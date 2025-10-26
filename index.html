@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building a Transformer from Scratch</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #1D1D1F;
+            background: white;
+        }
+
+        .container {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
+            padding: 120px 0;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 8vw, 5.5rem);
+            font-weight: 700;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: clamp(1.125rem, 2vw, 1.5rem);
+            color: #6e6e73;
+            max-width: 800px;
+            margin: 0 auto 32px;
+        }
+
+        .hero .subtitle {
+            font-size: clamp(1rem, 1.5vw, 1.25rem);
+            color: #86868b;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Section Styles */
+        section {
+            padding: 120px 0;
+        }
+
+        section:nth-child(even) {
+            background: linear-gradient(180deg, #ffffff 0%, #f5f5f7 100%);
+        }
+
+        h2 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 700;
+            margin-bottom: 48px;
+            color: #1D1D1F;
+        }
+
+        h3 {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: #007AFF;
+        }
+
+        p {
+            font-size: 1.125rem;
+            line-height: 1.8;
+            color: #1D1D1F;
+            margin-bottom: 24px;
+        }
+
+        /* Card Styles */
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 48px;
+            margin-bottom: 48px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
+        }
+
+        /* Code Block Styles */
+        .code-window {
+            background: #1D1D1F;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 32px 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .code-header {
+            background: #2D2D2F;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .code-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .code-dot.red { background: #FF5F57; }
+        .code-dot.yellow { background: #FEBC2E; }
+        .code-dot.green { background: #28C840; }
+
+        .code-content {
+            padding: 24px;
+            overflow-x: auto;
+        }
+
+        pre {
+            margin: 0;
+            font-family: "SF Mono", Monaco, Consolas, "Courier New", monospace;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .code-content code {
+            color: #F8F8F2;
+        }
+
+        /* Inline code in text */
+        p code, li code, .card code:not(.code-content code) {
+            color: #007AFF;
+            background: #F5F5F7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "SF Mono", Monaco, Consolas, "Courier New", monospace;
+            font-size: 0.9em;
+        }
+
+        /* Syntax highlighting */
+        .keyword { color: #FF79C6; }
+        .string { color: #50FA7B; }
+        .comment { color: #6272A4; }
+        .function { color: #8BE9FD; }
+        .class { color: #FFB86C; }
+
+        /* Terminal Styles */
+        .terminal {
+            background: #1D1D1F;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 32px 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .terminal-header {
+            background: #2D2D2F;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-content {
+            padding: 24px;
+            font-family: "SF Mono", Monaco, Consolas, "Courier New", monospace;
+            font-size: 0.95rem;
+            line-height: 1.8;
+        }
+
+        .terminal-line {
+            color: #F8F8F2;
+            margin-bottom: 8px;
+        }
+
+        .terminal-prompt {
+            color: #50FA7B;
+        }
+
+        .terminal-command {
+            color: #8BE9FD;
+        }
+
+        .terminal-comment {
+            color: #6272A4;
+        }
+
+        /* Diagram Styles */
+        .diagram {
+            margin: 48px 0;
+            text-align: center;
+        }
+
+        .diagram svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Grid Layout */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+            margin: 48px 0;
+        }
+
+        .grid-item {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+        }
+
+        .grid-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .grid-item h4 {
+            color: #007AFF;
+            font-size: 1.25rem;
+            margin-bottom: 16px;
+        }
+
+        /* Highlight Box */
+        .highlight {
+            background: linear-gradient(135deg, #007AFF10 0%, #5856D610 100%);
+            border-left: 4px solid #007AFF;
+            padding: 24px;
+            border-radius: 8px;
+            margin: 32px 0;
+        }
+
+        .highlight p {
+            margin-bottom: 0;
+            color: #1D1D1F;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero {
+                padding: 80px 0;
+            }
+
+            section {
+                padding: 80px 0;
+            }
+
+            .card {
+                padding: 32px 24px;
+            }
+
+            .code-content, .terminal-content {
+                padding: 16px;
+                font-size: 0.85rem;
+            }
+        }
+
+        /* Footer */
+        footer {
+            background: #1D1D1F;
+            color: #F8F8F2;
+            padding: 80px 0 0;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 60px;
+            padding-bottom: 48px;
+        }
+
+        .footer-section h4 {
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .footer-section p {
+            color: #86868b;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: #86868b;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: white;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid #2C2C2E;
+            padding: 24px 0;
+            text-align: center;
+        }
+
+        .footer-bottom p {
+            color: #86868b;
+            font-size: 0.875rem;
+            margin: 0;
+        }
+
+        @media (max-width: 1024px) {
+            .footer-content {
+                grid-template-columns: 1fr 1fr;
+                gap: 40px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <div class="hero">
+        <div class="container">
+            <h1>Building a Transformer from Scratch</h1>
+            <p>An educational journey through the architecture that powers modern AI</p>
+            <p class="subtitle">Learn how transformers work by building one in PyTorch, from attention mechanisms to complete text generation</p>
+        </div>
+    </div>
+
+    <!-- Introduction -->
+    <section>
+        <div class="container">
+            <h2>What is a Transformer?</h2>
+            <div class="card">
+                <p>A transformer is a neural network architecture introduced in <em>"Attention is All You Need"</em> (Vaswani et al., 2017). It revolutionized natural language processing and is the foundation of modern large language models like GPT, BERT, and Claude.</p>
+
+                <p>Rather than processing text sequentially like previous approaches, transformers use a mechanism called <strong>attention</strong> to process all words simultaneously while understanding their relationships. This makes them both more powerful and more efficient.</p>
+
+                <div class="highlight">
+                    <p><strong>Why build from scratch?</strong> Understanding how transformers work at a fundamental level helps you build better AI systems, debug problems effectively, and innovate on the architecture. Plus, it's surprisingly achievable!</p>
+                </div>
+            </div>
+
+            <h3>Key Components</h3>
+            <div class="grid">
+                <div class="grid-item">
+                    <h4>Self-Attention</h4>
+                    <p>Allows the model to weigh the importance of different words when processing each word in context</p>
+                </div>
+                <div class="grid-item">
+                    <h4>Multi-Head Attention</h4>
+                    <p>Runs multiple attention mechanisms in parallel, each learning different relationships</p>
+                </div>
+                <div class="grid-item">
+                    <h4>Positional Encoding</h4>
+                    <p>Adds positional information since transformers process all tokens simultaneously</p>
+                </div>
+                <div class="grid-item">
+                    <h4>Feed-Forward Networks</h4>
+                    <p>Applied to each position independently to process the attended information</p>
+                </div>
+                <div class="grid-item">
+                    <h4>Layer Normalization</h4>
+                    <p>Stabilizes training by normalizing activations within each layer</p>
+                </div>
+                <div class="grid-item">
+                    <h4>Residual Connections</h4>
+                    <p>Enable gradient flow through deep networks via "skip connections"</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 1: Embeddings -->
+    <section id="embeddings">
+        <div class="container">
+            <h2>Step 1: Token Embeddings & Positional Encoding</h2>
+            <div class="card">
+                <h3>Token Embeddings</h3>
+                <p>The first step is converting discrete tokens (words or subwords) into continuous vector representations. Each token gets mapped to a dense vector of size <code>d_model</code> through a learned embedding table.</p>
+
+                <p>Think of this as giving each word a unique coordinate in a high-dimensional space, where similar words end up close together.</p>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="keyword">class</span> <span class="class">TokenEmbedding</span>(nn.Module):
+    <span class="string">"""Convert token indices to dense vectors."""</span>
+
+    <span class="keyword">def</span> <span class="function">__init__</span>(self, vocab_size, d_model):
+        <span class="keyword">super</span>().__init__()
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.d_model = d_model
+
+    <span class="keyword">def</span> <span class="function">forward</span>(self, x):
+        <span class="comment"># x: (batch, seq_len) - token indices</span>
+        <span class="comment"># returns: (batch, seq_len, d_model) - embeddings</span>
+        <span class="keyword">return</span> self.embedding(x)</code></pre>
+                    </div>
+                </div>
+
+                <h3>Positional Encoding</h3>
+                <p>Since transformers process all tokens in parallel (unlike RNNs), we need to inject position information. We use learned positional embeddings that get added to the token embeddings.</p>
+
+                <p>This approach is used in GPT-2, GPT-3, and BERT. Each position gets its own learned embedding vector.</p>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="keyword">class</span> <span class="class">PositionalEncoding</span>(nn.Module):
+    <span class="string">"""Add position information to token embeddings."""</span>
+
+    <span class="keyword">def</span> <span class="function">__init__</span>(self, d_model, max_seq_len=<span class="string">5000</span>):
+        <span class="keyword">super</span>().__init__()
+        self.pos_embedding = nn.Embedding(max_seq_len, d_model)
+
+    <span class="keyword">def</span> <span class="function">forward</span>(self, x):
+        <span class="comment"># x: (batch, seq_len, d_model)</span>
+        batch_size, seq_len, d_model = x.shape
+
+        <span class="comment"># Create position indices: [0, 1, 2, ..., seq_len-1]</span>
+        positions = torch.arange(seq_len, device=x.device)
+
+        <span class="comment"># Get position embeddings and add to input</span>
+        pos_emb = self.pos_embedding(positions)
+        <span class="keyword">return</span> x + pos_emb  <span class="comment"># Broadcasting handles batch</span></code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 2: Attention -->
+    <section id="attention">
+        <div class="container">
+            <h2>Step 2: Scaled Dot-Product Attention</h2>
+            <div class="card">
+                <p>Attention is the core innovation of transformers. It allows each position to look at all other positions and decide which ones are important for understanding the current token.</p>
+
+                <p>The mechanism uses three components for each token:</p>
+                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                    <li><strong>Query (Q):</strong> "What am I looking for?"</li>
+                    <li><strong>Key (K):</strong> "What do I contain?"</li>
+                    <li><strong>Value (V):</strong> "What information do I offer?"</li>
+                </ul>
+
+                <p>The formula is elegant: <strong>Attention(Q, K, V) = softmax(Q·Kᵀ / √d_k) · V</strong></p>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Query, Key, Value inputs -->
+                        <rect x="50" y="50" width="120" height="60" fill="#007AFF" opacity="0.2" rx="8"/>
+                        <text x="110" y="85" text-anchor="middle" font-family="SF Pro Display" font-size="18" fill="#007AFF">Query (Q)</text>
+
+                        <rect x="240" y="50" width="120" height="60" fill="#5856D6" opacity="0.2" rx="8"/>
+                        <text x="300" y="85" text-anchor="middle" font-family="SF Pro Display" font-size="18" fill="#5856D6">Key (K)</text>
+
+                        <rect x="430" y="50" width="120" height="60" fill="#32D74B" opacity="0.2" rx="8"/>
+                        <text x="490" y="85" text-anchor="middle" font-family="SF Pro Display" font-size="18" fill="#32D74B">Value (V)</text>
+
+                        <!-- Arrows to MatMul -->
+                        <path d="M 150 110 L 150 160" stroke="#007AFF" stroke-width="3" fill="none" marker-end="url(#arrowblue)"/>
+                        <path d="M 270 110 L 270 160" stroke="#5856D6" stroke-width="3" fill="none" marker-end="url(#arrowpurple)"/>
+
+                        <!-- MatMul Q·Kᵀ -->
+                        <rect x="120" y="160" width="180" height="50" fill="#FF9500" opacity="0.2" rx="8"/>
+                        <text x="210" y="190" text-anchor="middle" font-family="SF Pro Display" font-size="16" fill="#FF9500">Q · Kᵀ / √d_k</text>
+
+                        <!-- Arrow to Softmax -->
+                        <path d="M 210 210 L 210 240" stroke="#FF9500" stroke-width="3" fill="none" marker-end="url(#arroworange)"/>
+
+                        <!-- Softmax -->
+                        <rect x="140" y="240" width="140" height="50" fill="#FF2D55" opacity="0.2" rx="8"/>
+                        <text x="210" y="270" text-anchor="middle" font-family="SF Pro Display" font-size="16" fill="#FF2D55">Softmax</text>
+
+                        <!-- Arrows to final MatMul -->
+                        <path d="M 250 265 L 350 265 L 350 320" stroke="#FF2D55" stroke-width="3" fill="none" marker-end="url(#arrowred)"/>
+                        <path d="M 490 110 L 490 265 L 390 265 L 390 320" stroke="#32D74B" stroke-width="3" fill="none" marker-end="url(#arrowgreen)"/>
+
+                        <!-- Final MatMul -->
+                        <rect x="280" y="320" width="180" height="50" fill="#1D1D1F" opacity="0.15" rx="8"/>
+                        <text x="370" y="350" text-anchor="middle" font-family="SF Pro Display" font-size="16" fill="#1D1D1F">Attention · V</text>
+
+                        <!-- Arrow definitions -->
+                        <defs>
+                            <marker id="arrowblue" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L0,6 L9,3 z" fill="#007AFF" />
+                            </marker>
+                            <marker id="arrowpurple" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L0,6 L9,3 z" fill="#5856D6" />
+                            </marker>
+                            <marker id="arroworange" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L0,6 L9,3 z" fill="#FF9500" />
+                            </marker>
+                            <marker id="arrowred" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L0,6 L9,3 z" fill="#FF2D55" />
+                            </marker>
+                            <marker id="arrowgreen" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L0,6 L9,3 z" fill="#32D74B" />
+                            </marker>
+                        </defs>
+                    </svg>
+                </div>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, query, key, value, mask=None):
+    <span class="comment"># Get dimension for scaling</span>
+    d_k = query.size(-<span class="string">1</span>)
+
+    <span class="comment"># Compute attention scores: Q·Kᵀ / √d_k</span>
+    scores = torch.matmul(query, key.transpose(-<span class="string">2</span>, -<span class="string">1</span>))
+    scores = scores / torch.sqrt(torch.tensor(d_k, dtype=torch.float32))
+
+    <span class="comment"># Apply causal mask if provided (prevent looking at future)</span>
+    <span class="keyword">if</span> mask <span class="keyword">is not None</span>:
+        scores = scores.masked_fill(mask == <span class="string">1</span>, float(<span class="string">'-inf'</span>))
+
+    <span class="comment"># Apply softmax to get attention weights (probabilities)</span>
+    attention_weights = torch.softmax(scores, dim=-<span class="string">1</span>)
+
+    <span class="comment"># Apply attention weights to values</span>
+    output = torch.matmul(attention_weights, value)
+
+    <span class="keyword">return</span> output, attention_weights</code></pre>
+                    </div>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Why scale by √d_k?</strong> Without scaling, dot products can get very large in high dimensions, pushing softmax into regions with tiny gradients. Scaling keeps the variance stable and gradients flowing.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 3: Multi-Head Attention -->
+    <section id="multi-head">
+        <div class="container">
+            <h2>Step 3: Multi-Head Attention</h2>
+            <div class="card">
+                <p>Instead of performing attention once, we run it multiple times in parallel with different learned projections. Each "head" can learn to focus on different types of relationships:</p>
+
+                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                    <li>Syntactic relationships (grammar, sentence structure)</li>
+                    <li>Semantic relationships (meaning, context)</li>
+                    <li>Long-range dependencies (discourse, references)</li>
+                    <li>Local patterns (nearby words, phrases)</li>
+                </ul>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 700 450" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Input -->
+                        <rect x="250" y="30" width="200" height="50" fill="#007AFF" opacity="0.2" rx="8"/>
+                        <text x="350" y="60" text-anchor="middle" font-family="SF Pro Display" font-size="16" fill="#007AFF">Input (batch, seq, d_model)</text>
+
+                        <!-- Linear Projections -->
+                        <path d="M 350 80 L 350 120" stroke="#007AFF" stroke-width="2" marker-end="url(#arrowblue)"/>
+
+                        <rect x="220" y="120" width="260" height="50" fill="#5856D6" opacity="0.2" rx="8"/>
+                        <text x="350" y="150" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#5856D6">Linear Projections (Q, K, V)</text>
+
+                        <!-- Split into heads -->
+                        <path d="M 280 170 L 150 210" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+                        <path d="M 320 170 L 280 210" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+                        <path d="M 380 170 L 420 210" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+                        <path d="M 420 170 L 550 210" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+
+                        <!-- Attention Heads -->
+                        <rect x="70" y="210" width="100" height="60" fill="#FF9500" opacity="0.2" rx="8"/>
+                        <text x="120" y="235" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#FF9500">Head 1</text>
+                        <text x="120" y="255" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Attention</text>
+
+                        <rect x="220" y="210" width="100" height="60" fill="#FF9500" opacity="0.2" rx="8"/>
+                        <text x="270" y="235" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#FF9500">Head 2</text>
+                        <text x="270" y="255" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Attention</text>
+
+                        <rect x="380" y="210" width="100" height="60" fill="#FF9500" opacity="0.2" rx="8"/>
+                        <text x="430" y="235" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#FF9500">Head 3</text>
+                        <text x="430" y="255" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Attention</text>
+
+                        <rect x="530" y="210" width="100" height="60" fill="#FF9500" opacity="0.2" rx="8"/>
+                        <text x="580" y="235" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#FF9500">Head N</text>
+                        <text x="580" y="255" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Attention</text>
+
+                        <!-- Concatenate -->
+                        <path d="M 150 270 L 280 310" stroke="#FF9500" stroke-width="2" marker-end="url(#arroworange)"/>
+                        <path d="M 280 270 L 320 310" stroke="#FF9500" stroke-width="2" marker-end="url(#arroworange)"/>
+                        <path d="M 420 270 L 380 310" stroke="#FF9500" stroke-width="2" marker-end="url(#arroworange)"/>
+                        <path d="M 550 270 L 420 310" stroke="#FF9500" stroke-width="2" marker-end="url(#arroworange)"/>
+
+                        <rect x="250" y="310" width="200" height="50" fill="#32D74B" opacity="0.2" rx="8"/>
+                        <text x="350" y="340" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#32D74B">Concatenate Heads</text>
+
+                        <!-- Output projection -->
+                        <path d="M 350 360 L 350 390" stroke="#32D74B" stroke-width="2" marker-end="url(#arrowgreen)"/>
+
+                        <rect x="250" y="390" width="200" height="50" fill="#1D1D1F" opacity="0.15" rx="8"/>
+                        <text x="350" y="420" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#1D1D1F">Output Projection</text>
+                    </svg>
+                </div>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
+    batch_size, seq_len, d_model = x.shape
+
+    <span class="comment"># 1. Project input to Q, K, V</span>
+    Q = self.W_q(x)  <span class="comment"># (batch, seq_len, d_model)</span>
+    K = self.W_k(x)
+    V = self.W_v(x)
+
+    <span class="comment"># 2. Split into multiple heads</span>
+    <span class="comment"># Reshape: (batch, seq_len, num_heads, d_k)</span>
+    Q = Q.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(<span class="string">1</span>, <span class="string">2</span>)
+    K = K.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(<span class="string">1</span>, <span class="string">2</span>)
+    V = V.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(<span class="string">1</span>, <span class="string">2</span>)
+
+    <span class="comment"># 3. Apply attention to each head (in parallel!)</span>
+    output, attn_weights = self.attention(Q, K, V, mask)
+
+    <span class="comment"># 4. Concatenate heads back together</span>
+    output = output.transpose(<span class="string">1</span>, <span class="string">2</span>).contiguous()
+    output = output.view(batch_size, seq_len, d_model)
+
+    <span class="comment"># 5. Final linear projection</span>
+    output = self.W_o(output)
+
+    <span class="keyword">return</span> output</code></pre>
+                    </div>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Why don't heads learn the same thing?</strong> Different random initializations, different learned projections, and the optimization process all encourage diversity. Redundancy doesn't help reduce loss, so heads naturally specialize.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 4: Feed-Forward Networks -->
+    <section id="feedforward">
+        <div class="container">
+            <h2>Step 4: Position-Wise Feed-Forward Networks</h2>
+            <div class="card">
+                <p>After attention gathers information from across the sequence, we need to process it. That's where the feed-forward network (FFN) comes in—a simple two-layer MLP applied independently to each position.</p>
+
+                <p>The architecture is straightforward:</p>
+                <ol style="margin-left: 24px; margin-bottom: 24px;">
+                    <li>Expand from d_model to d_ff (typically 4× larger)</li>
+                    <li>Apply GELU activation (smooth nonlinearity)</li>
+                    <li>Project back down to d_model</li>
+                </ol>
+
+                <p>This gives the model capacity to perform complex transformations on the attended information.</p>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="keyword">class</span> <span class="class">FeedForward</span>(nn.Module):
+    <span class="string">"""Position-wise feed-forward network."""</span>
+
+    <span class="keyword">def</span> <span class="function">__init__</span>(self, d_model, d_ff, dropout=<span class="string">0.1</span>):
+        <span class="keyword">super</span>().__init__()
+
+        <span class="comment"># Expand dimension</span>
+        self.linear1 = nn.Linear(d_model, d_ff)
+
+        <span class="comment"># GELU activation (used in GPT-2, GPT-3)</span>
+        self.activation = nn.GELU()
+        self.dropout1 = nn.Dropout(dropout)
+
+        <span class="comment"># Project back to d_model</span>
+        self.linear2 = nn.Linear(d_ff, d_model)
+        self.dropout2 = nn.Dropout(dropout)
+
+    <span class="keyword">def</span> <span class="function">forward</span>(self, x):
+        <span class="comment"># x: (batch, seq_len, d_model)</span>
+        x = self.linear1(x)        <span class="comment"># → (batch, seq_len, d_ff)</span>
+        x = self.activation(x)
+        x = self.dropout1(x)
+        x = self.linear2(x)        <span class="comment"># → (batch, seq_len, d_model)</span>
+        x = self.dropout2(x)
+        <span class="keyword">return</span> x</code></pre>
+                    </div>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Division of labor:</strong> Attention answers "What should I pay attention to?" while the FFN answers "Now that I have this information, what should I do with it?"</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 5: Transformer Block -->
+    <section>
+        <div class="container">
+            <h2>Step 5: Transformer Block</h2>
+            <div class="card">
+                <p>Now we combine everything into a single transformer block—the fundamental building block that we'll stack to create the full model. Each block contains:</p>
+
+                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                    <li><strong>Multi-head attention</strong> (communication between positions)</li>
+                    <li><strong>Feed-forward network</strong> (computation at each position)</li>
+                    <li><strong>Layer normalization</strong> (training stability)</li>
+                    <li><strong>Residual connections</strong> (gradient flow)</li>
+                </ul>
+
+                <p>We use Pre-LN architecture (like GPT-2/3) where normalization happens before each sub-layer rather than after.</p>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 500 600" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Input -->
+                        <rect x="150" y="30" width="200" height="50" fill="#007AFF" opacity="0.2" rx="8"/>
+                        <text x="250" y="60" text-anchor="middle" font-family="SF Pro Display" font-size="16" fill="#007AFF">Input</text>
+
+                        <!-- First residual block -->
+                        <rect x="50" y="100" width="400" height="180" fill="#f5f5f7" stroke="#007AFF" stroke-width="2" stroke-dasharray="5,5" rx="12"/>
+
+                        <!-- Layer Norm 1 -->
+                        <path d="M 250 80 L 250 120" stroke="#007AFF" stroke-width="2" marker-end="url(#arrowblue)"/>
+                        <rect x="170" y="120" width="160" height="40" fill="#5856D6" opacity="0.2" rx="8"/>
+                        <text x="250" y="145" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#5856D6">LayerNorm</text>
+
+                        <!-- Multi-Head Attention -->
+                        <path d="M 250 160 L 250 190" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+                        <rect x="150" y="190" width="200" height="40" fill="#FF9500" opacity="0.2" rx="8"/>
+                        <text x="250" y="215" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#FF9500">Multi-Head Attention</text>
+
+                        <!-- Residual connection 1 -->
+                        <path d="M 100 55 L 100 245 L 180 245" stroke="#32D74B" stroke-width="3" fill="none" marker-end="url(#arrowgreen)"/>
+                        <text x="75" y="150" font-family="SF Pro Display" font-size="12" fill="#32D74B">+</text>
+
+                        <circle cx="250" cy="245" r="20" fill="#32D74B" opacity="0.2"/>
+                        <text x="250" y="252" text-anchor="middle" font-family="SF Pro Display" font-size="20" fill="#32D74B">+</text>
+
+                        <!-- Second residual block -->
+                        <rect x="50" y="300" width="400" height="180" fill="#f5f5f7" stroke="#007AFF" stroke-width="2" stroke-dasharray="5,5" rx="12"/>
+
+                        <!-- Layer Norm 2 -->
+                        <path d="M 250 265 L 250 320" stroke="#32D74B" stroke-width="2" marker-end="url(#arrowgreen)"/>
+                        <rect x="170" y="320" width="160" height="40" fill="#5856D6" opacity="0.2" rx="8"/>
+                        <text x="250" y="345" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#5856D6">LayerNorm</text>
+
+                        <!-- Feed-Forward -->
+                        <path d="M 250 360 L 250 390" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+                        <rect x="170" y="390" width="160" height="40" fill="#FF9500" opacity="0.2" rx="8"/>
+                        <text x="250" y="415" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#FF9500">Feed-Forward</text>
+
+                        <!-- Residual connection 2 -->
+                        <path d="M 400 245 L 400 445 L 320 445" stroke="#32D74B" stroke-width="3" fill="none" marker-end="url(#arrowgreen)"/>
+                        <text x="415" y="350" font-family="SF Pro Display" font-size="12" fill="#32D74B">+</text>
+
+                        <circle cx="250" cy="445" r="20" fill="#32D74B" opacity="0.2"/>
+                        <text x="250" y="452" text-anchor="middle" font-family="SF Pro Display" font-size="20" fill="#32D74B">+</text>
+
+                        <!-- Output -->
+                        <path d="M 250 465 L 250 520" stroke="#32D74B" stroke-width="2" marker-end="url(#arrowgreen)"/>
+                        <rect x="150" y="520" width="200" height="50" fill="#1D1D1F" opacity="0.15" rx="8"/>
+                        <text x="250" y="550" text-anchor="middle" font-family="SF Pro Display" font-size="16" fill="#1D1D1F">Output</text>
+                    </svg>
+                </div>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
+    <span class="comment"># First sub-layer: Multi-head attention with residual</span>
+    residual = x
+    x = self.norm1(x)                    <span class="comment"># Pre-LN</span>
+    x = self.attention(x, mask=mask)
+    x = self.dropout1(x)
+    x = x + residual                     <span class="comment"># Residual connection</span>
+
+    <span class="comment"># Second sub-layer: Feed-forward with residual</span>
+    residual = x
+    x = self.norm2(x)                    <span class="comment"># Pre-LN</span>
+    x = self.ffn(x)
+    x = self.dropout2(x)
+    x = x + residual                     <span class="comment"># Residual connection</span>
+
+    <span class="keyword">return</span> x</code></pre>
+                    </div>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Why residual connections?</strong> They create gradient "highways" that allow gradients to flow directly from the output back to early layers. Without them, deep networks struggle to learn: ∂(x + f(x))/∂x = 1 + ∂f(x)/∂x—the "1" ensures gradients always flow!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 6: Complete Model -->
+    <section>
+        <div class="container">
+            <h2>Step 6: The Complete Transformer</h2>
+            <div class="card">
+                <p>Finally, we assemble all components into a complete decoder-only transformer (GPT-style). The architecture stacks multiple identical transformer blocks to create a deep network capable of learning complex patterns.</p>
+
+                <p>The data flows through these stages:</p>
+                <ol style="margin-left: 24px; margin-bottom: 24px;">
+                    <li><strong>Token Embedding:</strong> Convert token IDs to vectors</li>
+                    <li><strong>Positional Encoding:</strong> Add position information</li>
+                    <li><strong>Transformer Blocks:</strong> Stack N identical blocks (we use 6)</li>
+                    <li><strong>Final LayerNorm:</strong> Stabilize outputs</li>
+                    <li><strong>Output Projection:</strong> Project to vocabulary logits</li>
+                </ol>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="keyword">def</span> <span class="function">__init__</span>(
+    self, vocab_size, d_model=<span class="string">512</span>, num_heads=<span class="string">8</span>,
+    num_layers=<span class="string">6</span>, d_ff=<span class="string">2048</span>, max_seq_len=<span class="string">5000</span>, dropout=<span class="string">0.1</span>
+):
+    <span class="keyword">super</span>().__init__()
+
+    <span class="comment"># Token and positional embeddings</span>
+    self.token_embedding = TokenEmbedding(vocab_size, d_model)
+    self.pos_encoding = PositionalEncoding(d_model, max_seq_len)
+
+    <span class="comment"># Stack of transformer blocks</span>
+    self.blocks = nn.ModuleList([
+        TransformerBlock(d_model, num_heads, d_ff, dropout)
+        <span class="keyword">for</span> _ <span class="keyword">in</span> range(num_layers)
+    ])
+
+    <span class="comment"># Final layer norm and output projection</span>
+    self.ln_f = nn.LayerNorm(d_model)
+    self.output_proj = nn.Linear(d_model, vocab_size)</code></pre>
+                    </div>
+                </div>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
+    <span class="comment"># Create causal mask if not provided</span>
+    <span class="keyword">if</span> mask <span class="keyword">is</span> None:
+        mask = self.create_causal_mask(x.size(<span class="string">1</span>)).to(x.device)
+
+    <span class="comment"># 1. Embed tokens and add positions</span>
+    x = self.token_embedding(x)      <span class="comment"># (batch, seq) → (batch, seq, d_model)</span>
+    x = self.pos_encoding(x)
+
+    <span class="comment"># 2. Pass through all transformer blocks</span>
+    <span class="keyword">for</span> block <span class="keyword">in</span> self.blocks:
+        x = block(x, mask=mask)      <span class="comment"># (batch, seq, d_model) → (batch, seq, d_model)</span>
+
+    <span class="comment"># 3. Final normalization and projection to vocabulary</span>
+    x = self.ln_f(x)
+    logits = self.output_proj(x)     <span class="comment"># (batch, seq, d_model) → (batch, seq, vocab_size)</span>
+
+    <span class="keyword">return</span> logits</code></pre>
+                    </div>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Model scale:</strong> Our implementation uses 6 layers with d_model=512, similar to the original transformer paper. For comparison, GPT-3 has 96 layers with d_model=12,288. The architecture scales beautifully!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Try It Yourself -->
+    <section>
+        <div class="container">
+            <h2>Try It Yourself</h2>
+            <div class="card">
+                <p>Ready to train and experiment with your own transformer? The complete implementation is available on GitHub with everything you need to get started.</p>
+
+                <h3>Quick Start</h3>
+
+                <div class="terminal">
+                    <div class="terminal-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="terminal-content">
+                        <div class="terminal-line">
+                            <span class="terminal-prompt">$</span>
+                            <span class="terminal-command"> git clone https://github.com/zhubert/transformer.git</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="terminal-prompt">$</span>
+                            <span class="terminal-command"> cd transformer</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="terminal-comment"># Install dependencies with uv</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="terminal-prompt">$</span>
+                            <span class="terminal-command"> uv sync</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="terminal-comment"># Train the model (uses FineWeb dataset)</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="terminal-prompt">$</span>
+                            <span class="terminal-command"> uv run python commands/train.py</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="terminal-comment"># Generate text</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="terminal-prompt">$</span>
+                            <span class="terminal-command"> uv run python commands/generate.py --prompt "Once upon a time"</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>What You'll Find</h3>
+                <div class="grid">
+                    <div class="grid-item">
+                        <h4>Clean Implementation</h4>
+                        <p>Well-documented PyTorch code for every component, built from scratch without using pre-built transformer modules</p>
+                    </div>
+                    <div class="grid-item">
+                        <h4>Real Training</h4>
+                        <p>Train on FineWeb, a 10 billion token dataset from HuggingFace with streaming support and smart caching</p>
+                    </div>
+                    <div class="grid-item">
+                        <h4>Multiple Sampling</h4>
+                        <p>Experiment with greedy, top-k, top-p, and combined sampling strategies for text generation</p>
+                    </div>
+                    <div class="grid-item">
+                        <h4>Comprehensive Tests</h4>
+                        <p>Unit tests for all components to verify your understanding and catch bugs</p>
+                    </div>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Learning tip:</strong> Start by reading the code in order: embeddings → attention → feedforward → block → model. Each builds on the previous component!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Transformer from Scratch</h4>
+                    <p>An educational implementation of a decoder-only transformer in PyTorch. Built from scratch to understand the architecture that powers modern AI. This page was generated with assistance from Claude AI and may contain errors.</p>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Learn More</h4>
+                    <ul class="footer-links">
+                        <li><a href="https://github.com/zhubert/transformer">View Source Code</a></li>
+                        <li><a href="https://github.com/zhubert/transformer/blob/main/README.md">Documentation</a></li>
+                        <li><a href="https://github.com/zhubert/transformer/blob/main/CLAUDE.md">Implementation Guide</a></li>
+                        <li><a href="https://github.com/zhubert/transformer/tree/main/tests">Tests & Examples</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Components</h4>
+                    <ul class="footer-links">
+                        <li><a href="#embeddings">Token Embeddings</a></li>
+                        <li><a href="#attention">Attention Mechanism</a></li>
+                        <li><a href="#multi-head">Multi-Head Attention</a></li>
+                        <li><a href="#feedforward">Feed-Forward Network</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul class="footer-links">
+                        <li><a href="https://arxiv.org/abs/1706.03762" target="_blank">Original Paper</a></li>
+                        <li><a href="http://zhubert.com">More Projects</a></li>
+                        <li><a href="https://github.com/zhubert/transformer/issues">Report Issues</a></li>
+                        <li><a href="https://pytorch.org" target="_blank">PyTorch Docs</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <div class="container">
+                <p>Built with curiosity and PyTorch. Open source project for educational purposes.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
