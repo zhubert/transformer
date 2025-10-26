@@ -398,7 +398,7 @@ This is an educational project built for learning. The code prioritizes clarity 
 
 ## License
 
-[Add your license here]
+MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
