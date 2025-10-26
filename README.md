@@ -178,11 +178,31 @@ Warmup + cosine decay learning rate schedule for better convergence.
 - Cosine decay: Smoothly decreases LR following cosine curve
 - Prevents early training instability and improves final convergence
 
-### 🚧 Next Steps
+#### 11. Perplexity Evaluation (`src/transformer/perplexity.py`, `examples/evaluate_perplexity.py`)
+Complete perplexity calculation and model evaluation system.
 
-**Immediate**:
-- Text generation examples and inference scripts
-- Interactive generation script with different sampling strategies
+- Calculate perplexity from model logits or loss
+- Evaluate models on datasets
+- Compare multiple checkpoints to find best model
+- Detect overfitting by comparing train/validation perplexity
+- Comprehensive educational documentation explaining perplexity
+
+**Tests**: Full test coverage in `tests/test_perplexity.py`
+
+See [Understanding Perplexity](#understanding-perplexity) section for detailed explanation of this metric and how to use it.
+
+#### 12. Text Generation Scripts (`examples/generate.py`, `examples/sampling_comparison.py`)
+Complete text generation and inference capabilities.
+
+- **Interactive generation**: Generate text with various presets (greedy, precise, balanced, creative)
+- **Preset system**: Pre-configured sampling strategies for different use cases
+- **Sampling comparison**: Demo showing differences between sampling strategies
+- **Custom parameters**: Override presets with custom top-k, top-p, temperature settings
+- Checkpoint loading and model inference
+
+See [Text Generation with Advanced Sampling](#text-generation-with-advanced-sampling) for usage examples.
+
+### 🚧 Next Steps
 
 **Planned Training Improvements**:
 - **Gradient Accumulation** - Simulate larger batch sizes without more memory
@@ -191,10 +211,11 @@ Warmup + cosine decay learning rate schedule for better convergence.
   - Example: 4 accumulation steps × batch 8 = effective batch 32
 
 **Current Status**:
-- ✅ Learning rate scheduling implemented (warmup + cosine decay)
+- ✅ All core components complete and tested
+- ✅ Training pipeline with learning rate scheduling
 - ✅ Advanced sampling methods (top-k, top-p, combined)
-- ✅ Training parameters optimized (20 epochs, LR 3e-4, temp 0.5)
-- ✅ Decode method handles invalid tokens gracefully
+- ✅ Text generation scripts with preset strategies
+- ✅ Perplexity evaluation and model comparison tools
 
 ## Project Structure
 
@@ -208,6 +229,7 @@ transformer/
 │   ├── model.py            # Complete decoder-only transformer
 │   ├── sampling.py         # Advanced sampling strategies (top-k, top-p)
 │   ├── scheduler.py        # Learning rate scheduling
+│   ├── perplexity.py       # Perplexity calculation and evaluation
 │   └── dataset.py          # Dataset utilities
 │
 ├── tests/                   # Comprehensive test suite
@@ -216,12 +238,14 @@ transformer/
 │   ├── test_feedforward.py
 │   ├── test_block.py
 │   ├── test_model.py
-│   └── test_sampling.py    # 27 tests for sampling methods
+│   ├── test_sampling.py    # 27 tests for sampling methods
+│   └── test_perplexity.py  # Tests for perplexity calculation
 │
 ├── examples/                # Training and generation scripts
 │   ├── train.py            # Main training script
 │   ├── generate.py         # Text generation script
-│   └── sampling_comparison.py  # Demo of different sampling strategies
+│   ├── sampling_comparison.py    # Demo of different sampling strategies
+│   └── evaluate_perplexity.py   # Perplexity evaluation script
 │
 ├── CLAUDE.md               # Project planning and context
 └── README.md               # This file
@@ -340,6 +364,144 @@ This shows:
 - Impact of temperature on diversity
 - When to use each strategy
 - Statistical behavior with different distributions
+
+## Understanding Perplexity
+
+**Perplexity** is the standard metric for evaluating language models. It measures how "confused" or "perplexed" a model is when predicting text.
+
+### The Intuition
+
+Think of perplexity as answering: "On average, how many words does the model have to choose from?"
+
+- **Perplexity = 1**: Perfect! The model always knows exactly what comes next
+- **Perplexity = 50**: The model is as confused as if picking uniformly from 50 words
+- **Perplexity = 10,000**: Totally lost, like random guessing over entire vocabulary
+
+### Real-World Example
+
+```
+Text: "The capital of France is ___"
+
+Good model:
+  - Assigns P("Paris") = 0.9
+  - Low perplexity (~1.1)
+  - Confident and correct!
+
+Bad model:
+  - Assigns P("Paris") = 0.01
+  - High perplexity (~100)
+  - Very confused!
+```
+
+### Mathematical Definition
+
+Perplexity is the exponential of the average cross-entropy loss:
+
+```
+Perplexity = exp(CrossEntropyLoss)
+         = exp(-1/N * Σ log P(correct_word))
+```
+
+**Example Calculation**: If the model predicts 3 tokens with probabilities [0.5, 0.25, 0.125]:
+```
+Average loss = (0.693 + 1.386 + 2.079) / 3 = 1.386
+Perplexity = exp(1.386) = 4.0
+→ On average, the model was as confused as choosing from 4 words
+```
+
+### Typical Perplexity Values
+
+| Perplexity | Quality | Description |
+|------------|---------|-------------|
+| 1.0 | Perfect | Always 100% confident and correct (impossible in practice) |
+| 10-30 | Excellent | GPT-2 level performance on good text |
+| 50-100 | Decent | Model has learned patterns, room for improvement |
+| 200+ | Poor | Model is quite confused, needs more training |
+| ~vocab_size | Random | Model is just guessing randomly |
+
+### Why Perplexity Instead of Just Loss?
+
+**Loss = 3.0** - What does this mean? Hard to say!
+
+**Perplexity = 20** - The model is as confused as choosing from 20 words. Much clearer!
+
+Perplexity is more interpretable and allows you to compare models across different architectures, datasets, and research papers.
+
+### Detecting Overfitting
+
+Compare training and validation perplexity:
+
+```
+Good generalization:
+  Train perplexity: 18.2
+  Val perplexity:   19.5
+  → Small gap, model generalizes well! ✓
+
+Overfitting:
+  Train perplexity: 12.3
+  Val perplexity:   45.8
+  → Large gap, model memorized training data! ✗
+```
+
+If you see overfitting (val >> train):
+1. Add more dropout
+2. Reduce model size
+3. Get more training data
+4. Stop training earlier
+5. Add data augmentation
+
+### Evaluating Your Model
+
+Use the evaluation script to test your model:
+
+```bash
+# Evaluate latest checkpoint
+uv run python examples/evaluate_perplexity.py
+
+# Evaluate specific checkpoint
+uv run python examples/evaluate_perplexity.py --checkpoint checkpoints/model_epoch_10.pt
+
+# Compare all checkpoints
+uv run python examples/evaluate_perplexity.py --compare
+
+# Specify evaluation text
+uv run python examples/evaluate_perplexity.py --text-file my_test_data.txt
+```
+
+**Example output**:
+```
+================================================================================
+EVALUATION RESULTS
+================================================================================
+Loss: 2.8543
+Perplexity: 17.37
+
+What does this mean?
+--------------------------------------------------------------------------------
+EXCELLENT! Perplexity 17.37 is GPT-2 level performance.
+The model has learned the language patterns very well.
+
+Interpretation: On average, the model is as confused as if it had to
+choose uniformly from ~17 words at each step.
+```
+
+### Using Perplexity Programmatically
+
+```python
+from src.transformer.perplexity import calculate_perplexity, evaluate_perplexity
+
+# During training - calculate from logits
+logits = model(inputs)  # Shape: (batch, seq_len, vocab_size)
+targets = ...           # Shape: (batch, seq_len)
+perplexity = calculate_perplexity(logits, targets)
+print(f"Perplexity: {perplexity.item():.2f}")
+
+# Evaluate on a dataset
+val_perplexity, val_loss = evaluate_perplexity(
+    model, val_dataloader, device='cuda'
+)
+print(f"Validation perplexity: {val_perplexity:.2f}")
+```
 
 ## Training the Model
 
@@ -478,7 +640,8 @@ We're building **bottom-up**, starting with the simplest components and working 
 7. ✅ **Training** - Full training pipeline with MPS GPU support
 8. ✅ **Advanced Sampling** - Top-k, Top-p, and combined strategies for high-quality generation
 9. ✅ **Learning Rate Scheduling** - Warmup + cosine decay for better convergence
-10. 🚧 **Generation Examples** - Practical text generation demonstrations
+10. ✅ **Perplexity Evaluation** - Standard metric for evaluating language model quality
+11. ✅ **Text Generation Scripts** - Interactive generation with preset sampling strategies
 
 Each component is:
 - Fully implemented from scratch (no pre-built transformer modules)
