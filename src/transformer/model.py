@@ -297,9 +297,17 @@ class DecoderOnlyTransformer(nn.Module):
         mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool()
         return mask
 
-    def generate(self, start_tokens, max_length, temperature=1.0):
+    def generate(
+        self,
+        start_tokens,
+        max_length,
+        temperature=1.0,
+        top_k=None,
+        top_p=None,
+        sampling_strategy="multinomial",
+    ):
         """
-        Generate text autoregressively.
+        Generate text autoregressively with advanced sampling strategies.
 
         Starts with start_tokens and generates new tokens one at a time,
         feeding each generated token back as input for the next step.
@@ -311,15 +319,86 @@ class DecoderOnlyTransformer(nn.Module):
                         < 1.0: more confident/deterministic
                         = 1.0: unchanged probabilities
                         > 1.0: more random/diverse
+            top_k: If set, only sample from top-k most probable tokens
+                   Recommended: 50 for balanced generation
+            top_p: If set, sample from nucleus with cumulative probability ≥ p
+                   Recommended: 0.9 or 0.95 for high-quality generation
+            sampling_strategy: One of:
+                - "greedy": Always pick most probable token (deterministic)
+                - "multinomial": Sample from full distribution (default)
+                - "top_k": Use top-k filtering (requires top_k to be set)
+                - "top_p": Use nucleus sampling (requires top_p to be set)
+                - "top_k_top_p": Use both (requires both top_k and top_p)
 
         Returns:
             generated: Generated token indices of shape (batch, max_length)
 
-        Example:
+        Examples:
+            # Basic generation (multinomial sampling)
             start = torch.tensor([[1, 2, 3]])  # "The cat"
             generated = model.generate(start, max_length=10)
-            # → torch.tensor([[1, 2, 3, 42, 17, 8, ...]])  # "The cat sat on the mat"
+
+            # Greedy decoding (most confident)
+            generated = model.generate(start, max_length=10, sampling_strategy="greedy")
+
+            # Top-k sampling (filter long tail)
+            generated = model.generate(
+                start, max_length=10,
+                sampling_strategy="top_k", top_k=50, temperature=0.8
+            )
+
+            # Top-p sampling (adaptive nucleus)
+            generated = model.generate(
+                start, max_length=10,
+                sampling_strategy="top_p", top_p=0.9, temperature=0.8
+            )
+
+            # Combined (recommended for best quality)
+            generated = model.generate(
+                start, max_length=10,
+                sampling_strategy="top_k_top_p",
+                top_k=50, top_p=0.9, temperature=0.8
+            )
+
+        Sampling Strategy Guide:
+            Greedy: Deterministic, safe, but often repetitive
+            Multinomial: Random, diverse, but can be nonsensical
+            Top-k: Filters unlikely tokens, good baseline
+            Top-p: Adaptive to model confidence, more natural
+            Top-k + Top-p: Best of both worlds (recommended!)
+
+        Recommended Settings by Use Case:
+            - Creative writing: top_k=100, top_p=0.95, temperature=1.2
+            - Balanced output: top_k=50, top_p=0.9, temperature=1.0
+            - Focused/factual: top_k=40, top_p=0.85, temperature=0.8
+            - Deterministic: sampling_strategy="greedy"
         """
+        # Import sampling functions
+        from .sampling import (
+            sample_greedy,
+            sample_top_k,
+            sample_top_p,
+            sample_top_k_top_p,
+        )
+
+        # Validate sampling strategy
+        valid_strategies = ["greedy", "multinomial", "top_k", "top_p", "top_k_top_p"]
+        if sampling_strategy not in valid_strategies:
+            raise ValueError(
+                f"sampling_strategy must be one of {valid_strategies}, "
+                f"got '{sampling_strategy}'"
+            )
+
+        # Validate parameters based on strategy
+        if sampling_strategy == "top_k" and top_k is None:
+            raise ValueError("top_k must be set when using 'top_k' strategy")
+        if sampling_strategy == "top_p" and top_p is None:
+            raise ValueError("top_p must be set when using 'top_p' strategy")
+        if sampling_strategy == "top_k_top_p" and (top_k is None or top_p is None):
+            raise ValueError(
+                "Both top_k and top_p must be set when using 'top_k_top_p' strategy"
+            )
+
         self.eval()  # Set to evaluation mode (disables dropout)
 
         generated = start_tokens
@@ -331,13 +410,32 @@ class DecoderOnlyTransformer(nn.Module):
                 logits = self.forward(generated)
 
                 # Get logits for last position only: (batch, vocab_size)
-                next_token_logits = logits[:, -1, :] / temperature
+                next_token_logits = logits[:, -1, :]
 
-                # Convert to probabilities
-                probs = torch.softmax(next_token_logits, dim=-1)
+                # Apply sampling strategy
+                if sampling_strategy == "greedy":
+                    next_token = sample_greedy(next_token_logits)
 
-                # Sample from the distribution
-                next_token = torch.multinomial(probs, num_samples=1)  # (batch, 1)
+                elif sampling_strategy == "multinomial":
+                    # Original implementation (for backward compatibility)
+                    scaled_logits = next_token_logits / temperature
+                    probs = torch.softmax(scaled_logits, dim=-1)
+                    next_token = torch.multinomial(probs, num_samples=1)
+
+                elif sampling_strategy == "top_k":
+                    next_token = sample_top_k(
+                        next_token_logits, k=top_k, temperature=temperature
+                    )
+
+                elif sampling_strategy == "top_p":
+                    next_token = sample_top_p(
+                        next_token_logits, p=top_p, temperature=temperature
+                    )
+
+                elif sampling_strategy == "top_k_top_p":
+                    next_token = sample_top_k_top_p(
+                        next_token_logits, k=top_k, p=top_p, temperature=temperature
+                    )
 
                 # Append to sequence
                 generated = torch.cat([generated, next_token], dim=1)
