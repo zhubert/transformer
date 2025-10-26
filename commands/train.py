@@ -94,7 +94,7 @@ import argparse
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
-from src.transformer.dataset import TextDataset
+from src.transformer.fineweb_dataset import FineWebDataset
 from src.transformer.scheduler import get_cosine_schedule_with_warmup
 from src.transformer.perplexity import calculate_perplexity_from_loss
 
@@ -148,7 +148,6 @@ def train(debug=False, use_mps=False):
         torch.mps.manual_seed(42)
 
     # Configuration
-    TEXT_FILE = "Singular.txt"
     SEQ_LENGTH = 128
     BATCH_SIZE = 8              # Reduced from 32 to fit in M1 memory
     D_MODEL = 256
@@ -156,9 +155,11 @@ def train(debug=False, use_mps=False):
     NUM_LAYERS = 6
     D_FF = 1024
     DROPOUT = 0.1
-    NUM_EPOCHS = 20             # Increased from 3 - more epochs for better learning
-    LEARNING_RATE = 3e-4        # Increased from 1e-4 - standard transformer learning rate
+    NUM_EPOCHS = 20
+    LEARNING_RATE = 3e-4        # Standard transformer learning rate
     WEIGHT_DECAY = 0.01
+    TOKENS_PER_EPOCH = 100_000_000  # 100M tokens per epoch from FineWeb
+    MAX_CACHED_SHARDS = 5           # Keep 5 shards in cache (~2GB)
     LOG_INTERVAL = 10
     SAMPLE_INTERVAL = 100
     SAMPLE_PROMPT = "The"
@@ -178,20 +179,29 @@ def train(debug=False, use_mps=False):
     print()
 
     # Load dataset
-    print("Loading dataset...")
-    dataset = TextDataset(TEXT_FILE, seq_length=SEQ_LENGTH)
+    print("Loading FineWeb dataset...")
+    dataset = FineWebDataset(
+        cache_dir="data/fineweb_cache",
+        seq_length=SEQ_LENGTH,
+        tokens_per_epoch=TOKENS_PER_EPOCH,
+        max_cached_shards=MAX_CACHED_SHARDS,
+        seed=42  # Reproducible shard selection
+    )
     print()
 
+    # IterableDataset requires different DataLoader setup
+    # No shuffle (streaming), no len()
     dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
-        shuffle=True,
+        shuffle=False,  # Can't shuffle IterableDataset
         drop_last=True
     )
 
     print(f"Training configuration:")
-    print(f"  Sequences per epoch: {len(dataset):,}")
-    print(f"  Batches per epoch: {len(dataloader):,}")
+    print(f"  Tokens per epoch: {TOKENS_PER_EPOCH:,}")
+    print(f"  Approximate sequences per epoch: ~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}")
+    print(f"  Batch size: {BATCH_SIZE}")
     print()
 
     # Create model
@@ -246,11 +256,16 @@ def train(debug=False, use_mps=False):
     #    - Large steps early (learn fast), small steps late (settle in)
     #
     # Expected improvement: 10-30% better final loss!
-    total_steps = len(dataloader) * NUM_EPOCHS
+
+    # Estimate steps per epoch for FineWeb (IterableDataset)
+    # tokens_per_epoch / seq_length / batch_size
+    steps_per_epoch = (TOKENS_PER_EPOCH // SEQ_LENGTH // BATCH_SIZE)
+    total_steps = steps_per_epoch * NUM_EPOCHS
     warmup_steps = int(0.05 * total_steps)  # 5% of training for warmup
     min_lr = LEARNING_RATE * 0.1  # Final LR = 10% of peak
 
     print(f"Learning rate schedule:")
+    print(f"  Steps per epoch: ~{steps_per_epoch:,}")
     print(f"  Total training steps: {total_steps:,}")
     print(f"  Warmup steps: {warmup_steps:,} (5% of training)")
     print(f"  Max learning rate: {LEARNING_RATE:.6f}")
@@ -404,7 +419,7 @@ def train(debug=False, use_mps=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train a decoder-only transformer on text data")
+    parser = argparse.ArgumentParser(description="Train a decoder-only transformer on FineWeb")
     parser.add_argument(
         "--debug",
         action="store_true",

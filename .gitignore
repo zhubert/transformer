@@ -35,11 +35,10 @@ wheels/
 *~
 .DS_Store
 
-# Training data
-Singular.txt
-*.txt
-
 # Model checkpoints
 checkpoints/
 *.pt
 *.pth
+
+# FineWeb dataset cache (downloaded shards)
+data/
