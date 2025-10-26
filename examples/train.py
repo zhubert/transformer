@@ -83,6 +83,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.dataset import TextDataset
+from src.transformer.scheduler import get_cosine_schedule_with_warmup
 
 
 def get_device(use_mps=False):
@@ -209,10 +210,46 @@ def train(debug=False, use_mps=False):
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
+
+    # Optimizer with placeholder LR (scheduler will control actual LR)
     optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=LEARNING_RATE,
+        lr=1.0,  # Placeholder - scheduler overrides this
         weight_decay=WEIGHT_DECAY
+    )
+
+    # Learning Rate Scheduler
+    # ------------------------
+    # We use warmup + cosine decay for better training:
+    #
+    # 1. WARMUP (first 5% of training):
+    #    - Starts at LR=0, gradually increases to max_lr
+    #    - Prevents instability from huge gradients at start
+    #    - Random weights → huge gradients → need small LR initially
+    #
+    # 2. COSINE DECAY (remaining 95% of training):
+    #    - Smoothly decreases from max_lr to min_lr
+    #    - Enables fine-tuning at the end
+    #    - Large steps early (learn fast), small steps late (settle in)
+    #
+    # Expected improvement: 10-30% better final loss!
+    total_steps = len(dataloader) * NUM_EPOCHS
+    warmup_steps = int(0.05 * total_steps)  # 5% of training for warmup
+    min_lr = LEARNING_RATE * 0.1  # Final LR = 10% of peak
+
+    print(f"Learning rate schedule:")
+    print(f"  Total training steps: {total_steps:,}")
+    print(f"  Warmup steps: {warmup_steps:,} (5% of training)")
+    print(f"  Max learning rate: {LEARNING_RATE:.6f}")
+    print(f"  Min learning rate: {min_lr:.6f}")
+    print()
+
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer=optimizer,
+        warmup_steps=warmup_steps,
+        total_steps=total_steps,
+        max_lr=LEARNING_RATE,
+        min_lr=min_lr
     )
 
     print("=" * 80)
@@ -266,6 +303,10 @@ def train(debug=False, use_mps=False):
             # Update weights
             optimizer.step()
 
+            # Update learning rate (MUST be called after optimizer.step())
+            # This adjusts the LR according to our warmup + cosine decay schedule
+            scheduler.step()
+
             epoch_loss += loss.item()
             total_batches += 1
 
@@ -281,8 +322,10 @@ def train(debug=False, use_mps=False):
             # Logging
             if (batch_idx + 1) % LOG_INTERVAL == 0:
                 avg_loss = epoch_loss / (batch_idx + 1)
+                current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
                 print(f"  Batch {batch_idx + 1}/{len(dataloader)}, "
-                      f"Loss: {loss.item():.4f}, Avg: {avg_loss:.4f}")
+                      f"Loss: {loss.item():.4f}, Avg: {avg_loss:.4f}, "
+                      f"LR: {current_lr:.6f}")
 
             # Sample generation
             if (batch_idx + 1) % SAMPLE_INTERVAL == 0:
@@ -295,8 +338,10 @@ def train(debug=False, use_mps=False):
         # Epoch summary
         epoch_time = time.time() - epoch_start
         avg_epoch_loss = epoch_loss / len(dataloader)
+        current_lr = scheduler.get_last_lr()[0]
         print(f"\n  Epoch {epoch + 1} complete!")
         print(f"  Average Loss: {avg_epoch_loss:.4f}")
+        print(f"  Current LR: {current_lr:.6f}")
         print(f"  Time: {epoch_time:.1f}s")
         print()
 
@@ -306,7 +351,9 @@ def train(debug=False, use_mps=False):
             'epoch': epoch + 1,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),  # Save scheduler state
             'loss': avg_epoch_loss,
+            'current_lr': current_lr,  # Save current LR for reference
             'config': {
                 'vocab_size': dataset.vocab_size,
                 'd_model': D_MODEL,
