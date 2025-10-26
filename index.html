@@ -787,8 +787,6 @@
 
                 <p><strong>Pre-LN architecture:</strong> We use the Pre-LN (Pre-Layer Normalization) approach used in modern models like GPT-2 and GPT-3. This means we apply layer normalization <em>before</em> each sub-layer (attention or FFN) rather than after. This makes training more stable, especially for very deep networks.</p>
 
-                <p><strong>Why residual connections matter:</strong> When training deep networks (many stacked blocks), gradients can "vanish"—they become tiny by the time they reach early layers, preventing those layers from learning. Residual connections solve this by providing a direct path for gradients to flow backward through the network.</p>
-
                 <div class="diagram">
                     <svg viewBox="0 0 500 600" xmlns="http://www.w3.org/2000/svg">
                         <!-- Input -->
