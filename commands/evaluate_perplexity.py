@@ -42,6 +42,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.perplexity import evaluate_perplexity, calculate_perplexity_from_loss
+from src.transformer.device_utils import init_device, get_autocast_context
 
 # Import encoding detection from train.py
 sys.path.append(str(Path(__file__).parent))
@@ -150,7 +151,7 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     return model, checkpoint, detected_encoding
 
 
-def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8, device='cpu', encoding='p50k_base'):
+def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8, device='cpu', encoding='p50k_base', autocast_ctx=None):
     """
     Evaluate a single checkpoint on a dataset.
 
@@ -163,6 +164,7 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
         batch_size: Batch size for evaluation
         device: Device to run on
         encoding: Tokenizer encoding to use
+        autocast_ctx: Optional autocast context for mixed precision
 
     Returns:
         perplexity: Perplexity on the dataset
@@ -201,7 +203,7 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
 
     # Evaluate
     print("Evaluating...")
-    perplexity, loss = evaluate_perplexity(model, dataloader, device=device)
+    perplexity, loss = evaluate_perplexity(model, dataloader, device=device, autocast_ctx=autocast_ctx)
 
     print("=" * 80)
     print("EVALUATION RESULTS")
@@ -256,7 +258,7 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
     return perplexity, loss
 
 
-def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu', encoding='p50k_base'):
+def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu', encoding='p50k_base', autocast_ctx=None):
     """
     Compare all checkpoints in a directory to find the best one.
 
@@ -268,6 +270,7 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu',
         seq_length: Sequence length
         device: Device to run on
         encoding: Tokenizer encoding to use
+        autocast_ctx: Optional autocast context for mixed precision
     """
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*.pt"))
@@ -305,7 +308,7 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu',
             sys.exit(1)
 
         # Evaluate
-        perplexity, loss = evaluate_perplexity(model, dataloader, device=device)
+        perplexity, loss = evaluate_perplexity(model, dataloader, device=device, autocast_ctx=autocast_ctx)
 
         results.append({
             'checkpoint': checkpoint_path.name,
@@ -431,15 +434,15 @@ def main():
 
     args = parser.parse_args()
 
-    # Detect device
-    if args.device == "cuda" and not torch.cuda.is_available():
-        print("CUDA not available, falling back to CPU")
-        device = "cpu"
-    elif args.device == "mps" and not torch.backends.mps.is_available():
-        print("MPS not available, falling back to CPU")
-        device = "cpu"
-    else:
-        device = args.device
+    # Initialize device with proper setup
+    try:
+        device, device_name = init_device(args.device, seed=42)
+        autocast_ctx = get_autocast_context(device.type)
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        print("Falling back to CPU")
+        device, device_name = init_device("cpu", seed=42)
+        autocast_ctx = get_autocast_context(device.type)
 
     if args.compare:
         # Compare all checkpoints
@@ -448,7 +451,8 @@ def main():
             args.text_file,
             seq_length=args.seq_length,
             device=device,
-            encoding=args.encoding
+            encoding=args.encoding,
+            autocast_ctx=autocast_ctx
         )
     elif args.checkpoint:
         # Evaluate single checkpoint
@@ -458,7 +462,8 @@ def main():
             seq_length=args.seq_length,
             batch_size=args.batch_size,
             device=device,
-            encoding=args.encoding
+            encoding=args.encoding,
+            autocast_ctx=autocast_ctx
         )
     else:
         # Default: find latest checkpoint
@@ -480,7 +485,8 @@ def main():
             seq_length=args.seq_length,
             batch_size=args.batch_size,
             device=device,
-            encoding=args.encoding
+            encoding=args.encoding,
+            autocast_ctx=autocast_ctx
         )
 
 
