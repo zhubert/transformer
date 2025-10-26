@@ -31,17 +31,72 @@ Use Cases:
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
 import sys
 import argparse
+import tiktoken
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
-from src.transformer.dataset import TextDataset
 from src.transformer.perplexity import evaluate_perplexity, calculate_perplexity_from_loss
+
+
+class SimpleTextDataset(Dataset):
+    """
+    Simple dataset for loading text from a file for evaluation.
+
+    This is a minimal dataset implementation for evaluation purposes only.
+    For training, use FineWebDataset instead.
+    """
+
+    def __init__(self, text_file, seq_length=128, encoding_name="p50k_base"):
+        """
+        Load text from a file and create training sequences.
+
+        Args:
+            text_file: Path to text file
+            seq_length: Length of each sequence
+            encoding_name: tiktoken encoding to use
+        """
+        self.seq_length = seq_length
+        self.tokenizer = tiktoken.get_encoding(encoding_name)
+
+        # Read text file
+        with open(text_file, 'r', encoding='utf-8') as f:
+            text = f.read()
+
+        # Tokenize entire text
+        self.tokens = self.tokenizer.encode(text)
+
+        # Calculate number of complete sequences
+        self.num_sequences = (len(self.tokens) - 1) // seq_length
+
+        print(f"  Total tokens: {len(self.tokens):,}")
+        print(f"  Sequences: {self.num_sequences:,}")
+        print(f"  Vocabulary size: {self.tokenizer.n_vocab:,}")
+
+    def __len__(self):
+        return self.num_sequences
+
+    def __getitem__(self, idx):
+        """Get a single training pair (input, target)."""
+        start_idx = idx * self.seq_length
+        end_idx = start_idx + self.seq_length
+
+        input_seq = self.tokens[start_idx:end_idx]
+        target_seq = self.tokens[start_idx + 1:end_idx + 1]
+
+        return (
+            torch.tensor(input_seq, dtype=torch.long),
+            torch.tensor(target_seq, dtype=torch.long)
+        )
+
+    @property
+    def vocab_size(self):
+        return self.tokenizer.n_vocab
 
 
 def load_checkpoint(checkpoint_path, device='cpu'):
@@ -109,7 +164,7 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
 
     # Load dataset
     print(f"Loading evaluation dataset: {text_file}")
-    dataset = TextDataset(text_file, seq_length=seq_length)
+    dataset = SimpleTextDataset(text_file, seq_length=seq_length)
     print()
 
     dataloader = DataLoader(
@@ -207,7 +262,7 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu')
     print()
 
     # Load dataset once
-    dataset = TextDataset(text_file, seq_length=seq_length)
+    dataset = SimpleTextDataset(text_file, seq_length=seq_length)
     dataloader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False)
 
     results = []

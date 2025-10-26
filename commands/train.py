@@ -353,7 +353,7 @@ def train(debug=False, use_mps=False):
                 current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
                 batch_perplexity = calculate_perplexity_from_loss(loss).item()
                 avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
-                print(f"  Batch {batch_idx + 1}/{len(dataloader)}, "
+                print(f"  Batch {batch_idx + 1}/{steps_per_epoch}, "
                       f"Loss: {loss.item():.4f}, Perplexity: {batch_perplexity:.2f}, "
                       f"Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.2f}, "
                       f"LR: {current_lr:.6f}")
@@ -368,7 +368,7 @@ def train(debug=False, use_mps=False):
 
         # Epoch summary
         epoch_time = time.time() - epoch_start
-        avg_epoch_loss = epoch_loss / len(dataloader)
+        avg_epoch_loss = epoch_loss / (batch_idx + 1)  # Use actual batch count
         avg_epoch_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_epoch_loss)).item()
         current_lr = scheduler.get_last_lr()[0]
         print(f"\n  Epoch {epoch + 1} complete!")

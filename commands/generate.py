@@ -55,7 +55,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
-from src.transformer.dataset import TextDataset
+import tiktoken
 
 
 # Generation presets for different use cases
@@ -128,13 +128,13 @@ def load_model(checkpoint_path, device):
     return model, config
 
 
-def generate_text(model, dataset, prompt, max_length, sampling_method, sampling_params, device):
+def generate_text(model, tokenizer, prompt, max_length, sampling_method, sampling_params, device):
     """
     Generate text from a prompt using the specified sampling method.
 
     Args:
         model: Trained DecoderOnlyTransformer
-        dataset: TextDataset (for tokenization)
+        tokenizer: tiktoken tokenizer (for tokenization)
         prompt: Input text to continue from
         max_length: Maximum length to generate
         sampling_method: "greedy", "top_k", "top_p", or "top_k_top_p"
@@ -145,7 +145,7 @@ def generate_text(model, dataset, prompt, max_length, sampling_method, sampling_
         generated_text: Generated text as string
     """
     # Tokenize prompt
-    prompt_tokens = dataset.tokenizer.encode(prompt)
+    prompt_tokens = tokenizer.encode(prompt)
     input_ids = torch.tensor([prompt_tokens], dtype=torch.long).to(device)
 
     print(f"Prompt tokens: {len(prompt_tokens)}")
@@ -162,17 +162,17 @@ def generate_text(model, dataset, prompt, max_length, sampling_method, sampling_
         )
 
     # Decode
-    generated_text = dataset.decode(output_ids[0])
+    generated_text = tokenizer.decode(output_ids[0].tolist())
     return generated_text
 
 
-def interactive_mode(model, dataset, preset, device):
+def interactive_mode(model, tokenizer, preset, device):
     """
     Interactive generation mode - keep prompting user for input.
 
     Args:
         model: Trained model
-        dataset: TextDataset for tokenization
+        tokenizer: tiktoken tokenizer for tokenization
         preset: Generation preset configuration
         device: Device to run on
     """
@@ -212,7 +212,7 @@ def interactive_mode(model, dataset, preset, device):
 
             # Generate
             generated = generate_text(
-                model, dataset, prompt,
+                model, tokenizer, prompt,
                 max_length=preset['max_length'],
                 sampling_method=preset['method'],
                 sampling_params=preset['params'],
@@ -378,15 +378,11 @@ Examples:
     # Load model
     model, config = load_model(checkpoint_path, device)
 
-    # Initialize dataset for tokenization
-    # Note: We don't need the actual text, just the tokenizer
-    # Using a dummy file path - only vocab_size matters for generation
+    # Initialize tokenizer
     print("Initializing tokenizer...")
-    dataset = TextDataset.__new__(TextDataset)
-    import tiktoken
-    dataset.tokenizer = tiktoken.get_encoding("p50k_base")
-    dataset.vocab_size = config['vocab_size']
-    print(f"  Vocabulary size: {dataset.vocab_size:,}")
+    tokenizer = tiktoken.get_encoding("p50k_base")
+    vocab_size = config['vocab_size']
+    print(f"  Vocabulary size: {vocab_size:,}")
     print()
 
     # Setup generation parameters
@@ -417,7 +413,7 @@ Examples:
     # Interactive or single prompt mode
     if args.prompt is None:
         # Interactive mode
-        interactive_mode(model, dataset, generation_config, device)
+        interactive_mode(model, tokenizer, generation_config, device)
     else:
         # Single generation
         print(f"Preset: {args.preset} - {preset_config['description']}")
@@ -428,7 +424,7 @@ Examples:
         print()
 
         generated = generate_text(
-            model, dataset, args.prompt,
+            model, tokenizer, args.prompt,
             max_length=args.max_length,
             sampling_method=generation_config["method"],
             sampling_params=generation_config["params"],
