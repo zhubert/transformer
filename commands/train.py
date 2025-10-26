@@ -459,12 +459,12 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
 
     def print_table_header():
         """Print the table header for training metrics."""
-        print(f"{'Batch':>10} {'Loss':>8} {'PPL':>8} {'Avg Loss':>9} {'Avg PPL':>9} {'LR':>10} {'Phase':>10}")
-        print("-" * 90)
+        print(f"{'Batch':>10} {'Loss':>8} {'PPL':>8} {'Avg Loss':>9} {'Avg PPL':>9} {'LR':>10} {'Phase':>15}")
+        print("-" * 95)
 
     for epoch in range(NUM_EPOCHS):
         print(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
-        print("-" * 90)
+        print("-" * 95)
 
         # ==============================================================================
         # TRAINING PHASE
@@ -560,12 +560,16 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
 
                 # Determine phase (warmup or training)
                 step_in_cycle, total_in_cycle = accumulator.get_progress()
-                phase = "warmup" if total_batches < (warmup_steps * accumulation_steps) else "learning"
+                current_optimizer_step = total_batches // accumulation_steps
+                if current_optimizer_step < warmup_steps:
+                    phase = f"warmup {current_optimizer_step}/{warmup_steps}"
+                else:
+                    phase = "learning"
 
                 # Format batch count as "X/Y"
                 batch_str = f"{batch_idx + 1}/{batches_per_epoch}"
                 print(f"{batch_str:>10} {loss.item() * accumulation_steps:8.4f} {batch_perplexity:8.2f} "
-                      f"{avg_loss:9.4f} {avg_perplexity:9.2f} {current_lr:10.6f} {phase:>10}")
+                      f"{avg_loss:9.4f} {avg_perplexity:9.2f} {current_lr:10.6f} {phase:>15}")
                 log_lines_printed += 1
 
         # Training phase summary
