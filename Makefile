@@ -1,4 +1,4 @@
-.PHONY: help install test test-cov clean train generate evaluate compare demo-sampling
+.PHONY: help install test test-cov clean train train-quick generate evaluate compare demo-sampling
 
 # Default target
 help:
@@ -10,10 +10,11 @@ help:
 	@echo "Development:"
 	@echo "  make test          - Run all tests"
 	@echo "  make test-cov      - Run tests with coverage report"
-	@echo "  make clean         - Remove Python cache files and build artifacts"
+	@echo "  make clean         - Remove cache files, checkpoints, and build artifacts"
 	@echo ""
 	@echo "Transformer Operations:"
-	@echo "  make train         - Train a transformer model"
+	@echo "  make train         - Train a transformer model (100M tokens/epoch)"
+	@echo "  make train-quick   - Quick training (10M tokens/epoch, smaller model)"
 	@echo "  make generate      - Generate text (interactive mode)"
 	@echo "  make evaluate      - Evaluate latest checkpoint"
 	@echo "  make compare       - Compare all checkpoints"
@@ -43,10 +44,16 @@ clean:
 	rm -rf htmlcov
 	rm -rf .coverage
 	rm -rf build dist *.egg-info
+	rm -rf data/fineweb_cache
+	rm -rf checkpoints
+	rm -rf checkpoints_quick
 
 # Transformer operations via main.py CLI
 train:
 	uv run python main.py train
+
+train-quick:
+	uv run python commands/train.py --quick
 
 generate:
 	@echo "Starting interactive generation mode..."

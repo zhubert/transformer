@@ -57,6 +57,10 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.transformer.model import DecoderOnlyTransformer
 import tiktoken
 
+# Import encoding detection from train.py
+sys.path.append(str(Path(__file__).parent))
+from train import detect_encoding_from_checkpoint
+
 
 # Generation presets for different use cases
 GENERATION_PRESETS = {
@@ -99,13 +103,19 @@ def load_model(checkpoint_path, device):
     Returns:
         model: Loaded DecoderOnlyTransformer
         config: Model configuration dict
+        detected_encoding: Detected encoding from checkpoint
     """
     print(f"Loading model from {checkpoint_path}...")
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
     config = checkpoint['config']
+
+    # Detect encoding
+    detected_encoding = detect_encoding_from_checkpoint(checkpoint)
+
     print(f"  Model config: {config['num_layers']} layers, "
           f"{config['d_model']} d_model, {config['num_heads']} heads")
+    print(f"  Encoding: {detected_encoding}")
 
     # Create model with saved configuration
     model = DecoderOnlyTransformer(
@@ -125,7 +135,7 @@ def load_model(checkpoint_path, device):
     print(f"  Checkpoint from epoch {checkpoint['epoch']}, loss: {checkpoint['loss']:.4f}")
     print()
 
-    return model, config
+    return model, config, detected_encoding
 
 
 def generate_text(model, tokenizer, prompt, max_length, sampling_method, sampling_params, device):
@@ -327,6 +337,14 @@ Examples:
         help="List all available presets and exit"
     )
 
+    parser.add_argument(
+        "--encoding",
+        type=str,
+        default="p50k_base",
+        choices=["p50k_base", "cl100k_base"],
+        help="Tokenizer encoding to use (default: p50k_base, ~50K vocab; cl100k_base: ~100K vocab)"
+    )
+
     args = parser.parse_args()
 
     # List presets if requested
@@ -376,11 +394,22 @@ Examples:
     print()
 
     # Load model
-    model, config = load_model(checkpoint_path, device)
+    model, config, detected_encoding = load_model(checkpoint_path, device)
+
+    # Check for encoding mismatch
+    if detected_encoding != args.encoding:
+        print(f"ERROR: Checkpoint was trained with {detected_encoding}")
+        print(f"       but you're trying to generate with {args.encoding}")
+        print()
+        print(f"Please use the same encoding as the checkpoint:")
+        print(f"  uv run python commands/generate.py {checkpoint_path} --encoding {detected_encoding}")
+        print()
+        sys.exit(1)
 
     # Initialize tokenizer
     print("Initializing tokenizer...")
-    tokenizer = tiktoken.get_encoding("p50k_base")
+    print(f"  Using encoding: {args.encoding}")
+    tokenizer = tiktoken.get_encoding(args.encoding)
     vocab_size = config['vocab_size']
     print(f"  Vocabulary size: {vocab_size:,}")
     print()

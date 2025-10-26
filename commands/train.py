@@ -99,6 +99,49 @@ from src.transformer.scheduler import get_cosine_schedule_with_warmup
 from src.transformer.perplexity import calculate_perplexity_from_loss
 
 
+def detect_encoding_from_checkpoint(checkpoint):
+    """
+    Detect encoding from checkpoint, with backward compatibility.
+
+    Args:
+        checkpoint: Loaded checkpoint dict
+
+    Returns:
+        encoding_name: String like 'p50k_base' or 'cl100k_base'
+    """
+    # Preferred: use stored encoding (new checkpoints)
+    if 'encoding' in checkpoint.get('config', {}):
+        return checkpoint['config']['encoding']
+
+    # Fallback: infer from vocab_size (backward compatibility with old checkpoints)
+    vocab_size = checkpoint['config']['vocab_size']
+    if vocab_size == 50281:
+        return 'p50k_base'
+    elif vocab_size == 100277:
+        return 'cl100k_base'
+    else:
+        raise ValueError(f"Unknown vocab size: {vocab_size}. Cannot detect encoding.")
+
+
+def get_encoding_short_name(encoding):
+    """
+    Convert full encoding name to short version for filenames.
+
+    Args:
+        encoding: Full encoding name like 'p50k_base' or 'cl100k_base'
+
+    Returns:
+        Short name like 'p50k' or 'cl100k'
+    """
+    if encoding == 'p50k_base':
+        return 'p50k'
+    elif encoding == 'cl100k_base':
+        return 'cl100k'
+    else:
+        # Fallback: just remove '_base' suffix if present
+        return encoding.replace('_base', '')
+
+
 def get_device(use_mps=False):
     """
     Detect best available device for training.
@@ -131,13 +174,15 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu"):
     return generated_text
 
 
-def train(debug=False, use_mps=False):
+def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
     """
     Main training function.
 
     Args:
         debug: If True, print diagnostic information for debugging NaN issues
         use_mps: If True, try MPS (experimental - has known NaN issues)
+        encoding: Tokenizer encoding to use ("p50k_base" or "cl100k_base")
+        quick: If True, use smaller model and fewer tokens for faster training
     """
 
     # Set random seed for reproducibility
@@ -150,25 +195,44 @@ def train(debug=False, use_mps=False):
     # Configuration
     SEQ_LENGTH = 128
     BATCH_SIZE = 8              # Reduced from 32 to fit in M1 memory
-    D_MODEL = 256
-    NUM_HEADS = 4
-    NUM_LAYERS = 6
-    D_FF = 1024
+
+    # Quick mode: smaller model, fewer tokens for faster iteration
+    if quick:
+        D_MODEL = 128
+        NUM_HEADS = 4
+        NUM_LAYERS = 4
+        D_FF = 512
+        NUM_EPOCHS = 10
+        TOKENS_PER_EPOCH = 10_000_000  # 10M tokens per epoch
+        CHECKPOINT_DIR = Path("checkpoints_quick")
+    else:
+        D_MODEL = 256
+        NUM_HEADS = 4
+        NUM_LAYERS = 6
+        D_FF = 1024
+        NUM_EPOCHS = 20
+        TOKENS_PER_EPOCH = 100_000_000  # 100M tokens per epoch
+        CHECKPOINT_DIR = Path("checkpoints")
+
     DROPOUT = 0.1
-    NUM_EPOCHS = 20
     LEARNING_RATE = 3e-4        # Standard transformer learning rate
     WEIGHT_DECAY = 0.01
-    TOKENS_PER_EPOCH = 100_000_000  # 100M tokens per epoch from FineWeb
     MAX_CACHED_SHARDS = 5           # Keep 5 shards in cache (~2GB)
     LOG_INTERVAL = 10
     SAMPLE_INTERVAL = 100
     SAMPLE_PROMPT = "The"
-    CHECKPOINT_DIR = Path("checkpoints")
     CHECKPOINT_DIR.mkdir(exist_ok=True)
 
     print("=" * 80)
     print("TRANSFORMER TRAINING")
     print("=" * 80)
+    print()
+
+    if quick:
+        print("Quick mode enabled: smaller model, fewer tokens")
+        print()
+
+    print(f"Tokenizer encoding: {encoding}")
     print()
 
     # Device setup
@@ -185,7 +249,8 @@ def train(debug=False, use_mps=False):
         seq_length=SEQ_LENGTH,
         tokens_per_epoch=TOKENS_PER_EPOCH,
         max_cached_shards=MAX_CACHED_SHARDS,
-        seed=42  # Reproducible shard selection
+        seed=42,  # Reproducible shard selection
+        encoding_name=encoding
     )
     print()
 
@@ -378,8 +443,9 @@ def train(debug=False, use_mps=False):
         print(f"  Time: {epoch_time:.1f}s")
         print()
 
-        # Save checkpoint
-        checkpoint_path = CHECKPOINT_DIR / f"model_epoch_{epoch + 1}.pt"
+        # Save checkpoint with encoding in filename
+        encoding_short = get_encoding_short_name(encoding)
+        checkpoint_path = CHECKPOINT_DIR / f"model_epoch_{epoch + 1}_{encoding_short}.pt"
         torch.save({
             'epoch': epoch + 1,
             'model_state_dict': model.state_dict(),
@@ -395,6 +461,7 @@ def train(debug=False, use_mps=False):
                 'num_layers': NUM_LAYERS,
                 'd_ff': D_FF,
                 'dropout': DROPOUT,
+                'encoding': encoding,  # Store encoding for detection
             }
         }, checkpoint_path)
         print(f"  Saved checkpoint: {checkpoint_path}")
@@ -430,6 +497,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Use MPS (Apple Silicon GPU) - EXPERIMENTAL, has known NaN issues"
     )
+    parser.add_argument(
+        "--encoding",
+        type=str,
+        default="p50k_base",
+        choices=["p50k_base", "cl100k_base"],
+        help="Tokenizer encoding to use (default: p50k_base, ~50K vocab; cl100k_base: ~100K vocab)"
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick training mode: smaller model (4 layers, d_model=128) and fewer tokens (10M/epoch)"
+    )
     args = parser.parse_args()
 
-    train(debug=args.debug, use_mps=args.mps)
+    train(debug=args.debug, use_mps=args.mps, encoding=args.encoding, quick=args.quick)

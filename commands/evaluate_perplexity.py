@@ -43,6 +43,10 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.perplexity import evaluate_perplexity, calculate_perplexity_from_loss
 
+# Import encoding detection from train.py
+sys.path.append(str(Path(__file__).parent))
+from train import detect_encoding_from_checkpoint
+
 
 class SimpleTextDataset(Dataset):
     """
@@ -133,16 +137,20 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     model = model.to(device)
     model.eval()
 
+    # Detect encoding
+    detected_encoding = detect_encoding_from_checkpoint(checkpoint)
+
     print(f"  Epoch: {checkpoint['epoch']}")
+    print(f"  Encoding: {detected_encoding}")
     print(f"  Training loss: {checkpoint['loss']:.4f}")
     if 'perplexity' in checkpoint:
         print(f"  Training perplexity: {checkpoint['perplexity']:.2f}")
     print()
 
-    return model, checkpoint
+    return model, checkpoint, detected_encoding
 
 
-def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8, device='cpu'):
+def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8, device='cpu', encoding='p50k_base'):
     """
     Evaluate a single checkpoint on a dataset.
 
@@ -154,17 +162,28 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
         seq_length: Sequence length for evaluation
         batch_size: Batch size for evaluation
         device: Device to run on
+        encoding: Tokenizer encoding to use
 
     Returns:
         perplexity: Perplexity on the dataset
         loss: Cross-entropy loss on the dataset
     """
     # Load model
-    model, checkpoint = load_checkpoint(checkpoint_path, device=device)
+    model, checkpoint, detected_encoding = load_checkpoint(checkpoint_path, device=device)
+
+    # Check for encoding mismatch
+    if detected_encoding != encoding:
+        print(f"  ERROR: Checkpoint was trained with {detected_encoding}")
+        print(f"         but you're trying to evaluate with {encoding}")
+        print()
+        print(f"  Please use the same encoding as the checkpoint:")
+        print(f"    uv run python commands/evaluate_perplexity.py --encoding {detected_encoding}")
+        print()
+        sys.exit(1)
 
     # Load dataset
     print(f"Loading evaluation dataset: {text_file}")
-    dataset = SimpleTextDataset(text_file, seq_length=seq_length)
+    dataset = SimpleTextDataset(text_file, seq_length=seq_length, encoding_name=encoding)
     print()
 
     dataloader = DataLoader(
@@ -237,7 +256,7 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
     return perplexity, loss
 
 
-def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu'):
+def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu', encoding='p50k_base'):
     """
     Compare all checkpoints in a directory to find the best one.
 
@@ -248,6 +267,7 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu')
         text_file: Text file to evaluate on
         seq_length: Sequence length
         device: Device to run on
+        encoding: Tokenizer encoding to use
     """
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*.pt"))
@@ -262,7 +282,7 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu')
     print()
 
     # Load dataset once
-    dataset = SimpleTextDataset(text_file, seq_length=seq_length)
+    dataset = SimpleTextDataset(text_file, seq_length=seq_length, encoding_name=encoding)
     dataloader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False)
 
     results = []
@@ -272,7 +292,17 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu')
         print("-" * 80)
 
         # Load model
-        model, checkpoint = load_checkpoint(checkpoint_path, device=device)
+        model, checkpoint, detected_encoding = load_checkpoint(checkpoint_path, device=device)
+
+        # Check for encoding mismatch
+        if detected_encoding != encoding:
+            print(f"  ERROR: This checkpoint was trained with {detected_encoding}")
+            print(f"         but you're trying to evaluate with {encoding}")
+            print()
+            print(f"  Please use the same encoding as the checkpoints:")
+            print(f"    uv run python commands/evaluate_perplexity.py --compare --encoding {detected_encoding}")
+            print()
+            sys.exit(1)
 
         # Evaluate
         perplexity, loss = evaluate_perplexity(model, dataloader, device=device)
@@ -391,6 +421,13 @@ def main():
         choices=["cpu", "cuda", "mps"],
         help="Device to run evaluation on"
     )
+    parser.add_argument(
+        "--encoding",
+        type=str,
+        default="p50k_base",
+        choices=["p50k_base", "cl100k_base"],
+        help="Tokenizer encoding to use (default: p50k_base, ~50K vocab; cl100k_base: ~100K vocab)"
+    )
 
     args = parser.parse_args()
 
@@ -410,7 +447,8 @@ def main():
             args.checkpoint_dir,
             args.text_file,
             seq_length=args.seq_length,
-            device=device
+            device=device,
+            encoding=args.encoding
         )
     elif args.checkpoint:
         # Evaluate single checkpoint
@@ -419,7 +457,8 @@ def main():
             args.text_file,
             seq_length=args.seq_length,
             batch_size=args.batch_size,
-            device=device
+            device=device,
+            encoding=args.encoding
         )
     else:
         # Default: find latest checkpoint
@@ -440,7 +479,8 @@ def main():
             args.text_file,
             seq_length=args.seq_length,
             batch_size=args.batch_size,
-            device=device
+            device=device,
+            encoding=args.encoding
         )
 
 
