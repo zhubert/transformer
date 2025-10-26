@@ -80,6 +80,38 @@ MPS is Apple's GPU acceleration for PyTorch on M1/M2/M3 chips.
 Why use MPS instead of CPU?
 - 5-15x faster training
 - Can handle larger batches (more GPU memory)
+
+⚠️ KNOWN ISSUES with MPS:
+- Random NaN training failures (PyTorch bugs #107294, #109457)
+- Caused by asynchronous execution bugs in PyTorch's MPS backend
+- Affects transformer models specifically (attention + layer norm)
+- No official fix as of PyTorch 2.9.0
+
+Workarounds:
+- ✅ Use CPU (default) - stable, 100% reliable
+- ⚠️ Try MPS with --mps flag - 5-10x faster but may crash
+- 🐛 Debug mode: --mps --debug - forces synchronization (more stable, slower)
+
+What to Expect During Training:
+---------------------------------
+Training progress (quick mode on M1 MacBook Pro):
+
+Epoch 1:  Loss ~8.0, Perplexity ~3000  (random guessing)
+Epoch 3:  Loss ~5.0, Perplexity ~150   (learning patterns)
+Epoch 5:  Loss ~4.0, Perplexity ~55    (getting decent)
+Epoch 10: Loss ~3.0, Perplexity ~20    (pretty good!)
+
+Training time per epoch:
+- CPU: ~10-15 minutes (quick mode)
+- MPS: ~2-3 minutes (if stable)
+
+Loss Interpretation:
+- High loss (8-10): Model guessing randomly, terrible predictions
+- Medium loss (3-5): Model learning patterns
+- Low loss (1.5-3): Model making decent predictions
+- Very low loss (<1.5): Excellent predictions (or overfitting - check validation!)
+
+The model saves checkpoints after each epoch to checkpoints/ directory.
 """
 
 import torch

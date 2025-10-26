@@ -72,13 +72,20 @@ So if your training loss is 3.0, your perplexity is exp(3.0) ≈ 20.
 
 This means: "The model is as confused as if choosing from ~20 words"
 
-Typical Values:
----------------
-- Perfect model: Perplexity = 1.0 (always correct with 100% confidence)
-- Excellent model: Perplexity = 10-30 (GPT-2 level on good text)
-- Decent model: Perplexity = 50-100
-- Poor model: Perplexity = 200+
-- Random guessing: Perplexity = vocab_size (e.g., 50,000)
+Typical Perplexity Values:
+--------------------------
++-------------+------------+-----------------------------------------------+
+| Perplexity  | Quality    | Description                                   |
++-------------+------------+-----------------------------------------------+
+| 1.0         | Perfect    | Always 100% confident and correct             |
+|             |            | (impossible in practice)                      |
+| 10-30       | Excellent  | GPT-2 level performance on good text          |
+| 50-100      | Decent     | Model has learned patterns, room for          |
+|             |            | improvement                                   |
+| 200+        | Poor       | Model is quite confused, needs more training  |
+| ~vocab_size | Random     | Model is just guessing randomly               |
+|             |            | (e.g., 50,000 for large vocabulary)           |
++-------------+------------+-----------------------------------------------+
 
 Why Lower is Better:
 --------------------
@@ -108,6 +115,27 @@ Use Cases:
 3. Evaluate on validation/test sets
 4. Detect overfitting (train perplexity << val perplexity)
 5. Compare to other models in literature
+
+Detecting Overfitting:
+----------------------
+Compare training and validation perplexity to detect overfitting:
+
+Good generalization:
+    Train perplexity: 18.2
+    Val perplexity:   19.5
+    → Small gap, model generalizes well! ✓
+
+Overfitting:
+    Train perplexity: 12.3
+    Val perplexity:   45.8
+    → Large gap, model memorized training data! ✗
+
+If you see overfitting (val >> train), try:
+1. Add more dropout (increase dropout rate)
+2. Reduce model size (fewer layers, smaller dimensions)
+3. Get more training data
+4. Stop training earlier (early stopping)
+5. Add data augmentation or regularization
 """
 
 import torch

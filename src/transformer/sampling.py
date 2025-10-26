@@ -42,6 +42,21 @@ Temperature:
   = 1.0: Original probabilities
   > 1.0: More random/creative (flatter distribution)
 
+Recommended Settings by Use Case:
+----------------------------------
++-------------------+--------------+---------------------------------------+
+| Use Case          | Strategy     | Settings                              |
++-------------------+--------------+---------------------------------------+
+| Creative Writing  | top_k_top_p  | k=100, p=0.95, temp=1.2               |
+| Balanced/General  | top_k_top_p  | k=50, p=0.9, temp=1.0                 |
+| Factual/Technical | top_k_top_p  | k=40, p=0.85, temp=0.7                |
+| Chatbot           | top_p        | p=0.9, temp=0.8                       |
+| Code Generation   | top_k        | k=20, temp=0.6                        |
+| Debugging         | greedy       | (deterministic, no randomness)        |
++-------------------+--------------+---------------------------------------+
+
+For most use cases, top_k_top_p with k=50, p=0.9, temp=0.8-1.0 is recommended!
+
 Example Usage:
 --------------
     logits = model(input_ids)[:, -1, :]  # Shape: (batch, vocab_size)
