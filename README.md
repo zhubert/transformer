@@ -1,6 +1,6 @@
 # Transformer from Scratch
 
-An educational GPT-style transformer built from scratch in PyTorch. Every component is implemented by hand with comprehensive documentation to understand how modern LLMs work under the hood.
+An educational GPT-style transformer built from scratch in PyTorch. Every component is implemented by Claude's hand with comprehensive documentation to understand how modern LLMs work under the hood.
 
 ## Quick Start
 
