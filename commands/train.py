@@ -121,6 +121,10 @@ from pathlib import Path
 import sys
 import time
 import argparse
+from rich.console import Console
+from rich.table import Table
+from rich.live import Live
+from rich.panel import Panel
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -456,121 +460,157 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
 
     total_batches = 0
     start_time = time.time()
+    console = Console()
 
-    def print_table_header():
-        """Print the table header for training metrics."""
-        print(f"{'Batch':>10} {'Loss':>8} {'PPL':>8} {'Avg Loss':>9} {'Avg PPL':>9} {'LR':>10} {'Phase':>15}")
-        print("-" * 95)
+    def create_metrics_table(rows, epoch_num, num_epochs):
+        """Create a Rich table with training metrics and fixed header.
+
+        Args:
+            rows: List of tuples (batch_str, loss, ppl, avg_loss, avg_ppl, lr, phase)
+            epoch_num: Current epoch number (1-indexed)
+            num_epochs: Total number of epochs
+
+        Returns:
+            Rich Table with the metrics
+        """
+        table = Table(title=f"Epoch {epoch_num}/{num_epochs}", show_header=True, header_style="bold magenta")
+        table.add_column("Batch", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Loss", justify="right", style="green")
+        table.add_column("PPL", justify="right", style="green")
+        table.add_column("Avg Loss", justify="right", style="yellow")
+        table.add_column("Avg PPL", justify="right", style="yellow")
+        table.add_column("LR", justify="right", style="blue")
+        table.add_column("Phase", justify="right", style="magenta")
+
+        # Only show last 15 rows to keep display clean
+        for row in rows[-15:]:
+            batch_str, loss, ppl, avg_loss, avg_ppl, lr, phase = row
+            # Color code phase
+            phase_style = "yellow" if "warmup" in phase else "green"
+            table.add_row(
+                batch_str,
+                f"{loss:.4f}",
+                f"{ppl:.2f}",
+                f"{avg_loss:.4f}",
+                f"{avg_ppl:.2f}",
+                f"{lr:.6f}",
+                f"[{phase_style}]{phase}[/{phase_style}]"
+            )
+
+        return table
 
     for epoch in range(NUM_EPOCHS):
-        print(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
-        print("-" * 95)
-
         # ==============================================================================
         # TRAINING PHASE
         # ==============================================================================
         model.train()  # Set to training mode
 
-        # Print initial table header
-        print_table_header()
-
         epoch_loss = 0.0
         epoch_start = time.time()
-        log_lines_printed = 0  # Track how many log lines we've printed
+        training_rows = []  # Store training metrics for Rich table display
 
         # Reset gradient accumulator for new epoch
         accumulator.reset()
         optimizer.zero_grad()  # Clear gradients once at epoch start
 
-        for batch_idx, (inputs, targets) in enumerate(train_dataloader):
-            # Move to device
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+        # Create Live display for this epoch
+        # This keeps the table header fixed at top while rows scroll
+        with Live(create_metrics_table(training_rows, epoch + 1, NUM_EPOCHS), console=console, refresh_per_second=4) as live:
+            for batch_idx, (inputs, targets) in enumerate(train_dataloader):
+                # Move to device
+                inputs = inputs.to(device)
+                targets = targets.to(device)
 
-            # Forward pass with autocast (mixed precision on CUDA, no-op on MPS/CPU)
-            with autocast_ctx:
-                logits = model(inputs, debug=debug)
+                # Forward pass with autocast (mixed precision on CUDA, no-op on MPS/CPU)
+                with autocast_ctx:
+                    logits = model(inputs, debug=debug)
 
-                # NaN detection (defensive check)
-                if torch.isnan(logits).any() or torch.isinf(logits).any():
-                    print(f"\n  ERROR: NaN/Inf detected in logits at batch {batch_idx + 1}")
-                    print(f"  Logits stats: min={logits.min().item():.4f}, "
-                          f"max={logits.max().item():.4f}, mean={logits.mean().item():.4f}")
-                    raise ValueError("NaN/Inf in logits - training unstable")
+                    # NaN detection (defensive check)
+                    if torch.isnan(logits).any() or torch.isinf(logits).any():
+                        print(f"\n  ERROR: NaN/Inf detected in logits at batch {batch_idx + 1}")
+                        print(f"  Logits stats: min={logits.min().item():.4f}, "
+                              f"max={logits.max().item():.4f}, mean={logits.mean().item():.4f}")
+                        raise ValueError("NaN/Inf in logits - training unstable")
 
-                # Calculate loss
-                batch_size, seq_length, vocab_size = logits.shape
-                loss = criterion(
-                    logits.view(batch_size * seq_length, vocab_size),
-                    targets.view(batch_size * seq_length)
-                )
+                    # Calculate loss
+                    batch_size, seq_length, vocab_size = logits.shape
+                    loss = criterion(
+                        logits.view(batch_size * seq_length, vocab_size),
+                        targets.view(batch_size * seq_length)
+                    )
 
-                # IMPORTANT: Scale loss for gradient accumulation
-                # This ensures accumulated gradients have correct magnitude
-                # See training_utils.py for detailed explanation
-                loss = accumulator.scale_loss(loss)
+                    # IMPORTANT: Scale loss for gradient accumulation
+                    # This ensures accumulated gradients have correct magnitude
+                    # See training_utils.py for detailed explanation
+                    loss = accumulator.scale_loss(loss)
 
-            # Check loss for NaN
-            if torch.isnan(loss) or torch.isinf(loss):
-                print(f"\n  ERROR: NaN/Inf loss at batch {batch_idx + 1}")
-                print(f"  Loss value: {loss.item()}")
-                raise ValueError("NaN/Inf loss - training unstable")
+                # Check loss for NaN
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"\n  ERROR: NaN/Inf loss at batch {batch_idx + 1}")
+                    print(f"  Loss value: {loss.item()}")
+                    raise ValueError("NaN/Inf loss - training unstable")
 
-            # Backward pass - accumulates gradients
-            loss.backward()
+                # Backward pass - accumulates gradients
+                loss.backward()
 
-            # Check if we should update weights (every accumulation_steps batches)
-            if accumulator.step():
-                # Clip gradients to prevent explosion
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                # Check if we should update weights (every accumulation_steps batches)
+                if accumulator.step():
+                    # Clip gradients to prevent explosion
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-                # Update weights
-                optimizer.step()
+                    # Update weights
+                    optimizer.step()
 
-                # Update learning rate (MUST be called after optimizer.step())
-                # This adjusts the LR according to our warmup + cosine decay schedule
-                scheduler.step()
+                    # Update learning rate (MUST be called after optimizer.step())
+                    # This adjusts the LR according to our warmup + cosine decay schedule
+                    scheduler.step()
 
-                # Clear gradients for next accumulation cycle
-                optimizer.zero_grad()
+                    # Clear gradients for next accumulation cycle
+                    optimizer.zero_grad()
 
-            # Track loss (unscaled for logging)
-            epoch_loss += loss.item() * accumulation_steps  # Unscale for display
-            total_batches += 1
+                # Track loss (unscaled for logging)
+                epoch_loss += loss.item() * accumulation_steps  # Unscale for display
+                total_batches += 1
 
-            # Debug: Check for NaN in weights after first batch
-            if batch_idx == 0 and not debug:
-                for name, param in model.named_parameters():
-                    if torch.isnan(param).any():
-                        print(f"  WARNING: NaN in weights after batch 1: {name}")
-                        print(f"  This means batch 1 corrupted the model!")
-                        raise ValueError("Weights corrupted after batch 1")
+                # Debug: Check for NaN in weights after first batch
+                if batch_idx == 0 and not debug:
+                    for name, param in model.named_parameters():
+                        if torch.isnan(param).any():
+                            print(f"  WARNING: NaN in weights after batch 1: {name}")
+                            print(f"  This means batch 1 corrupted the model!")
+                            raise ValueError("Weights corrupted after batch 1")
 
-            # Logging
-            if (batch_idx + 1) % LOG_INTERVAL == 0:
-                avg_loss = epoch_loss / (batch_idx + 1)
-                current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
-                batch_perplexity = calculate_perplexity_from_loss(loss * accumulation_steps).item()
-                avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
+                # Logging
+                if (batch_idx + 1) % LOG_INTERVAL == 0:
+                    avg_loss = epoch_loss / (batch_idx + 1)
+                    current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
+                    batch_perplexity = calculate_perplexity_from_loss(loss * accumulation_steps).item()
+                    avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
 
-                # Repeat header every 30 log lines to keep it visible
-                if log_lines_printed > 0 and log_lines_printed % 30 == 0:
-                    print()
-                    print_table_header()
+                    # Determine phase (warmup or training)
+                    step_in_cycle, total_in_cycle = accumulator.get_progress()
+                    current_optimizer_step = total_batches // accumulation_steps
+                    if current_optimizer_step < warmup_steps:
+                        phase = f"warmup {current_optimizer_step}/{warmup_steps}"
+                    else:
+                        phase = "learning"
 
-                # Determine phase (warmup or training)
-                step_in_cycle, total_in_cycle = accumulator.get_progress()
-                current_optimizer_step = total_batches // accumulation_steps
-                if current_optimizer_step < warmup_steps:
-                    phase = f"warmup {current_optimizer_step}/{warmup_steps}"
-                else:
-                    phase = "learning"
+                    # Format batch count as "X/Y"
+                    batch_str = f"{batch_idx + 1}/{batches_per_epoch}"
 
-                # Format batch count as "X/Y"
-                batch_str = f"{batch_idx + 1}/{batches_per_epoch}"
-                print(f"{batch_str:>10} {loss.item() * accumulation_steps:8.4f} {batch_perplexity:8.2f} "
-                      f"{avg_loss:9.4f} {avg_perplexity:9.2f} {current_lr:10.6f} {phase:>15}")
-                log_lines_printed += 1
+                    # Add row to training data
+                    training_rows.append((
+                        batch_str,
+                        loss.item() * accumulation_steps,
+                        batch_perplexity,
+                        avg_loss,
+                        avg_perplexity,
+                        current_lr,
+                        phase
+                    ))
+
+                    # Update the live display with new table
+                    live.update(create_metrics_table(training_rows, epoch + 1, NUM_EPOCHS))
 
         # Training phase summary
         synchronize()
@@ -686,7 +726,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     print("Final sample generations:")
     print("-" * 80)
     for prompt in ["The", "In the", "She was"]:
-        sample = generate_sample(model, dataset, prompt, max_length=100, device=device, autocast_ctx=autocast_ctx)
+        sample = generate_sample(model, train_dataset, prompt, max_length=100, device=device, autocast_ctx=autocast_ctx)
         print(f"\nPrompt: '{prompt}'")
         print(f"Generated: '{sample}'")
     print()
