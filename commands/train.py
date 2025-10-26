@@ -367,7 +367,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     # Create model
     print("Creating model...")
     model = DecoderOnlyTransformer(
-        vocab_size=dataset.vocab_size,
+        vocab_size=train_dataset.vocab_size,
         d_model=D_MODEL,
         num_heads=NUM_HEADS,
         num_layers=NUM_LAYERS,
