@@ -225,14 +225,6 @@ class FineWebDataset(IterableDataset):
         if seed is not None:
             random.seed(seed)
 
-        print(f"FineWeb Dataset initialized ({split} split):")
-        print(f"  Cache directory: {self.cache_dir}")
-        print(f"  Tokens per epoch: {self.tokens_per_epoch:,}")
-        print(f"  Sequences per epoch: ~{self.tokens_per_epoch // seq_length:,}")
-        print(f"  Max cached shards: {max_cached_shards}")
-        print(f"  Vocabulary size: {self.tokenizer.n_vocab:,}")
-        print(f"  Validation fraction: {validation_fraction:.1%}")
-
     def _load_metadata(self) -> dict:
         """Load cache metadata from disk."""
         if self.metadata_file.exists():

@@ -125,6 +125,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.live import Live
 from rich.panel import Panel
+from rich.text import Text
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -281,25 +282,33 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     LOG_INTERVAL = 10
     CHECKPOINT_DIR.mkdir(exist_ok=True)
 
-    print("=" * 80)
-    print("TRANSFORMER TRAINING")
-    print("=" * 80)
-    print()
+    # Initialize Rich console
+    console = Console()
 
+    # Display header
+    header_text = "TRANSFORMER TRAINING"
     if quick:
-        print("Quick mode enabled: smaller model, fewer tokens")
-        print()
-
-    print(f"Tokenizer encoding: {encoding}")
-    print()
+        header_text += " [yellow](Quick Mode)[/yellow]"
+    console.print(Panel(header_text, style="bold blue", expand=False))
+    console.print()
 
     # Device setup with proper initialization
     device_type_str = get_device_type_from_args(use_mps)
     device, device_name = init_device(device_type_str, seed=42)
-    print(f"Device: {device_name}")
+
+    # Create setup configuration table
+    setup_table = Table(title="Setup Configuration", show_header=True, header_style="bold cyan")
+    setup_table.add_column("Setting", style="cyan", no_wrap=True)
+    setup_table.add_column("Value", style="white")
+
+    setup_table.add_row("Tokenizer", encoding)
+    device_display = device_name
     if use_mps:
-        print("  WARNING: MPS has known NaN issues. Use --debug if training fails.")
-    print()
+        device_display += " [yellow](⚠ Experimental - may have NaN issues)[/yellow]"
+    setup_table.add_row("Device", device_display)
+
+    console.print(setup_table)
+    console.print()
 
     # Get device-specific utilities
     autocast_ctx = get_autocast_context(device.type)
@@ -307,8 +316,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     get_max_memory = get_memory_stats_fn(device.type)
 
     # Load datasets (train and validation)
-    print("Loading FineWeb dataset...")
-    print()
+    console.print("[bold]Loading FineWeb dataset...[/bold]")
 
     # Training dataset (90% of data)
     train_dataset = FineWebDataset(
@@ -321,7 +329,6 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         split="train",  # Use training split
         validation_fraction=0.1  # 10% reserved for validation
     )
-    print()
 
     # Validation dataset (10% of data)
     # Use fewer tokens for validation to save time
@@ -336,7 +343,41 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         split="validation",  # Use validation split (different shards!)
         validation_fraction=0.1
     )
-    print()
+
+    # Create dataset info table
+    dataset_table = Table(title="Dataset Configuration", show_header=True, header_style="bold green")
+    dataset_table.add_column("Parameter", style="cyan", no_wrap=True)
+    dataset_table.add_column("Train", style="green", justify="right")
+    dataset_table.add_column("Validation", style="yellow", justify="right")
+
+    dataset_table.add_row(
+        "Tokens per epoch",
+        f"{TOKENS_PER_EPOCH:,}",
+        f"{val_tokens_per_epoch:,}"
+    )
+    dataset_table.add_row(
+        "Sequences per epoch",
+        f"~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}",
+        f"~{val_tokens_per_epoch // SEQ_LENGTH:,}"
+    )
+    dataset_table.add_row(
+        "Vocabulary size",
+        f"{train_dataset.vocab_size:,}",
+        f"{val_dataset.vocab_size:,}"
+    )
+    dataset_table.add_row(
+        "Cache directory",
+        "data/fineweb_cache",
+        "data/fineweb_cache"
+    )
+    dataset_table.add_row(
+        "Max cached shards",
+        str(MAX_CACHED_SHARDS),
+        str(MAX_CACHED_SHARDS)
+    )
+
+    console.print(dataset_table)
+    console.print()
 
     # Create dataloaders
     # IterableDataset requires different DataLoader setup
@@ -358,18 +399,33 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     # Calculate effective batch size with gradient accumulation
     effective_batch_size = BATCH_SIZE * SEQ_LENGTH * accumulation_steps
 
-    print(f"Training configuration:")
-    print(f"  Tokens per epoch (train): {TOKENS_PER_EPOCH:,}")
-    print(f"  Tokens per epoch (val): {val_tokens_per_epoch:,}")
-    print(f"  Approximate sequences per epoch: ~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}")
-    print(f"  Batch size: {BATCH_SIZE} sequences ({BATCH_SIZE * SEQ_LENGTH:,} tokens)")
-    print(f"  Gradient accumulation steps: {accumulation_steps}")
-    print(f"  Effective batch size: {BATCH_SIZE * accumulation_steps} sequences ({effective_batch_size:,} tokens)")
-    print(f"  → {accumulation_steps}x more stable than without accumulation!")
-    print()
+    # Create training configuration table
+    train_config_table = Table(title="Training Configuration", show_header=True, header_style="bold magenta")
+    train_config_table.add_column("Parameter", style="cyan", no_wrap=True)
+    train_config_table.add_column("Value", style="white")
+
+    train_config_table.add_row(
+        "Batch size",
+        f"{BATCH_SIZE} sequences ({BATCH_SIZE * SEQ_LENGTH:,} tokens)"
+    )
+    train_config_table.add_row(
+        "Gradient accumulation",
+        f"{accumulation_steps} steps"
+    )
+    train_config_table.add_row(
+        "Effective batch size",
+        f"[bold]{BATCH_SIZE * accumulation_steps}[/bold] sequences ({effective_batch_size:,} tokens)"
+    )
+    train_config_table.add_row(
+        "Stability improvement",
+        f"[green]✓ {accumulation_steps}x more stable than without accumulation[/green]"
+    )
+
+    console.print(train_config_table)
+    console.print()
 
     # Create model
-    print("Creating model...")
+    console.print("[bold]Creating model...[/bold]")
     model = DecoderOnlyTransformer(
         vocab_size=train_dataset.vocab_size,
         d_model=D_MODEL,
@@ -382,18 +438,32 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     model = model.to(device)
 
     num_params = sum(p.numel() for p in model.parameters())
-    print(f"  Model parameters: {num_params:,}")
 
     # Check for NaN in initial weights
     has_nan = False
     for name, param in model.named_parameters():
         if torch.isnan(param).any():
-            print(f"  WARNING: NaN in initial weights: {name}")
+            console.print(f"[red]WARNING: NaN in initial weights: {name}[/red]")
             has_nan = True
     if has_nan:
         raise ValueError("Model has NaN in initial weights!")
-    print("  Initial weights: OK (no NaN)")
-    print()
+
+    # Create model info table
+    model_table = Table(title="Model Architecture", show_header=True, header_style="bold blue")
+    model_table.add_column("Parameter", style="cyan", no_wrap=True)
+    model_table.add_column("Value", style="white", justify="right")
+
+    model_table.add_row("Embedding dimension (d_model)", str(D_MODEL))
+    model_table.add_row("Number of layers", str(NUM_LAYERS))
+    model_table.add_row("Attention heads", str(NUM_HEADS))
+    model_table.add_row("Feed-forward dimension", str(D_FF))
+    model_table.add_row("Dropout", str(DROPOUT))
+    model_table.add_row("Max sequence length", str(SEQ_LENGTH * 2))
+    model_table.add_row("[bold]Total parameters[/bold]", f"[bold]{num_params:,}[/bold]")
+    model_table.add_row("Weight initialization", "[green]✓ No NaN detected[/green]")
+
+    console.print(model_table)
+    console.print()
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -436,14 +506,22 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     warmup_steps = int(0.05 * total_steps)  # 5% of training for warmup
     min_lr = LEARNING_RATE * 0.1  # Final LR = 10% of peak
 
-    print(f"Learning rate schedule:")
-    print(f"  Batches per epoch: ~{batches_per_epoch:,}")
-    print(f"  Weight updates per epoch: ~{steps_per_epoch:,} (with accumulation)")
-    print(f"  Total training steps: {total_steps:,}")
-    print(f"  Warmup steps: {warmup_steps:,} (5% of training)")
-    print(f"  Max learning rate: {LEARNING_RATE:.6f}")
-    print(f"  Min learning rate: {min_lr:.6f}")
-    print()
+    # Create learning rate schedule table
+    lr_table = Table(title="Learning Rate Schedule", show_header=True, header_style="bold yellow")
+    lr_table.add_column("Parameter", style="cyan", no_wrap=True)
+    lr_table.add_column("Value", style="white", justify="right")
+
+    lr_table.add_row("Batches per epoch", f"~{batches_per_epoch:,}")
+    lr_table.add_row("Weight updates per epoch", f"~{steps_per_epoch:,}")
+    lr_table.add_row("Total epochs", str(NUM_EPOCHS))
+    lr_table.add_row("[bold]Total training steps[/bold]", f"[bold]{total_steps:,}[/bold]")
+    lr_table.add_row("Warmup steps", f"{warmup_steps:,} (5%)")
+    lr_table.add_row("Max learning rate", f"{LEARNING_RATE:.6f}")
+    lr_table.add_row("Min learning rate", f"{min_lr:.6f}")
+    lr_table.add_row("Schedule type", "Warmup + Cosine Decay")
+
+    console.print(lr_table)
+    console.print()
 
     scheduler = get_cosine_schedule_with_warmup(
         optimizer=optimizer,
@@ -453,20 +531,18 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         min_lr=min_lr
     )
 
-    print("=" * 80)
-    print("STARTING TRAINING")
-    print("=" * 80)
-    print()
+    # Starting training panel
+    console.print(Panel("[bold green]STARTING TRAINING[/bold green]", style="bold green", expand=False))
+    console.print()
 
     total_batches = 0
     start_time = time.time()
-    console = Console()
 
     def create_metrics_table(rows, epoch_num, num_epochs):
         """Create a Rich table with training metrics and fixed header.
 
         Args:
-            rows: List of tuples (batch_str, loss, ppl, avg_loss, avg_ppl, lr, phase)
+            rows: List of tuples (batch_str, loss, ppl, avg_loss, avg_ppl, lr)
             epoch_num: Current epoch number (1-indexed)
             num_epochs: Total number of epochs
 
@@ -480,21 +556,17 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         table.add_column("Avg Loss", justify="right", style="yellow")
         table.add_column("Avg PPL", justify="right", style="yellow")
         table.add_column("LR", justify="right", style="blue")
-        table.add_column("Phase", justify="right", style="magenta")
 
         # Only show last 15 rows to keep display clean
         for row in rows[-15:]:
-            batch_str, loss, ppl, avg_loss, avg_ppl, lr, phase = row
-            # Color code phase
-            phase_style = "yellow" if "warmup" in phase else "green"
+            batch_str, loss, ppl, avg_loss, avg_ppl, lr = row
             table.add_row(
                 batch_str,
                 f"{loss:.4f}",
                 f"{ppl:.2f}",
                 f"{avg_loss:.4f}",
                 f"{avg_ppl:.2f}",
-                f"{lr:.6f}",
-                f"[{phase_style}]{phase}[/{phase_style}]"
+                f"{lr:.2e}"
             )
 
         return table
@@ -587,16 +659,14 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
                     batch_perplexity = calculate_perplexity_from_loss(loss * accumulation_steps).item()
                     avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
 
-                    # Determine phase (warmup or training)
-                    step_in_cycle, total_in_cycle = accumulator.get_progress()
+                    # Check if we're in warmup phase
                     current_optimizer_step = total_batches // accumulation_steps
-                    if current_optimizer_step < warmup_steps:
-                        phase = f"warmup {current_optimizer_step}/{warmup_steps}"
-                    else:
-                        phase = "learning"
+                    in_warmup = current_optimizer_step < warmup_steps
 
-                    # Format batch count as "X/Y"
+                    # Format batch count as "X/Y", with asterisk if in warmup
                     batch_str = f"{batch_idx + 1}/{batches_per_epoch}"
+                    if in_warmup:
+                        batch_str = f"*{batch_str}"
 
                     # Add row to training data
                     training_rows.append((
@@ -605,8 +675,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
                         batch_perplexity,
                         avg_loss,
                         avg_perplexity,
-                        current_lr,
-                        phase
+                        current_lr
                     ))
 
                     # Update the live display with new table
@@ -625,8 +694,8 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         # Evaluate on validation data to check for overfitting/underfitting
         # The model has NEVER seen this data during training, so this tells us
         # if the model is truly learning patterns or just memorizing training data.
-        print()
-        print("Running validation...")
+        console.print()
+        console.print("[bold]Running validation...[/bold]")
         model.eval()  # Set to evaluation mode (disables dropout)
 
         val_loss = 0.0
@@ -657,28 +726,39 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         avg_val_loss = val_loss / val_batches
         avg_val_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_val_loss)).item()
 
-        # Print epoch summary with both train and validation metrics
-        print()
-        print(f"Epoch {epoch + 1} Summary:")
-        print(f"  Train Loss: {avg_train_loss:.4f}  |  Train Perplexity: {avg_train_perplexity:.2f}")
-        print(f"  Val Loss:   {avg_val_loss:.4f}  |  Val Perplexity:   {avg_val_perplexity:.2f}")
-        print(f"  Learning Rate: {current_lr:.6f}")
-        print(f"  Time: {train_time:.1f}s train + {val_time:.1f}s val = {train_time + val_time:.1f}s total")
+        # Create epoch summary table
+        console.print()
+        summary_table = Table(show_header=True, header_style="bold cyan", box=None)
+        summary_table.add_column("Metric", style="cyan", no_wrap=True)
+        summary_table.add_column("Train", style="green", justify="right")
+        summary_table.add_column("Validation", style="yellow", justify="right")
 
-        # Interpretation help for users
+        summary_table.add_row("Loss", f"{avg_train_loss:.4f}", f"{avg_val_loss:.4f}")
+        summary_table.add_row("Perplexity", f"{avg_train_perplexity:.2f}", f"{avg_val_perplexity:.2f}")
+        summary_table.add_row("Time", f"{train_time:.1f}s", f"{val_time:.1f}s")
+
+        # Determine status message with color
         if avg_val_loss < avg_train_loss * 1.05:
-            # Validation loss is close to training loss (good!)
-            print(f"  Status: ✓ Model is learning well (val ≈ train)")
+            status = "[green]✓ Model is learning well (val ≈ train)[/green]"
         elif avg_val_loss < avg_train_loss * 1.15:
-            # Validation loss is slightly higher (normal)
-            print(f"  Status: ✓ Model is learning (val slightly > train, normal)")
+            status = "[green]✓ Model is learning (val slightly > train, normal)[/green]"
         elif avg_val_loss > avg_train_loss * 1.3:
-            # Validation loss much higher (possible overfitting)
-            print(f"  Status: ⚠ Possible overfitting (val >> train)")
+            status = "[yellow]⚠ Possible overfitting (val >> train)[/yellow]"
         else:
-            # In between
-            print(f"  Status: Model is training")
-        print()
+            status = "Model is training"
+
+        # Create panel with summary
+        panel_content = f"[bold]Learning Rate:[/bold] {current_lr:.6f}\n"
+        panel_content += f"[bold]Total Time:[/bold] {train_time + val_time:.1f}s\n"
+        panel_content += f"[bold]Status:[/bold] {status}"
+
+        console.print(Panel(
+            summary_table,
+            title=f"[bold]Epoch {epoch + 1}/{NUM_EPOCHS} Summary[/bold]",
+            subtitle=panel_content,
+            border_style="blue"
+        ))
+        console.print()
 
         # Save checkpoint with encoding in filename
         encoding_short = get_encoding_short_name(encoding)
@@ -704,32 +784,48 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
                 'accumulation_steps': accumulation_steps,  # Store for reference
             }
         }, checkpoint_path)
-        print(f"  Saved checkpoint: {checkpoint_path}")
-        print()
+        console.print(f"[dim]Saved checkpoint: {checkpoint_path}[/dim]")
+        console.print()
 
     # Training complete
     synchronize()  # Ensure all operations complete
     total_time = time.time() - start_time
-    print("=" * 80)
-    print("TRAINING COMPLETE!")
-    print("=" * 80)
-    print(f"Total time: {total_time / 60:.1f} minutes")
+
+    # Create training complete summary
+    complete_table = Table(show_header=False, box=None)
+    complete_table.add_column("", style="cyan", no_wrap=True)
+    complete_table.add_column("", style="white", justify="right")
+
+    complete_table.add_row("Total time", f"{total_time / 60:.1f} minutes")
+    complete_table.add_row("Epochs completed", str(NUM_EPOCHS))
+    complete_table.add_row("Final train loss", f"{avg_train_loss:.4f}")
+    complete_table.add_row("Final train perplexity", f"{avg_train_perplexity:.2f}")
+    complete_table.add_row("Final val loss", f"{avg_val_loss:.4f}")
+    complete_table.add_row("Final val perplexity", f"{avg_val_perplexity:.2f}")
 
     # Device-specific stats (CUDA only for now)
     if device.type == "cuda":
         peak_memory_gb = get_max_memory() / (1024**3)
-        print(f"Peak GPU memory: {peak_memory_gb:.2f} GB")
+        complete_table.add_row("Peak GPU memory", f"{peak_memory_gb:.2f} GB")
 
-    print()
+    console.print(Panel(
+        complete_table,
+        title="[bold green]TRAINING COMPLETE![/bold green]",
+        border_style="green",
+        expand=False
+    ))
+    console.print()
 
     # Final samples
-    print("Final sample generations:")
-    print("-" * 80)
+    console.print(Panel("[bold]Final Sample Generations[/bold]", style="bold magenta", expand=False))
+    console.print()
+
     for prompt in ["The", "In the", "She was"]:
         sample = generate_sample(model, train_dataset, prompt, max_length=100, device=device, autocast_ctx=autocast_ctx)
-        print(f"\nPrompt: '{prompt}'")
-        print(f"Generated: '{sample}'")
-    print()
+        console.print(f"[cyan]Prompt:[/cyan] '{prompt}'")
+        console.print(f"[green]Generated:[/green] '{sample}'")
+        console.print()
+    console.print()
 
 
 if __name__ == "__main__":
