@@ -68,9 +68,24 @@ Position-wise 2-layer neural network (Multi-Layer Perceptron).
 
 **Tests**: 10/10 passing
 
+#### 5. Multi-Head Attention (`src/transformer/attention.py`)
+Runs multiple scaled dot-product attention operations in parallel.
+
+- Projects input to Q, K, V using learned linear transformations
+- Splits into multiple heads (d_k = d_model / num_heads)
+- Applies attention to each head in parallel
+- Concatenates outputs and applies final projection
+- Allows model to attend to different representation subspaces
+
+**Comprehensive documentation** explaining:
+- What multi-head attention is and why we use it
+- How different heads learn different patterns
+- Why heads don't all learn the same thing
+
+**Tests**: 13/13 passing
+
 ### 🚧 In Progress
 
-- Multi-Head Attention
 - Transformer Block
 - Complete Decoder-Only Transformer Model
 - Training script
@@ -151,7 +166,7 @@ We're building **bottom-up**, starting with the simplest components and working 
 1. ✅ **Scaled Dot-Product Attention** - The fundamental mechanism
 2. ✅ **Embeddings** - Token and positional representations
 3. ✅ **Feed-Forward Network** - Position-wise MLP
-4. 🚧 **Multi-Head Attention** - Parallel attention heads
+4. ✅ **Multi-Head Attention** - Parallel attention heads
 5. 🚧 **Transformer Block** - Combining all components
 6. 🚧 **Complete Model** - Stacking blocks
 7. 🚧 **Training** - Training loop with a toy dataset
