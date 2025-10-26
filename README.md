@@ -123,7 +123,35 @@ The complete, working transformer that assembles all components.
 
 **Tests**: 15/15 passing
 
-#### 8. Training Implementation (`examples/train.py`, `src/transformer/dataset.py`)
+#### 8. Advanced Sampling Strategies (`src/transformer/sampling.py`)
+Sophisticated text generation sampling methods for improved output quality.
+
+- **Top-k Sampling**: Filters to only k most probable tokens
+- **Top-p (Nucleus) Sampling**: Adaptively selects tokens based on cumulative probability
+- **Combined Top-k + Top-p**: Best of both approaches
+- **Temperature Scaling**: Controls randomness/creativity
+- **Greedy Decoding**: Deterministic selection
+
+**Comprehensive documentation** explaining:
+- How each sampling method works
+- When to use each strategy
+- Trade-offs between quality and diversity
+- Recommended settings for different use cases
+- Mathematical details with examples
+
+**Tests**: 27/27 passing
+
+Integrated into `model.generate()` with easy-to-use API:
+```python
+# Recommended: Combined top-k + top-p
+output = model.generate(
+    prompt, max_length=50,
+    sampling_strategy="top_k_top_p",
+    top_k=50, top_p=0.9, temperature=0.8
+)
+```
+
+#### 9. Training Implementation (`examples/train.py`, `src/transformer/dataset.py`)
 Complete training pipeline with MPS GPU acceleration.
 
 - BPE tokenization using tiktoken (p50k_base encoding)
@@ -143,31 +171,30 @@ Complete training pipeline with MPS GPU acceleration.
 
 **Successfully trains on M1 GPUs** with stable convergence!
 
+#### 10. Learning Rate Scheduling (`src/transformer/scheduler.py`)
+Warmup + cosine decay learning rate schedule for better convergence.
+
+- Linear warmup: Gradually increases LR from 0 to peak over warmup steps
+- Cosine decay: Smoothly decreases LR following cosine curve
+- Prevents early training instability and improves final convergence
+
 ### 🚧 Next Steps
 
 **Immediate**:
 - Text generation examples and inference scripts
+- Interactive generation script with different sampling strategies
 
 **Planned Training Improvements**:
-- **Learning Rate Schedule** - Add warmup + cosine decay for better convergence
-  - Warmup: Gradually increase LR from 0 for first N steps (prevents early instability)
-  - Cosine Decay: Smoothly decrease LR over training (helps final convergence)
-  - Expected improvement: Lower final loss, more stable training
-
 - **Gradient Accumulation** - Simulate larger batch sizes without more memory
   - Accumulate gradients over multiple batches before updating weights
   - Larger effective batch size = more stable gradients, better learning
   - Example: 4 accumulation steps × batch 8 = effective batch 32
 
-- **Better Sampling (Top-k/Top-p)** - Improve generation quality
-  - Top-k: Only sample from k most likely tokens (prevents rare/weird tokens)
-  - Top-p (nucleus): Sample from smallest set of tokens with cumulative prob > p
-  - Both prevent model from generating invalid or very rare tokens
-  - Expected improvement: More coherent, natural-sounding text
-
 **Current Status**:
-- Training parameters optimized (20 epochs, LR 3e-4, temp 0.5)
-- Decode method fixed to handle invalid tokens gracefully
+- ✅ Learning rate scheduling implemented (warmup + cosine decay)
+- ✅ Advanced sampling methods (top-k, top-p, combined)
+- ✅ Training parameters optimized (20 epochs, LR 3e-4, temp 0.5)
+- ✅ Decode method handles invalid tokens gracefully
 
 ## Project Structure
 
@@ -178,18 +205,23 @@ transformer/
 │   ├── embeddings.py        # Token embeddings & positional encoding
 │   ├── feedforward.py       # Feed-forward network (MLP)
 │   ├── block.py            # Single transformer block
-│   └── model.py            # Complete decoder-only transformer
+│   ├── model.py            # Complete decoder-only transformer
+│   ├── sampling.py         # Advanced sampling strategies (top-k, top-p)
+│   ├── scheduler.py        # Learning rate scheduling
+│   └── dataset.py          # Dataset utilities
 │
 ├── tests/                   # Comprehensive test suite
 │   ├── test_attention.py
 │   ├── test_embeddings.py
 │   ├── test_feedforward.py
 │   ├── test_block.py
-│   └── test_model.py
+│   ├── test_model.py
+│   └── test_sampling.py    # 27 tests for sampling methods
 │
 ├── examples/                # Training and generation scripts
-│   ├── train.py
-│   └── generate.py
+│   ├── train.py            # Main training script
+│   ├── generate.py         # Text generation script
+│   └── sampling_comparison.py  # Demo of different sampling strategies
 │
 ├── CLAUDE.md               # Project planning and context
 └── README.md               # This file
@@ -234,10 +266,80 @@ uv run pytest
 uv run pytest tests/test_attention.py -v
 uv run pytest tests/test_embeddings.py -v
 uv run pytest tests/test_feedforward.py -v
+uv run pytest tests/test_sampling.py -v  # Test all sampling strategies
 
 # Run with coverage
 uv run pytest --cov=src/transformer
 ```
+
+## Text Generation with Advanced Sampling
+
+The model supports multiple sampling strategies for generating text:
+
+### Quick Example
+
+```python
+from src.transformer.model import DecoderOnlyTransformer
+import torch
+
+# Load your trained model
+model = DecoderOnlyTransformer(vocab_size=50000, d_model=512, num_heads=8)
+# model.load_state_dict(...)
+
+# Prepare prompt (tokenized)
+prompt = torch.tensor([[1, 2, 3]])  # Your tokenized text
+
+# Generate with different strategies:
+
+# 1. Greedy (deterministic, safest)
+output = model.generate(prompt, max_length=50, sampling_strategy="greedy")
+
+# 2. Top-k (filters unlikely tokens)
+output = model.generate(
+    prompt, max_length=50,
+    sampling_strategy="top_k",
+    top_k=50, temperature=0.8
+)
+
+# 3. Top-p / Nucleus (adaptive)
+output = model.generate(
+    prompt, max_length=50,
+    sampling_strategy="top_p",
+    top_p=0.9, temperature=0.8
+)
+
+# 4. Combined (RECOMMENDED - best quality)
+output = model.generate(
+    prompt, max_length=50,
+    sampling_strategy="top_k_top_p",
+    top_k=50, top_p=0.9, temperature=0.8
+)
+```
+
+### Recommended Settings by Use Case
+
+| Use Case | Strategy | Settings |
+|----------|----------|----------|
+| **Creative Writing** | `top_k_top_p` | `k=100, p=0.95, temp=1.2` |
+| **Balanced/General** | `top_k_top_p` | `k=50, p=0.9, temp=1.0` |
+| **Factual/Technical** | `top_k_top_p` | `k=40, p=0.85, temp=0.7` |
+| **Chatbot** | `top_p` | `p=0.9, temp=0.8` |
+| **Code Generation** | `top_k` | `k=20, temp=0.6` |
+| **Deterministic** | `greedy` | (no parameters) |
+
+### Sampling Strategy Comparison
+
+Run the demonstration script to see how different strategies behave:
+
+```bash
+uv run python examples/sampling_comparison.py
+```
+
+This shows:
+- How each sampling method works
+- Impact of temperature on diversity
+- When to use each strategy
+- Statistical behavior with different distributions
 
 ## Training the Model
 
@@ -374,7 +476,9 @@ We're building **bottom-up**, starting with the simplest components and working 
 5. ✅ **Transformer Block** - Combining all components
 6. ✅ **Complete Model** - Decoder-only transformer with generation capability
 7. ✅ **Training** - Full training pipeline with MPS GPU support
-8. 🚧 **Generation Examples** - Practical text generation demonstrations
+8. ✅ **Advanced Sampling** - Top-k, Top-p, and combined strategies for high-quality generation
+9. ✅ **Learning Rate Scheduling** - Warmup + cosine decay for better convergence
+10. 🚧 **Generation Examples** - Practical text generation demonstrations
 
 Each component is:
 - Fully implemented from scratch (no pre-built transformer modules)
