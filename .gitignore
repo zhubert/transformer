@@ -34,3 +34,12 @@ wheels/
 *.swo
 *~
 .DS_Store
+
+# Training data
+Singular.txt
+*.txt
+
+# Model checkpoints
+checkpoints/
+*.pt
+*.pth

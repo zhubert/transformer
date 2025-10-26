@@ -198,7 +198,11 @@ class DecoderOnlyTransformer(nn.Module):
                 torch.nn.init.ones_(module.weight)
                 torch.nn.init.zeros_(module.bias)
 
-    def forward(self, x, mask=None):
+        # Special initialization for output projection (large vocab stability)
+        # Use smaller std for the final layer to prevent numerical instability
+        torch.nn.init.normal_(self.output_proj.weight, mean=0.0, std=0.01)
+
+    def forward(self, x, mask=None, debug=False):
         """
         Forward pass through the transformer.
 
@@ -206,6 +210,7 @@ class DecoderOnlyTransformer(nn.Module):
             x: Input token indices of shape (batch, seq_len)
             mask: Optional causal mask of shape (seq_len, seq_len) or (batch, seq_len, seq_len)
                   If None, a causal mask will be created automatically
+            debug: If True, print diagnostic information for NaN detection
 
         Returns:
             logits: Output logits of shape (batch, seq_len, vocab_size)
@@ -231,20 +236,44 @@ class DecoderOnlyTransformer(nn.Module):
             mask = self.create_causal_mask(seq_len).to(x.device)
 
         # 1. Embed tokens: (batch, seq_len) → (batch, seq_len, d_model)
+        # Debug: Check input tokens
+        if debug:
+            if (x < 0).any() or (x >= self.token_embedding.embedding.num_embeddings).any():
+                print(f"[DEBUG] Invalid token IDs in input!")
+                print(f"  Token range: min={x.min().item()}, max={x.max().item()}")
+                print(f"  Vocab size: {self.token_embedding.embedding.num_embeddings}")
+                print(f"  Negative tokens: {(x < 0).sum().item()}")
+                print(f"  Too large tokens: {(x >= self.token_embedding.embedding.num_embeddings).sum().item()}")
+
+            # Check if embedding weights contain NaN
+            if torch.isnan(self.token_embedding.embedding.weight).any():
+                print(f"[DEBUG] Embedding weights contain NaN before lookup!")
+
         x = self.token_embedding(x)
+        if debug and torch.isnan(x).any():
+            print(f"NaN after token_embedding! Stats: min={x.min()}, max={x.max()}")
 
         # 2. Add positional encoding: (batch, seq_len, d_model) → (batch, seq_len, d_model)
         x = self.pos_encoding(x)
+        if debug and torch.isnan(x).any():
+            print(f"NaN after pos_encoding! Stats: min={x.min()}, max={x.max()}")
 
         # 3. Pass through all transformer blocks
-        for block in self.blocks:
-            x = block(x, mask=mask)  # (batch, seq_len, d_model) → (batch, seq_len, d_model)
+        for i, block in enumerate(self.blocks):
+            x = block(x, mask=mask, debug=debug)  # (batch, seq_len, d_model) → (batch, seq_len, d_model)
+            if debug and torch.isnan(x).any():
+                print(f"NaN after block {i}! Stats: min={x.min()}, max={x.max()}")
+                break
 
         # 4. Final layer normalization
         x = self.ln_f(x)  # (batch, seq_len, d_model) → (batch, seq_len, d_model)
+        if debug and torch.isnan(x).any():
+            print(f"NaN after final layernorm! Stats: min={x.min()}, max={x.max()}")
 
         # 5. Project to vocabulary: (batch, seq_len, d_model) → (batch, seq_len, vocab_size)
         logits = self.output_proj(x)
+        if debug and torch.isnan(logits).any():
+            print(f"NaN after output_proj! Stats: min={logits.min()}, max={logits.max()}")
 
         return logits
 

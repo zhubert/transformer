@@ -134,7 +134,7 @@ class TransformerBlock(nn.Module):
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, debug=False):
         """
         Apply transformer block with Pre-LN architecture.
 
@@ -161,6 +161,7 @@ class TransformerBlock(nn.Module):
             x: Input tensor of shape (batch, seq_len, d_model)
             mask: Optional causal mask of shape (seq_len, seq_len) or (batch, seq_len, seq_len)
                   Prevents attending to future positions in decoder
+            debug: If True, enable diagnostic prints for NaN detection
 
         Returns:
             output: Block output of shape (batch, seq_len, d_model)
@@ -169,7 +170,7 @@ class TransformerBlock(nn.Module):
         # First sub-layer: Multi-head self-attention with residual connection
         residual = x  # Save input for skip connection
         x = self.norm1(x)  # Pre-LN: normalize before attention
-        x = self.attention(x, mask=mask)  # Multi-head attention
+        x = self.attention(x, mask=mask, debug=debug)  # Multi-head attention
         x = self.dropout1(x)  # Dropout for regularization
         x = x + residual  # Residual connection (gradient highway!)
 

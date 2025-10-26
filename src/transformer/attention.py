@@ -21,7 +21,7 @@ class ScaledDotProductAttention(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, query, key, value, mask=None):
+    def forward(self, query, key, value, mask=None, debug=False):
         """
         Compute scaled dot-product attention.
 
@@ -31,6 +31,7 @@ class ScaledDotProductAttention(nn.Module):
             value: Value tensor of shape (batch, seq_len, d_v)
             mask: Optional mask tensor of shape (batch, seq_len, seq_len).
                   Positions with True/1 are masked (set to -inf before softmax).
+            debug: If True, print diagnostic information for NaN detection
 
         Returns:
             output: Attention output of shape (batch, seq_len, d_v)
@@ -43,7 +44,14 @@ class ScaledDotProductAttention(nn.Module):
         # query: (batch, seq_len, d_k)
         # key.transpose(-2, -1): (batch, d_k, seq_len)
         # scores: (batch, seq_len, seq_len)
-        scores = torch.matmul(query, key.transpose(-2, -1)) / torch.sqrt(torch.tensor(d_k, dtype=torch.float32))
+        scores = torch.matmul(query, key.transpose(-2, -1)) / torch.sqrt(torch.tensor(d_k, dtype=torch.float32, device=query.device))
+
+        # Debug: Check for NaN in scores
+        if debug and (torch.isnan(scores).any() or torch.isinf(scores).any()):
+            print(f"  [DEBUG] NaN/Inf in attention scores before mask!")
+            print(f"  Query stats: min={query.min():.4f}, max={query.max():.4f}, mean={query.mean():.4f}")
+            print(f"  Key stats: min={key.min():.4f}, max={key.max():.4f}, mean={key.mean():.4f}")
+            print(f"  Scores stats: min={scores.min():.4f}, max={scores.max():.4f}, mean={scores.mean():.4f}")
 
         # Apply mask if provided (set masked positions to -inf)
         if mask is not None:
@@ -53,11 +61,21 @@ class ScaledDotProductAttention(nn.Module):
         # Each row sums to 1.0 (probability distribution over sequence positions)
         attention_weights = torch.softmax(scores, dim=-1)
 
+        # Debug: Check for NaN after softmax
+        if debug and torch.isnan(attention_weights).any():
+            print(f"  [DEBUG] NaN in attention_weights after softmax!")
+            print(f"  Scores before softmax stats: min={scores.min():.4f}, max={scores.max():.4f}")
+
         # Apply attention weights to values
         # attention_weights: (batch, seq_len, seq_len)
         # value: (batch, seq_len, d_v)
         # output: (batch, seq_len, d_v)
         output = torch.matmul(attention_weights, value)
+
+        # Debug: Check for NaN in output
+        if debug and torch.isnan(output).any():
+            print(f"  [DEBUG] NaN in attention output!")
+            print(f"  Value stats: min={value.min():.4f}, max={value.max():.4f}, mean={value.mean():.4f}")
 
         return output, attention_weights
 
@@ -140,7 +158,7 @@ class MultiHeadAttention(nn.Module):
         # Final output projection
         self.W_o = nn.Linear(d_model, d_model)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, debug=False):
         """
         Apply multi-head attention.
 
@@ -148,6 +166,7 @@ class MultiHeadAttention(nn.Module):
             x: Input tensor of shape (batch, seq_len, d_model)
             mask: Optional causal mask of shape (seq_len, seq_len) or (batch, seq_len, seq_len)
                   Positions with True/1 are masked (can't attend)
+            debug: If True, enable diagnostic prints for NaN detection
 
         Returns:
             output: Multi-head attention output of shape (batch, seq_len, d_model)
@@ -180,7 +199,7 @@ class MultiHeadAttention(nn.Module):
         # Q, K, V: (batch, num_heads, seq_len, d_k)
         # output: (batch, num_heads, seq_len, d_k)
         # attn_weights: (batch, num_heads, seq_len, seq_len)
-        output, attn_weights = self.attention(Q, K, V, mask)
+        output, attn_weights = self.attention(Q, K, V, mask, debug=debug)
 
         # 5. Concatenate heads
         # Transpose: (batch, num_heads, seq_len, d_k) → (batch, seq_len, num_heads, d_k)
