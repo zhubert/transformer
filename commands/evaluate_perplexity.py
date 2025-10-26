@@ -373,7 +373,7 @@ def main():
 
         if not checkpoint_files:
             print(f"No checkpoints found in {checkpoint_dir}")
-            print("Please train a model first using examples/train.py")
+            print("Please train a model first using: uv run python main.py train")
             return
 
         latest_checkpoint = checkpoint_files[-1]

@@ -1,0 +1,75 @@
+.PHONY: help install test test-cov clean train generate evaluate compare demo-sampling
+
+# Default target
+help:
+	@echo "Available commands:"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make install       - Install project dependencies with uv"
+	@echo ""
+	@echo "Development:"
+	@echo "  make test          - Run all tests"
+	@echo "  make test-cov      - Run tests with coverage report"
+	@echo "  make clean         - Remove Python cache files and build artifacts"
+	@echo ""
+	@echo "Transformer Operations:"
+	@echo "  make train         - Train a transformer model"
+	@echo "  make generate      - Generate text (interactive mode)"
+	@echo "  make evaluate      - Evaluate latest checkpoint"
+	@echo "  make compare       - Compare all checkpoints"
+	@echo "  make demo-sampling - Demonstrate sampling strategies"
+	@echo ""
+	@echo "For more options, use: uv run python main.py <command> --help"
+
+# Install dependencies
+install:
+	uv sync
+
+# Run tests
+test:
+	uv run pytest tests/ -v
+
+# Run tests with coverage
+test-cov:
+	uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
+
+# Clean up cache files
+clean:
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.pyo" -delete
+	find . -type f -name "*.coverage" -delete
+	rm -rf .pytest_cache
+	rm -rf htmlcov
+	rm -rf .coverage
+	rm -rf build dist *.egg-info
+
+# Transformer operations via main.py CLI
+train:
+	uv run python main.py train
+
+generate:
+	@echo "Starting interactive generation mode..."
+	@echo "Tip: Use 'make generate-prompt CHECKPOINT=path/to/checkpoint.pt PROMPT=\"your text\"' for single prompts"
+	uv run python main.py generate
+
+# Generate with custom prompt (use: make generate-prompt CHECKPOINT=checkpoints/model_epoch_10.pt PROMPT="Once upon a time")
+generate-prompt:
+	@if [ -z "$(CHECKPOINT)" ]; then \
+		echo "Error: CHECKPOINT not specified. Usage: make generate-prompt CHECKPOINT=path/to/checkpoint.pt PROMPT=\"your text\""; \
+		exit 1; \
+	fi
+	@if [ -z "$(PROMPT)" ]; then \
+		echo "Error: PROMPT not specified. Usage: make generate-prompt CHECKPOINT=path/to/checkpoint.pt PROMPT=\"your text\""; \
+		exit 1; \
+	fi
+	uv run python main.py generate $(CHECKPOINT) --prompt "$(PROMPT)"
+
+evaluate:
+	uv run python main.py evaluate
+
+compare:
+	uv run python main.py compare
+
+demo-sampling:
+	uv run python main.py demo-sampling

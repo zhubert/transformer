@@ -31,18 +31,18 @@ Different tasks require different sampling strategies:
 Usage Examples:
 ---------------
     # Interactive mode with balanced preset
-    python examples/generate.py checkpoints/model_epoch_10.pt --preset balanced
+    uv run python main.py generate checkpoints/model_epoch_10.pt --preset balanced
 
     # Single prompt with creative preset
-    python examples/generate.py checkpoints/model_epoch_10.pt \
+    uv run python main.py generate checkpoints/model_epoch_10.pt \
         --prompt "Once upon a time" --preset creative --max-length 100
 
     # Greedy decoding (deterministic)
-    python examples/generate.py checkpoints/model_epoch_10.pt \
+    uv run python main.py generate checkpoints/model_epoch_10.pt \
         --prompt "The quick brown" --preset greedy
 
     # Custom parameters (overrides preset)
-    python examples/generate.py checkpoints/model_epoch_10.pt \
+    uv run python main.py generate checkpoints/model_epoch_10.pt \
         --preset balanced --temperature 0.8 --top-k 60
 """
 
@@ -241,14 +241,14 @@ def main():
         epilog="""
 Examples:
   # Interactive mode with balanced preset
-  python examples/generate.py checkpoints/model_epoch_10.pt --preset balanced
+  uv run python main.py generate checkpoints/model_epoch_10.pt --preset balanced
 
   # Single prompt with creative preset
-  python examples/generate.py checkpoints/model_epoch_10.pt \\
+  uv run python main.py generate checkpoints/model_epoch_10.pt \\
       --prompt "Once upon a time" --preset creative
 
   # Custom parameters
-  python examples/generate.py checkpoints/model_epoch_10.pt \\
+  uv run python main.py generate checkpoints/model_epoch_10.pt \\
       --prompt "The" --temperature 0.8 --top-k 60 --top-p 0.92
         """
     )

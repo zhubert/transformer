@@ -151,7 +151,7 @@ output = model.generate(
 )
 ```
 
-#### 9. Training Implementation (`examples/train.py`, `src/transformer/dataset.py`)
+#### 9. Training Implementation (`commands/train.py`, `src/transformer/dataset.py`)
 Complete training pipeline with MPS GPU acceleration.
 
 - BPE tokenization using tiktoken (p50k_base encoding)
@@ -178,7 +178,7 @@ Warmup + cosine decay learning rate schedule for better convergence.
 - Cosine decay: Smoothly decreases LR following cosine curve
 - Prevents early training instability and improves final convergence
 
-#### 11. Perplexity Evaluation (`src/transformer/perplexity.py`, `examples/evaluate_perplexity.py`)
+#### 11. Perplexity Evaluation (`src/transformer/perplexity.py`, `commands/evaluate_perplexity.py`)
 Complete perplexity calculation and model evaluation system.
 
 - Calculate perplexity from model logits or loss
@@ -191,7 +191,7 @@ Complete perplexity calculation and model evaluation system.
 
 See [Understanding Perplexity](#understanding-perplexity) section for detailed explanation of this metric and how to use it.
 
-#### 12. Text Generation Scripts (`examples/generate.py`, `examples/sampling_comparison.py`)
+#### 12. Text Generation Scripts (`commands/generate.py`, `commands/sampling_comparison.py`)
 Complete text generation and inference capabilities.
 
 - **Interactive generation**: Generate text with various presets (greedy, precise, balanced, creative)
@@ -241,11 +241,11 @@ transformer/
 │   ├── test_sampling.py    # 27 tests for sampling methods
 │   └── test_perplexity.py  # Tests for perplexity calculation
 │
-├── examples/                # Training and generation scripts
-│   ├── train.py            # Main training script
-│   ├── generate.py         # Text generation script
-│   ├── sampling_comparison.py    # Demo of different sampling strategies
-│   └── evaluate_perplexity.py   # Perplexity evaluation script
+├── commands/                # CLI command implementations
+│   ├── train.py            # Training command
+│   ├── generate.py         # Text generation command
+│   ├── sampling_comparison.py    # Sampling strategy demo
+│   └── evaluate_perplexity.py   # Perplexity evaluation command
 │
 ├── CLAUDE.md               # Project planning and context
 └── README.md               # This file
@@ -356,7 +356,7 @@ output = model.generate(
 Run the demonstration script to see how different strategies behave:
 
 ```bash
-uv run python examples/sampling_comparison.py
+uv run python commands/sampling_comparison.py
 ```
 
 This shows:
@@ -456,16 +456,16 @@ Use the evaluation script to test your model:
 
 ```bash
 # Evaluate latest checkpoint
-uv run python examples/evaluate_perplexity.py
+uv run python main.py evaluate
 
 # Evaluate specific checkpoint
-uv run python examples/evaluate_perplexity.py --checkpoint checkpoints/model_epoch_10.pt
+uv run python main.py evaluate --checkpoint checkpoints/model_epoch_10.pt
 
 # Compare all checkpoints
-uv run python examples/evaluate_perplexity.py --compare
+uv run python main.py compare
 
 # Specify evaluation text
-uv run python examples/evaluate_perplexity.py --text-file my_test_data.txt
+uv run python main.py evaluate --text-file my_test_data.txt
 ```
 
 **Example output**:
@@ -511,12 +511,12 @@ The transformer can be trained on any text file using the training script.
 
 ```bash
 # Train on your text file (default: CPU)
-uv run python examples/train.py
+uv run python main.py train
 ```
 
 ### Training Configuration
 
-The training script (`examples/train.py`) defaults to CPU for stability:
+The training script (`commands/train.py`) defaults to CPU for stability:
 
 - **Model size**: 6 layers, 256 dimensions, 4 attention heads (~30M parameters)
 - **Batch size**: 8
@@ -571,13 +571,13 @@ Epoch 1/3
 
 ```bash
 # Recommended: CPU mode (stable)
-uv run python examples/train.py
+uv run python main.py train
 
 # Experimental: MPS mode (faster but unstable)
-uv run python examples/train.py --mps
+uv run python main.py train --mps
 
 # If MPS fails: debug mode forces sync (slower but more stable)
-uv run python examples/train.py --mps --debug
+uv run python main.py train --mps --debug
 ```
 
 **Note**: CUDA (NVIDIA GPUs) does not have these issues.
@@ -587,7 +587,7 @@ uv run python examples/train.py --mps --debug
 Enable debug mode for detailed NaN diagnostics:
 
 ```bash
-uv run python examples/train.py --debug
+uv run python main.py train --debug
 ```
 
 This prints diagnostic information at each step to help identify numerical stability issues.
@@ -595,7 +595,7 @@ This prints diagnostic information at each step to help identify numerical stabi
 ### Using Your Own Text
 
 1. Place your text file in the project root
-2. Update `TEXT_FILE` in `examples/train.py` (line 121)
+2. Update `TEXT_FILE` in `commands/train.py` (line 151)
 3. Run training as above
 
 **Recommended text size**: 100KB - 10MB (smaller trains faster, larger learns better)

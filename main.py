@@ -1,5 +1,338 @@
+#!/usr/bin/env python3
+"""
+Transformer CLI - Main entry point for transformer operations.
+
+This CLI provides access to all transformer functionality:
+- Training models
+- Generating text
+- Evaluating model performance
+- Comparing checkpoints
+- Demonstrating sampling strategies
+
+Usage:
+    python main.py train [OPTIONS]
+    python main.py generate CHECKPOINT [OPTIONS]
+    python main.py evaluate [OPTIONS]
+    python main.py compare [OPTIONS]
+    python main.py demo-sampling
+"""
+
+import sys
+import argparse
+from pathlib import Path
+
+# Add src to path
+sys.path.append(str(Path(__file__).parent))
+
+# Import from commands
+from commands.train import train
+from commands.generate import main as generate_main
+from commands.evaluate_perplexity import (
+    evaluate_checkpoint,
+    compare_checkpoints,
+)
+from commands.sampling_comparison import (
+    demonstrate_sampling_strategies,
+    demonstrate_with_model,
+)
+
+
+def create_parser():
+    """Create the main argument parser with subcommands."""
+    parser = argparse.ArgumentParser(
+        description="Transformer CLI - Train, generate, and evaluate transformer models",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # ============================================================================
+    # TRAIN subcommand
+    # ============================================================================
+    train_parser = subparsers.add_parser(
+        "train",
+        help="Train a decoder-only transformer model",
+        description="Train a transformer model on text data with configurable hyperparameters",
+    )
+    train_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode with diagnostic prints for NaN detection",
+    )
+    train_parser.add_argument(
+        "--mps",
+        action="store_true",
+        help="Use MPS (Apple Silicon GPU) - EXPERIMENTAL, has known NaN issues",
+    )
+
+    # ============================================================================
+    # GENERATE subcommand
+    # ============================================================================
+    generate_parser = subparsers.add_parser(
+        "generate",
+        help="Generate text using a trained model",
+        description="Generate text from a trained transformer model with various sampling strategies",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Interactive mode
+  python main.py generate checkpoints/model_epoch_10.pt --preset balanced
+
+  # Single prompt
+  python main.py generate checkpoints/model_epoch_10.pt \\
+      --prompt "Once upon a time" --preset creative
+
+  # Custom parameters
+  python main.py generate checkpoints/model_epoch_10.pt \\
+      --prompt "The" --temperature 0.8 --top-k 60
+        """,
+    )
+    generate_parser.add_argument(
+        "checkpoint",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Path to model checkpoint file",
+    )
+    generate_parser.add_argument(
+        "--prompt", type=str, default=None, help="Text prompt (if not provided, enters interactive mode)"
+    )
+    generate_parser.add_argument(
+        "--preset",
+        type=str,
+        choices=["greedy", "precise", "balanced", "creative", "very-creative"],
+        default="balanced",
+        help="Generation preset (default: balanced)",
+    )
+    generate_parser.add_argument(
+        "--max-length",
+        type=int,
+        default=100,
+        help="Maximum tokens to generate (default: 100)",
+    )
+    generate_parser.add_argument(
+        "--temperature", type=float, default=None, help="Temperature (overrides preset)"
+    )
+    generate_parser.add_argument(
+        "--top-k", type=int, default=None, help="Top-k parameter (overrides preset)"
+    )
+    generate_parser.add_argument(
+        "--top-p", type=float, default=None, help="Top-p parameter (overrides preset)"
+    )
+    generate_parser.add_argument(
+        "--method",
+        type=str,
+        choices=["greedy", "top_k", "top_p", "top_k_top_p"],
+        default=None,
+        help="Sampling method (overrides preset)",
+    )
+    generate_parser.add_argument(
+        "--device",
+        type=str,
+        choices=["cpu", "cuda", "mps"],
+        default=None,
+        help="Device to use (default: auto-detect)",
+    )
+    generate_parser.add_argument(
+        "--list-presets", action="store_true", help="List all available presets and exit"
+    )
+
+    # ============================================================================
+    # EVALUATE subcommand
+    # ============================================================================
+    evaluate_parser = subparsers.add_parser(
+        "evaluate",
+        help="Evaluate a model checkpoint using perplexity",
+        description="Evaluate model performance on a text dataset",
+    )
+    evaluate_parser.add_argument(
+        "--checkpoint", type=str, help="Path to specific checkpoint to evaluate"
+    )
+    evaluate_parser.add_argument(
+        "--text-file",
+        type=str,
+        default="Singular.txt",
+        help="Text file to evaluate on (default: Singular.txt)",
+    )
+    evaluate_parser.add_argument(
+        "--seq-length", type=int, default=128, help="Sequence length (default: 128)"
+    )
+    evaluate_parser.add_argument(
+        "--batch-size", type=int, default=8, help="Batch size (default: 8)"
+    )
+    evaluate_parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda", "mps"],
+        help="Device to run on (default: cpu)",
+    )
+
+    # ============================================================================
+    # COMPARE subcommand
+    # ============================================================================
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="Compare all model checkpoints",
+        description="Compare all checkpoints in a directory to find the best model",
+    )
+    compare_parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default="checkpoints",
+        help="Directory containing checkpoints (default: checkpoints)",
+    )
+    compare_parser.add_argument(
+        "--text-file",
+        type=str,
+        default="Singular.txt",
+        help="Text file to evaluate on (default: Singular.txt)",
+    )
+    compare_parser.add_argument(
+        "--seq-length", type=int, default=128, help="Sequence length (default: 128)"
+    )
+    compare_parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda", "mps"],
+        help="Device to run on (default: cpu)",
+    )
+
+    # ============================================================================
+    # DEMO-SAMPLING subcommand
+    # ============================================================================
+    demo_parser = subparsers.add_parser(
+        "demo-sampling",
+        help="Demonstrate different sampling strategies",
+        description="Educational demonstration of how different sampling methods work",
+    )
+    demo_parser.add_argument(
+        "--with-model",
+        action="store_true",
+        help="Also demonstrate with an actual trained model (if available)",
+    )
+
+    return parser
+
+
 def main():
-    print("Hello from transformer!")
+    """Main entry point for the transformer CLI."""
+    parser = create_parser()
+    args = parser.parse_args()
+
+    # Show help if no command specified
+    if args.command is None:
+        parser.print_help()
+        print("\nUse 'python main.py <command> --help' for more information on a command.")
+        sys.exit(1)
+
+    # ============================================================================
+    # Route to appropriate handler
+    # ============================================================================
+
+    if args.command == "train":
+        print("=" * 80)
+        print("TRAINING MODE")
+        print("=" * 80)
+        print()
+        train(debug=args.debug, use_mps=args.mps)
+
+    elif args.command == "generate":
+        print("=" * 80)
+        print("GENERATION MODE")
+        print("=" * 80)
+        print()
+        # Call generate main with sys.argv modified to match its expectations
+        # The generate script expects: script_name checkpoint [options]
+        original_argv = sys.argv
+        try:
+            # Build new argv for generate script
+            new_argv = ["generate"]
+            if args.checkpoint:
+                new_argv.append(args.checkpoint)
+            if args.prompt:
+                new_argv.extend(["--prompt", args.prompt])
+            if args.preset:
+                new_argv.extend(["--preset", args.preset])
+            if args.max_length:
+                new_argv.extend(["--max-length", str(args.max_length)])
+            if args.temperature is not None:
+                new_argv.extend(["--temperature", str(args.temperature)])
+            if args.top_k is not None:
+                new_argv.extend(["--top-k", str(args.top_k)])
+            if args.top_p is not None:
+                new_argv.extend(["--top-p", str(args.top_p)])
+            if args.method:
+                new_argv.extend(["--method", args.method])
+            if args.device:
+                new_argv.extend(["--device", args.device])
+            if args.list_presets:
+                new_argv.append("--list-presets")
+
+            sys.argv = new_argv
+            generate_main()
+        finally:
+            sys.argv = original_argv
+
+    elif args.command == "evaluate":
+        print("=" * 80)
+        print("EVALUATION MODE")
+        print("=" * 80)
+        print()
+
+        if args.checkpoint:
+            # Evaluate specific checkpoint
+            evaluate_checkpoint(
+                args.checkpoint,
+                args.text_file,
+                seq_length=args.seq_length,
+                batch_size=args.batch_size,
+                device=args.device,
+            )
+        else:
+            # Find and evaluate latest checkpoint
+            checkpoint_dir = Path(args.checkpoint_dir) if hasattr(args, 'checkpoint_dir') else Path("checkpoints")
+            checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*.pt"))
+
+            if not checkpoint_files:
+                print(f"No checkpoints found in {checkpoint_dir}")
+                print("Please train a model first using: python main.py train")
+                sys.exit(1)
+
+            latest_checkpoint = checkpoint_files[-1]
+            print(f"No checkpoint specified, using latest: {latest_checkpoint.name}")
+            print()
+
+            evaluate_checkpoint(
+                str(latest_checkpoint),
+                args.text_file,
+                seq_length=args.seq_length,
+                batch_size=args.batch_size,
+                device=args.device,
+            )
+
+    elif args.command == "compare":
+        print("=" * 80)
+        print("COMPARISON MODE")
+        print("=" * 80)
+        print()
+        compare_checkpoints(
+            args.checkpoint_dir,
+            args.text_file,
+            seq_length=args.seq_length,
+            device=args.device,
+        )
+
+    elif args.command == "demo-sampling":
+        print("=" * 80)
+        print("SAMPLING DEMONSTRATION MODE")
+        print("=" * 80)
+        print()
+        demonstrate_sampling_strategies()
+        if args.with_model:
+            print("\n" * 2)
+            demonstrate_with_model()
 
 
 if __name__ == "__main__":
