@@ -145,7 +145,29 @@ Complete training pipeline with MPS GPU acceleration.
 
 ### 🚧 Next Steps
 
+**Immediate**:
 - Text generation examples and inference scripts
+
+**Planned Training Improvements**:
+- **Learning Rate Schedule** - Add warmup + cosine decay for better convergence
+  - Warmup: Gradually increase LR from 0 for first N steps (prevents early instability)
+  - Cosine Decay: Smoothly decrease LR over training (helps final convergence)
+  - Expected improvement: Lower final loss, more stable training
+
+- **Gradient Accumulation** - Simulate larger batch sizes without more memory
+  - Accumulate gradients over multiple batches before updating weights
+  - Larger effective batch size = more stable gradients, better learning
+  - Example: 4 accumulation steps × batch 8 = effective batch 32
+
+- **Better Sampling (Top-k/Top-p)** - Improve generation quality
+  - Top-k: Only sample from k most likely tokens (prevents rare/weird tokens)
+  - Top-p (nucleus): Sample from smallest set of tokens with cumulative prob > p
+  - Both prevent model from generating invalid or very rare tokens
+  - Expected improvement: More coherent, natural-sounding text
+
+**Current Status**:
+- Training parameters optimized (20 epochs, LR 3e-4, temp 0.5)
+- Decode method fixed to handle invalid tokens gracefully
 
 ## Project Structure
 
