@@ -33,6 +33,18 @@ Key Concepts:
     - Low loss (e.g., 1.5): Model is quite good at predictions
     - The goal of training is to make loss as low as possible!
 
+**Perplexity**: Exponential of loss, measuring model "confusion"
+    - Perplexity = exp(loss)
+    - More interpretable than raw loss
+    - Perplexity ~50 means "model as confused as choosing from 50 words"
+    - Lower perplexity = better model
+    - Typical values:
+        * Perfect: 1.0 (always correct)
+        * Excellent: 10-30 (GPT-2 level)
+        * Decent: 50-100
+        * Poor: 200+
+        * Random: vocab_size (e.g., 50,000)
+
 **CrossEntropyLoss**: The loss function for classification tasks
     - Compares model's predicted probabilities with actual next token
     - Penalizes confident wrong predictions more than uncertain ones
@@ -84,6 +96,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.dataset import TextDataset
 from src.transformer.scheduler import get_cosine_schedule_with_warmup
+from src.transformer.perplexity import calculate_perplexity_from_loss
 
 
 def get_device(use_mps=False):
@@ -323,8 +336,11 @@ def train(debug=False, use_mps=False):
             if (batch_idx + 1) % LOG_INTERVAL == 0:
                 avg_loss = epoch_loss / (batch_idx + 1)
                 current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
+                batch_perplexity = calculate_perplexity_from_loss(loss).item()
+                avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
                 print(f"  Batch {batch_idx + 1}/{len(dataloader)}, "
-                      f"Loss: {loss.item():.4f}, Avg: {avg_loss:.4f}, "
+                      f"Loss: {loss.item():.4f}, Perplexity: {batch_perplexity:.2f}, "
+                      f"Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.2f}, "
                       f"LR: {current_lr:.6f}")
 
             # Sample generation
@@ -338,9 +354,11 @@ def train(debug=False, use_mps=False):
         # Epoch summary
         epoch_time = time.time() - epoch_start
         avg_epoch_loss = epoch_loss / len(dataloader)
+        avg_epoch_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_epoch_loss)).item()
         current_lr = scheduler.get_last_lr()[0]
         print(f"\n  Epoch {epoch + 1} complete!")
         print(f"  Average Loss: {avg_epoch_loss:.4f}")
+        print(f"  Average Perplexity: {avg_epoch_perplexity:.2f}")
         print(f"  Current LR: {current_lr:.6f}")
         print(f"  Time: {epoch_time:.1f}s")
         print()
@@ -353,6 +371,7 @@ def train(debug=False, use_mps=False):
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),  # Save scheduler state
             'loss': avg_epoch_loss,
+            'perplexity': avg_epoch_perplexity,  # Save perplexity for comparison
             'current_lr': current_lr,  # Save current LR for reference
             'config': {
                 'vocab_size': dataset.vocab_size,
