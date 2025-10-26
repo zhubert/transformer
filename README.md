@@ -104,11 +104,29 @@ The fundamental building block that gets stacked to create the full transformer.
 
 **Tests**: 14/14 passing
 
-### 🚧 In Progress
+#### 7. Complete Decoder-Only Transformer Model (`src/transformer/model.py`)
+The complete, working transformer that assembles all components.
 
-- Complete Decoder-Only Transformer Model
+- Combines token embeddings + positional encodings + transformer blocks
+- Automatic causal mask creation for autoregressive generation
+- Proper weight initialization for training stability
+- Output projection to vocabulary logits
+- Includes `generate()` method for text generation
+- Supports various model sizes (configurable layers, heads, dimensions)
+
+**Extremely comprehensive documentation** explaining:
+- Complete architecture with shape flow diagrams
+- What logits are and why we use them
+- Causal masking for decoder-only models
+- Model size comparisons (GPT-2, GPT-3)
+- Autoregressive generation process
+
+**Tests**: 15/15 passing
+
+### 🚧 Next Steps
+
 - Training script
-- Text generation
+- Text generation examples
 
 ## Project Structure
 
@@ -187,9 +205,9 @@ We're building **bottom-up**, starting with the simplest components and working 
 3. ✅ **Feed-Forward Network** - Position-wise MLP
 4. ✅ **Multi-Head Attention** - Parallel attention heads
 5. ✅ **Transformer Block** - Combining all components
-6. 🚧 **Complete Model** - Stacking blocks
+6. ✅ **Complete Model** - Decoder-only transformer with generation capability
 7. 🚧 **Training** - Training loop with a toy dataset
-8. 🚧 **Generation** - Autoregressive text generation
+8. 🚧 **Generation Examples** - Practical text generation demonstrations
 
 Each component is:
 - Fully implemented from scratch (no pre-built transformer modules)
