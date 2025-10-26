@@ -228,7 +228,7 @@ def calculate_perplexity_from_loss(loss):
     return perplexity
 
 
-def evaluate_perplexity(model, dataloader, device='cpu', max_batches=None):
+def evaluate_perplexity(model, dataloader, device='cpu', max_batches=None, autocast_ctx=None):
     """
     Evaluate perplexity of a model on a dataset.
 
@@ -240,6 +240,7 @@ def evaluate_perplexity(model, dataloader, device='cpu', max_batches=None):
         dataloader: DataLoader providing (input, target) batches
         device: Device to run evaluation on ('cpu', 'cuda', or 'mps')
         max_batches: If set, only evaluate on first N batches (for quick checks)
+        autocast_ctx: Optional autocast context for mixed precision (CUDA only)
 
     Returns:
         avg_perplexity: Average perplexity across all batches
@@ -265,6 +266,10 @@ def evaluate_perplexity(model, dataloader, device='cpu', max_batches=None):
         - If val_perplexity >> train_perplexity: Overfitting!
         - Good models: val_perplexity ≈ train_perplexity (maybe slightly higher)
     """
+    from contextlib import nullcontext
+    if autocast_ctx is None:
+        autocast_ctx = nullcontext()
+
     model.eval()  # Set to evaluation mode (disables dropout, etc.)
 
     total_loss = 0.0
@@ -272,7 +277,7 @@ def evaluate_perplexity(model, dataloader, device='cpu', max_batches=None):
 
     criterion = nn.CrossEntropyLoss()
 
-    with torch.no_grad():  # Don't compute gradients (saves memory and time)
+    with torch.no_grad(), autocast_ctx:  # Don't compute gradients + mixed precision
         for batch_idx, (inputs, targets) in enumerate(dataloader):
             # Stop early if max_batches specified (useful for quick checks)
             if max_batches is not None and batch_idx >= max_batches:

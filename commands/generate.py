@@ -55,6 +55,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
+from src.transformer.device_utils import init_device, get_autocast_context
 import tiktoken
 
 # Import encoding detection from train.py
@@ -138,7 +139,7 @@ def load_model(checkpoint_path, device):
     return model, config, detected_encoding
 
 
-def generate_text(model, tokenizer, prompt, max_length, sampling_method, sampling_params, device):
+def generate_text(model, tokenizer, prompt, max_length, sampling_method, sampling_params, device, autocast_ctx):
     """
     Generate text from a prompt using the specified sampling method.
 
@@ -150,6 +151,7 @@ def generate_text(model, tokenizer, prompt, max_length, sampling_method, samplin
         sampling_method: "greedy", "top_k", "top_p", or "top_k_top_p"
         sampling_params: Dict of parameters for sampling method
         device: Device to run on
+        autocast_ctx: Autocast context for mixed precision (CUDA only)
 
     Returns:
         generated_text: Generated text as string
@@ -162,8 +164,8 @@ def generate_text(model, tokenizer, prompt, max_length, sampling_method, samplin
     print(f"Generating {max_length} tokens using {sampling_method} sampling...")
     print()
 
-    # Generate
-    with torch.no_grad():
+    # Generate with autocast (mixed precision on CUDA, no-op on MPS/CPU)
+    with torch.no_grad(), autocast_ctx:
         output_ids = model.generate(
             input_ids,
             max_length=max_length,
@@ -176,7 +178,7 @@ def generate_text(model, tokenizer, prompt, max_length, sampling_method, samplin
     return generated_text
 
 
-def interactive_mode(model, tokenizer, preset, device):
+def interactive_mode(model, tokenizer, preset, device, autocast_ctx):
     """
     Interactive generation mode - keep prompting user for input.
 
@@ -185,6 +187,7 @@ def interactive_mode(model, tokenizer, preset, device):
         tokenizer: tiktoken tokenizer for tokenization
         preset: Generation preset configuration
         device: Device to run on
+        autocast_ctx: Autocast context for mixed precision
     """
     print("=" * 80)
     print("INTERACTIVE GENERATION MODE")
@@ -226,7 +229,8 @@ def interactive_mode(model, tokenizer, preset, device):
                 max_length=preset['max_length'],
                 sampling_method=preset['method'],
                 sampling_params=preset['params'],
-                device=device
+                device=device,
+                autocast_ctx=autocast_ctx
             )
 
             print()
@@ -374,23 +378,16 @@ Examples:
             print("  No checkpoints directory found")
         sys.exit(1)
 
-    # Setup device
-    if args.device:
-        device = torch.device(args.device)
-    else:
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-        elif torch.backends.mps.is_available():
-            device = torch.device("mps")
-        else:
-            device = torch.device("cpu")
+    # Setup device with proper initialization
+    device, device_name = init_device(args.device, seed=42)
+    autocast_ctx = get_autocast_context(device.type)
 
     print()
     print("=" * 80)
     print("TRANSFORMER TEXT GENERATION")
     print("=" * 80)
     print()
-    print(f"Device: {device}")
+    print(f"Device: {device_name}")
     print()
 
     # Load model
@@ -442,7 +439,7 @@ Examples:
     # Interactive or single prompt mode
     if args.prompt is None:
         # Interactive mode
-        interactive_mode(model, tokenizer, generation_config, device)
+        interactive_mode(model, tokenizer, generation_config, device, autocast_ctx)
     else:
         # Single generation
         print(f"Preset: {args.preset} - {preset_config['description']}")
@@ -457,7 +454,8 @@ Examples:
             max_length=args.max_length,
             sampling_method=generation_config["method"],
             sampling_params=generation_config["params"],
-            device=device
+            device=device,
+            autocast_ctx=autocast_ctx
         )
 
         print("Generated text:")

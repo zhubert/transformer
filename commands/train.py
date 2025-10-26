@@ -129,6 +129,10 @@ from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.fineweb_dataset import FineWebDataset
 from src.transformer.scheduler import get_cosine_schedule_with_warmup
 from src.transformer.perplexity import calculate_perplexity_from_loss
+from src.transformer.device_utils import (
+    init_device, get_autocast_context, get_synchronize_fn,
+    get_memory_stats_fn, print_device_info
+)
 
 
 def detect_encoding_from_checkpoint(checkpoint):
@@ -174,31 +178,32 @@ def get_encoding_short_name(encoding):
         return encoding.replace('_base', '')
 
 
-def get_device(use_mps=False):
+def get_device_type_from_args(use_mps=False):
     """
-    Detect best available device for training.
-
-    Defaults to CPU for stability. MPS (Apple Silicon GPU) has known
-    issues with NaN during training (PyTorch bugs #107294, #109457).
+    Convert legacy --mps flag to device_type string.
 
     Args:
-        use_mps: If True, try to use MPS despite known issues
+        use_mps: If True, explicitly request MPS
+
+    Returns:
+        device_type: "mps" if use_mps is True, None otherwise (autodetect)
     """
-    if use_mps and torch.backends.mps.is_available():
-        return torch.device("mps"), "MPS (Apple Silicon GPU) - EXPERIMENTAL"
-    elif torch.cuda.is_available():
-        return torch.device("cuda"), "CUDA (NVIDIA GPU)"
-    else:
-        return torch.device("cpu"), "CPU"
+    if use_mps:
+        return "mps"
+    return None  # Autodetect
 
 
-def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu"):
+def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", autocast_ctx=None):
     """Generate sample text to see how the model is learning."""
+    from contextlib import nullcontext
+    if autocast_ctx is None:
+        autocast_ctx = nullcontext()
+
     model.eval()
     prompt_tokens = dataset.tokenizer.encode(prompt_text)
     input_ids = torch.tensor([prompt_tokens], dtype=torch.long).to(device)
 
-    with torch.no_grad():
+    with torch.no_grad(), autocast_ctx:
         output_ids = model.generate(input_ids, max_length=max_length, temperature=0.5)
 
     generated_text = dataset.decode(output_ids[0])
@@ -216,13 +221,6 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
         encoding: Tokenizer encoding to use ("p50k_base" or "cl100k_base")
         quick: If True, use smaller model and fewer tokens for faster training
     """
-
-    # Set random seed for reproducibility
-    torch.manual_seed(42)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(42)
-    if torch.backends.mps.is_available():
-        torch.mps.manual_seed(42)
 
     # Configuration
     SEQ_LENGTH = 128
@@ -265,12 +263,18 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
     print(f"Tokenizer encoding: {encoding}")
     print()
 
-    # Device setup
-    device, device_name = get_device(use_mps=use_mps)
+    # Device setup with proper initialization
+    device_type_str = get_device_type_from_args(use_mps)
+    device, device_name = init_device(device_type_str, seed=42)
     print(f"Device: {device_name}")
     if use_mps:
         print("  WARNING: MPS has known NaN issues. Use --debug if training fails.")
     print()
+
+    # Get device-specific utilities
+    autocast_ctx = get_autocast_context(device.type)
+    synchronize = get_synchronize_fn(device.type)
+    get_max_memory = get_memory_stats_fn(device.type)
 
     # Load dataset
     print("Loading FineWeb dataset...")
@@ -404,22 +408,23 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
             inputs = inputs.to(device)
             targets = targets.to(device)
 
-            # Forward pass
-            logits = model(inputs, debug=debug)
+            # Forward pass with autocast (mixed precision on CUDA, no-op on MPS/CPU)
+            with autocast_ctx:
+                logits = model(inputs, debug=debug)
 
-            # NaN detection (defensive check)
-            if torch.isnan(logits).any() or torch.isinf(logits).any():
-                print(f"\n  ERROR: NaN/Inf detected in logits at batch {batch_idx + 1}")
-                print(f"  Logits stats: min={logits.min().item():.4f}, "
-                      f"max={logits.max().item():.4f}, mean={logits.mean().item():.4f}")
-                raise ValueError("NaN/Inf in logits - training unstable")
+                # NaN detection (defensive check)
+                if torch.isnan(logits).any() or torch.isinf(logits).any():
+                    print(f"\n  ERROR: NaN/Inf detected in logits at batch {batch_idx + 1}")
+                    print(f"  Logits stats: min={logits.min().item():.4f}, "
+                          f"max={logits.max().item():.4f}, mean={logits.mean().item():.4f}")
+                    raise ValueError("NaN/Inf in logits - training unstable")
 
-            # Calculate loss
-            batch_size, seq_length, vocab_size = logits.shape
-            loss = criterion(
-                logits.view(batch_size * seq_length, vocab_size),
-                targets.view(batch_size * seq_length)
-            )
+                # Calculate loss
+                batch_size, seq_length, vocab_size = logits.shape
+                loss = criterion(
+                    logits.view(batch_size * seq_length, vocab_size),
+                    targets.view(batch_size * seq_length)
+                )
 
             # Check loss for NaN
             if torch.isnan(loss) or torch.isinf(loss):
@@ -471,7 +476,8 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
                       f"{avg_loss:9.4f} {avg_perplexity:9.2f} {current_lr:10.6f} {phase:>10}")
                 log_lines_printed += 1
 
-        # Epoch summary
+        # Epoch summary (synchronize for accurate timing on CUDA)
+        synchronize()
         epoch_time = time.time() - epoch_start
         avg_epoch_loss = epoch_loss / (batch_idx + 1)  # Use actual batch count
         avg_epoch_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_epoch_loss)).item()
@@ -507,18 +513,25 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
         print()
 
     # Training complete
+    synchronize()  # Ensure all operations complete
     total_time = time.time() - start_time
     print("=" * 80)
     print("TRAINING COMPLETE!")
     print("=" * 80)
     print(f"Total time: {total_time / 60:.1f} minutes")
+
+    # Device-specific stats (CUDA only for now)
+    if device.type == "cuda":
+        peak_memory_gb = get_max_memory() / (1024**3)
+        print(f"Peak GPU memory: {peak_memory_gb:.2f} GB")
+
     print()
 
     # Final samples
     print("Final sample generations:")
     print("-" * 80)
     for prompt in ["The", "In the", "She was"]:
-        sample = generate_sample(model, dataset, prompt, max_length=100, device=device)
+        sample = generate_sample(model, dataset, prompt, max_length=100, device=device, autocast_ctx=autocast_ctx)
         print(f"\nPrompt: '{prompt}'")
         print(f"Generated: '{sample}'")
     print()
