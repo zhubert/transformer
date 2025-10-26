@@ -961,6 +961,263 @@
         </div>
     </section>
 
+    <!-- Step 7: Training at Scale -->
+    <section id="training">
+        <div class="container">
+            <h2>Step 7: Training at Scale</h2>
+            <div class="card">
+                <p>Building the transformer architecture is only half the battle. To train it effectively, we need techniques that make training stable, prevent over fitting, and work within the constraints of hobby-scale hardware. This section covers two critical techniques: <strong>gradient accumulation</strong> and <strong>validation splits</strong>.</p>
+
+                <h3>The Challenge: Small Batches, Noisy Training</h3>
+                <p><strong>What is a batch?</strong> During training, we process multiple examples together in a "batch." The model makes predictions for all examples, we compute the average loss, then we calculate gradients and update weights. Larger batches give us more stable gradient estimates because we're averaging over more examples.</p>
+
+                <p><strong>The problem with small batches:</strong> On hobby hardware (like an M1 Mac or consumer GPU), we're limited to small batches—typically just 8 sequences at a time. Small batches lead to <em>noisy gradients</em>: each batch gives a slightly different signal about which direction to update the weights, causing erratic training.</p>
+
+                <div class="highlight">
+                    <p><strong>Memory bottleneck:</strong> Why can't we just use bigger batches? Each example in a batch requires storing activations in memory for the backward pass. M1 Macs have ~8GB unified memory, and a batch of 8 sequences already uses ~4GB. Doubling to 16 would run out of memory!</p>
+                </div>
+
+                <h3>Gradient Accumulation: Large Batches Without the Memory Cost</h3>
+                <p><strong>The key insight:</strong> We don't need to process all examples simultaneously! Gradient accumulation lets us simulate large batch sizes by accumulating gradients over multiple small batches before updating weights.</p>
+
+                <p><strong>How it works:</strong></p>
+                <ol style="margin-left: 24px; margin-bottom: 24px;">
+                    <li><strong>Process batch 1:</strong> Forward pass → Loss → Backward pass → Store gradients (don't update yet!)</li>
+                    <li><strong>Process batch 2:</strong> Forward pass → Loss → Backward pass → <em>Add</em> gradients to stored ones</li>
+                    <li><strong>Repeat</strong> for N batches (e.g., 16 times)</li>
+                    <li><strong>Update weights:</strong> Use the accumulated (averaged) gradients</li>
+                </ol>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 700 500" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Title -->
+                        <text x="350" y="30" text-anchor="middle" font-family="SF Pro Display" font-size="20" font-weight="600" fill="#1D1D1F">Gradient Accumulation</text>
+
+                        <!-- Left side: Without Accumulation -->
+                        <text x="150" y="70" text-anchor="middle" font-family="SF Pro Display" font-size="16" font-weight="600" fill="#007AFF">Without Accumulation</text>
+
+                        <!-- Batch 1 -->
+                        <rect x="50" y="90" width="200" height="60" fill="#FF9500" opacity="0.2" rx="8" stroke="#FF9500" stroke-width="2"/>
+                        <text x="150" y="115" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#1D1D1F">Batch 1 (8 sequences)</text>
+                        <text x="150" y="135" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#666">Forward → Backward</text>
+
+                        <!-- Arrow -->
+                        <path d="M 150 150 L 150 170" stroke="#FF9500" stroke-width="2" marker-end="url(#arroworange)"/>
+
+                        <!-- Update -->
+                        <circle cx="150" cy="185" r="25" fill="#32D74B" opacity="0.3" stroke="#32D74B" stroke-width="2"/>
+                        <text x="150" y="192" text-anchor="middle" font-family="SF Pro Display" font-size="14" font-weight="600" fill="#32D74B">Update</text>
+
+                        <!-- Noisy label -->
+                        <text x="150" y="230" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#FF2D55">Noisy gradients!</text>
+
+                        <!-- Right side: With Accumulation -->
+                        <text x="525" y="70" text-anchor="middle" font-family="SF Pro Display" font-size="16" font-weight="600" fill="#5856D6">With Accumulation (16×)</text>
+
+                        <!-- Multiple batches stacked -->
+                        <rect x="425" y="90" width="200" height="40" fill="#FF9500" opacity="0.2" rx="8" stroke="#FF9500" stroke-width="2"/>
+                        <text x="525" y="115" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#666">Batch 1 → accumulate</text>
+
+                        <rect x="425" y="135" width="200" height="40" fill="#FF9500" opacity="0.2" rx="8" stroke="#FF9500" stroke-width="2"/>
+                        <text x="525" y="160" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#666">Batch 2 → accumulate</text>
+
+                        <text x="525" y="195" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#666">⋮</text>
+
+                        <rect x="425" y="210" width="200" height="40" fill="#FF9500" opacity="0.2" rx="8" stroke="#FF9500" stroke-width="2"/>
+                        <text x="525" y="235" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#666">Batch 16 → accumulate</text>
+
+                        <!-- Arrow -->
+                        <path d="M 525 250 L 525 270" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+
+                        <!-- Update -->
+                        <circle cx="525" cy="285" r="25" fill="#32D74B" opacity="0.3" stroke="#32D74B" stroke-width="2"/>
+                        <text x="525" y="292" text-anchor="middle" font-family="SF Pro Display" font-size="14" font-weight="600" fill="#32D74B">Update</text>
+
+                        <!-- Stable label -->
+                        <text x="525" y="330" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#32D74B">Stable gradients!</text>
+
+                        <!-- Bottom comparison -->
+                        <rect x="50" y="370" width="600" height="100" fill="#f5f5f7" rx="8"/>
+                        <text x="350" y="395" text-anchor="middle" font-family="SF Pro Display" font-size="14" font-weight="600" fill="#1D1D1F">The Mathematics</text>
+                        <text x="350" y="420" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#666">Left: gradient from 8 sequences (1,024 tokens)</text>
+                        <text x="350" y="440" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#666">Right: averaged gradient from 128 sequences (16,384 tokens)</text>
+                        <text x="350" y="460" text-anchor="middle" font-family="SF Pro Display" font-size="12" font-weight="600" fill="#007AFF">16× more stable, same memory!</text>
+                    </svg>
+                </div>
+
+                <p><strong>Why this works mathematically:</strong> Gradients are linear, so averaging gradients from N separate batches gives the same result as computing the gradient on one large batch containing all N×batch_size examples. The key formula:</p>
+
+                <p style="text-align: center; font-family: 'SF Mono', monospace; background: #f5f5f7; padding: 16px; border-radius: 8px; margin: 24px 0;">
+                    ∇(L₁ + L₂ + ... + Lₙ) = ∇L₁ + ∇L₂ + ... + ∇Lₙ
+                </p>
+
+                <p>By accumulating gradients over 16 batches of 8 sequences each, we get gradients equivalent to a batch of 128 sequences—16× more stable!—while only ever holding 8 sequences in memory at once.</p>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="comment"># Without accumulation (noisy)</span>
+<span class="keyword">for</span> batch <span class="keyword">in</span> dataloader:
+    loss = compute_loss(batch)
+    loss.backward()           <span class="comment"># Compute gradients</span>
+    optimizer.step()          <span class="comment"># Update every batch (noisy!)</span>
+    optimizer.zero_grad()
+
+<span class="comment"># With accumulation (stable)</span>
+accumulation_steps = <span class="string">16</span>
+<span class="keyword">for</span> i, batch <span class="keyword">in</span> enumerate(dataloader):
+    loss = compute_loss(batch)
+    loss = loss / accumulation_steps  <span class="comment"># Scale for correct averaging</span>
+    loss.backward()                   <span class="comment"># Accumulate gradients</span>
+
+    <span class="keyword">if</span> (i + <span class="string">1</span>) % accumulation_steps == <span class="string">0</span>:
+        optimizer.step()              <span class="comment"># Update every 16 batches (stable!)</span>
+        optimizer.zero_grad()</code></pre>
+                    </div>
+                </div>
+
+                <h3>Validation: Detecting Overfitting</h3>
+                <p><strong>The problem: Memorization vs. Learning</strong></p>
+                <p>Imagine a student preparing for an exam. They could:</p>
+                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                    <li><strong>Memorize answers</strong> to practice problems → Fails on new problems (overfitting)</li>
+                    <li><strong>Learn concepts</strong> from practice problems → Succeeds on new problems (good generalization)</li>
+                </ul>
+
+                <p>The same happens with neural networks. As training progresses, the model might start memorizing the training data instead of learning general patterns. This is called <strong>overfitting</strong>.</p>
+
+                <p><strong>The solution: Validation split</strong></p>
+                <p>We set aside 10% of our data that the model <em>never</em> sees during training. After each epoch, we evaluate the model on this "validation" data. If the model is truly learning patterns (not memorizing), it should perform well on both training and validation data.</p>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 700 450" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Title -->
+                        <text x="350" y="30" text-anchor="middle" font-family="SF Pro Display" font-size="20" font-weight="600" fill="#1D1D1F">Training vs Validation Loss</text>
+
+                        <!-- Axes -->
+                        <line x1="80" y1="380" x2="650" y2="380" stroke="#1D1D1F" stroke-width="2"/>
+                        <line x1="80" y1="80" x2="80" y2="380" stroke="#1D1D1F" stroke-width="2"/>
+
+                        <!-- X-axis label -->
+                        <text x="365" y="410" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#666">Training Epochs →</text>
+
+                        <!-- Y-axis label -->
+                        <text x="40" y="230" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#666" transform="rotate(-90 40 230)">Loss →</text>
+
+                        <!-- Scenario 1: Good training (both decreasing) -->
+                        <text x="200" y="70" text-anchor="middle" font-family="SF Pro Display" font-size="13" font-weight="600" fill="#32D74B">✓ Good: Both Improving</text>
+
+                        <!-- Training curve (good) -->
+                        <path d="M 100 150 Q 150 130 200 120" stroke="#007AFF" stroke-width="3" fill="none"/>
+                        <circle cx="200" cy="120" r="4" fill="#007AFF"/>
+
+                        <!-- Validation curve (good) -->
+                        <path d="M 100 160 Q 150 142 200 133" stroke="#5856D6" stroke-width="3" stroke-dasharray="5,5" fill="none"/>
+                        <circle cx="200" cy="133" r="4" fill="#5856D6"/>
+
+                        <!-- Scenario 2: Overfitting (val increases) -->
+                        <text x="450" y="70" text-anchor="middle" font-family="SF Pro Display" font-size="13" font-weight="600" fill="#FF2D55">⚠ Overfitting: Val Worsening</text>
+
+                        <!-- Training curve (overfitting) -->
+                        <path d="M 350 150 Q 400 130 450 100 Q 500 80 550 70" stroke="#007AFF" stroke-width="3" fill="none"/>
+                        <circle cx="550" cy="70" r="4" fill="#007AFF"/>
+
+                        <!-- Validation curve (overfitting) -->
+                        <path d="M 350 160 Q 400 142 450 135 Q 500 145 550 170" stroke="#5856D6" stroke-width="3" stroke-dasharray="5,5" fill="none"/>
+                        <circle cx="550" cy="170" r="4" fill="#5856D6"/>
+
+                        <!-- Divergence annotation -->
+                        <path d="M 480 110 L 480 150" stroke="#FF2D55" stroke-width="2" marker-start="url(#arrowred)" marker-end="url(#arrowred)"/>
+                        <text x="500" y="135" font-family="SF Mono" font-size="11" fill="#FF2D55">Diverging!</text>
+
+                        <!-- Legend -->
+                        <rect x="150" y="390" width="400" height="50" fill="#f5f5f7" rx="8"/>
+                        <line x1="170" y1="410" x2="210" y2="410" stroke="#007AFF" stroke-width="3"/>
+                        <text x="220" y="415" font-family="SF Pro Display" font-size="12" fill="#1D1D1F">Train Loss (seen data)</text>
+
+                        <line x1="370" y1="410" x2="410" y2="410" stroke="#5856D6" stroke-width="3" stroke-dasharray="5,5"/>
+                        <text x="420" y="415" font-family="SF Pro Display" font-size="12" fill="#1D1D1F">Val Loss (unseen data)</text>
+                    </svg>
+                </div>
+
+                <p><strong>How to interpret the curves:</strong></p>
+                <div class="grid">
+                    <div class="grid-item">
+                        <h4 style="color: #32D74B;">✓ Good Training</h4>
+                        <p style="font-family: 'SF Mono', monospace; font-size: 0.9em; color: #666;">
+                            Train: 5.0 → 4.0 → 3.0<br/>
+                            Val:   5.2 → 4.2 → 3.2
+                        </p>
+                        <p>Both losses decreasing together. Model is learning general patterns that work on new data!</p>
+                    </div>
+                    <div class="grid-item">
+                        <h4 style="color: #FF9500;">⚠ Underfitting</h4>
+                        <p style="font-family: 'SF Mono', monospace; font-size: 0.9em; color: #666;">
+                            Train: 5.0 → 4.8 → 4.7<br/>
+                            Val:   5.2 → 5.0 → 4.9
+                        </p>
+                        <p>Both losses barely improving. Model is too simple or needs more training epochs.</p>
+                    </div>
+                    <div class="grid-item">
+                        <h4 style="color: #FF2D55;">⚠ Overfitting</h4>
+                        <p style="font-family: 'SF Mono', monospace; font-size: 0.9em; color: #666;">
+                            Train: 5.0 → 3.0 → 1.5<br/>
+                            Val:   5.2 → 3.5 → 4.0
+                        </p>
+                        <p>Training loss decreasing but validation increasing. Model is memorizing training data!</p>
+                    </div>
+                </div>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="comment"># Training with validation</span>
+<span class="keyword">for</span> epoch <span class="keyword">in</span> range(num_epochs):
+    <span class="comment"># Training phase</span>
+    model.train()
+    <span class="keyword">for</span> batch <span class="keyword">in</span> train_dataloader:
+        <span class="comment"># ... forward, backward, update ...</span>
+
+    <span class="comment"># Validation phase (no weight updates!)</span>
+    model.eval()
+    <span class="keyword">with</span> torch.no_grad():
+        <span class="keyword">for</span> batch <span class="keyword">in</span> val_dataloader:
+            val_loss = compute_loss(batch)
+            <span class="comment"># Just measure, don't update</span>
+
+    print(<span class="string">f"Train loss: {train_loss:.2f}, Val loss: {val_loss:.2f}"</span>)
+
+    <span class="comment"># Check for overfitting</span>
+    <span class="keyword">if</span> val_loss > train_loss * <span class="string">1.3</span>:
+        print(<span class="string">"Warning: Possible overfitting!"</span>)</code></pre>
+                    </div>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Implementation in this project:</strong> Our training script automatically splits FineWeb into 90% training and 10% validation using a deterministic hash-based split. After each epoch, you'll see both training and validation metrics, along with interpretation hints to help you understand if your model is learning well!</p>
+                </div>
+
+                <h3>Expected Improvements</h3>
+                <p>With gradient accumulation and validation:</p>
+                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                    <li><strong>20-30% lower final loss</strong> due to stable training</li>
+                    <li><strong>Smoother training curves</strong> that are easier to debug</li>
+                    <li><strong>Confidence in generalization</strong> by monitoring validation</li>
+                    <li><strong>Early stopping</strong> when validation stops improving</li>
+                    <li><strong>Works on hobby hardware</strong> without expensive GPUs</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
     <!-- Try It Yourself -->
     <section>
         <div class="container">

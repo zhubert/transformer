@@ -129,6 +129,7 @@ from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.fineweb_dataset import FineWebDataset
 from src.transformer.scheduler import get_cosine_schedule_with_warmup
 from src.transformer.perplexity import calculate_perplexity_from_loss
+from src.transformer.training_utils import GradientAccumulator
 from src.transformer.device_utils import (
     init_device, get_autocast_context, get_synchronize_fn,
     get_memory_stats_fn, print_device_info
@@ -211,15 +212,40 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
+def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumulation_steps=16):
     """
-    Main training function.
+    Main training function with gradient accumulation and validation.
 
     Args:
         debug: If True, print diagnostic information for debugging NaN issues
         use_mps: If True, try MPS (experimental - has known NaN issues)
         encoding: Tokenizer encoding to use ("p50k_base" or "cl100k_base")
         quick: If True, use smaller model and fewer tokens for faster training
+        accumulation_steps: Number of batches to accumulate before updating weights.
+                           Effective batch size = BATCH_SIZE × accumulation_steps
+                           Higher values = more stable training but slower updates
+                           Recommended: 16-32 for hobby hardware
+
+    What is Gradient Accumulation?
+    ------------------------------
+    Gradient accumulation allows us to simulate large batch training without
+    running out of memory. Instead of updating weights after each small batch,
+    we accumulate gradients over multiple batches and update once.
+
+    Example:
+        Without accumulation (batch_size=8):
+            Process 8 sequences → Update weights (noisy gradients!)
+
+        With accumulation (batch_size=8, accumulation_steps=16):
+            Process 8 sequences → Accumulate gradients
+            Process 8 sequences → Accumulate gradients
+            ... (16 times total)
+            Update weights using accumulated gradients (smooth!)
+
+        Effective batch: 8 × 16 = 128 sequences (stable training!)
+        Memory usage: Same as batch_size=8 (fits on hobby hardware)
+
+    See src/transformer/training_utils.py for detailed explanation.
     """
 
     # Configuration
@@ -276,31 +302,66 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
     synchronize = get_synchronize_fn(device.type)
     get_max_memory = get_memory_stats_fn(device.type)
 
-    # Load dataset
+    # Load datasets (train and validation)
     print("Loading FineWeb dataset...")
-    dataset = FineWebDataset(
+    print()
+
+    # Training dataset (90% of data)
+    train_dataset = FineWebDataset(
         cache_dir="data/fineweb_cache",
         seq_length=SEQ_LENGTH,
         tokens_per_epoch=TOKENS_PER_EPOCH,
         max_cached_shards=MAX_CACHED_SHARDS,
         seed=42,  # Reproducible shard selection
-        encoding_name=encoding
+        encoding_name=encoding,
+        split="train",  # Use training split
+        validation_fraction=0.1  # 10% reserved for validation
     )
     print()
 
+    # Validation dataset (10% of data)
+    # Use fewer tokens for validation to save time
+    val_tokens_per_epoch = TOKENS_PER_EPOCH // 10  # 10% of training tokens
+    val_dataset = FineWebDataset(
+        cache_dir="data/fineweb_cache",
+        seq_length=SEQ_LENGTH,
+        tokens_per_epoch=val_tokens_per_epoch,
+        max_cached_shards=MAX_CACHED_SHARDS,
+        seed=42,  # Same seed for consistency
+        encoding_name=encoding,
+        split="validation",  # Use validation split (different shards!)
+        validation_fraction=0.1
+    )
+    print()
+
+    # Create dataloaders
     # IterableDataset requires different DataLoader setup
     # No shuffle (streaming), no len()
-    dataloader = DataLoader(
-        dataset,
+    train_dataloader = DataLoader(
+        train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,  # Can't shuffle IterableDataset
         drop_last=True
     )
 
+    val_dataloader = DataLoader(
+        val_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        drop_last=True
+    )
+
+    # Calculate effective batch size with gradient accumulation
+    effective_batch_size = BATCH_SIZE * SEQ_LENGTH * accumulation_steps
+
     print(f"Training configuration:")
-    print(f"  Tokens per epoch: {TOKENS_PER_EPOCH:,}")
+    print(f"  Tokens per epoch (train): {TOKENS_PER_EPOCH:,}")
+    print(f"  Tokens per epoch (val): {val_tokens_per_epoch:,}")
     print(f"  Approximate sequences per epoch: ~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}")
-    print(f"  Batch size: {BATCH_SIZE}")
+    print(f"  Batch size: {BATCH_SIZE} sequences ({BATCH_SIZE * SEQ_LENGTH:,} tokens)")
+    print(f"  Gradient accumulation steps: {accumulation_steps}")
+    print(f"  Effective batch size: {BATCH_SIZE * accumulation_steps} sequences ({effective_batch_size:,} tokens)")
+    print(f"  → {accumulation_steps}x more stable than without accumulation!")
     print()
 
     # Create model
@@ -340,6 +401,12 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
         weight_decay=WEIGHT_DECAY
     )
 
+    # Gradient Accumulator
+    # --------------------
+    # Manages gradient accumulation to simulate large batch training.
+    # See src/transformer/training_utils.py for detailed explanation.
+    accumulator = GradientAccumulator(accumulation_steps=accumulation_steps)
+
     # Learning Rate Scheduler
     # ------------------------
     # We use warmup + cosine decay for better training:
@@ -357,14 +424,17 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
     # Expected improvement: 10-30% better final loss!
 
     # Estimate steps per epoch for FineWeb (IterableDataset)
-    # tokens_per_epoch / seq_length / batch_size
-    steps_per_epoch = (TOKENS_PER_EPOCH // SEQ_LENGTH // BATCH_SIZE)
+    # With gradient accumulation, we update weights less frequently
+    # Real steps = (tokens_per_epoch / seq_length / batch_size) / accumulation_steps
+    batches_per_epoch = (TOKENS_PER_EPOCH // SEQ_LENGTH // BATCH_SIZE)
+    steps_per_epoch = batches_per_epoch // accumulation_steps  # Fewer weight updates
     total_steps = steps_per_epoch * NUM_EPOCHS
     warmup_steps = int(0.05 * total_steps)  # 5% of training for warmup
     min_lr = LEARNING_RATE * 0.1  # Final LR = 10% of peak
 
     print(f"Learning rate schedule:")
-    print(f"  Steps per epoch: ~{steps_per_epoch:,}")
+    print(f"  Batches per epoch: ~{batches_per_epoch:,}")
+    print(f"  Weight updates per epoch: ~{steps_per_epoch:,} (with accumulation)")
     print(f"  Total training steps: {total_steps:,}")
     print(f"  Warmup steps: {warmup_steps:,} (5% of training)")
     print(f"  Max learning rate: {LEARNING_RATE:.6f}")
@@ -396,6 +466,11 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
         print(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
         print("-" * 90)
 
+        # ==============================================================================
+        # TRAINING PHASE
+        # ==============================================================================
+        model.train()  # Set to training mode
+
         # Print initial table header
         print_table_header()
 
@@ -403,7 +478,11 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
         epoch_start = time.time()
         log_lines_printed = 0  # Track how many log lines we've printed
 
-        for batch_idx, (inputs, targets) in enumerate(dataloader):
+        # Reset gradient accumulator for new epoch
+        accumulator.reset()
+        optimizer.zero_grad()  # Clear gradients once at epoch start
+
+        for batch_idx, (inputs, targets) in enumerate(train_dataloader):
             # Move to device
             inputs = inputs.to(device)
             targets = targets.to(device)
@@ -426,25 +505,37 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
                     targets.view(batch_size * seq_length)
                 )
 
+                # IMPORTANT: Scale loss for gradient accumulation
+                # This ensures accumulated gradients have correct magnitude
+                # See training_utils.py for detailed explanation
+                loss = accumulator.scale_loss(loss)
+
             # Check loss for NaN
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"\n  ERROR: NaN/Inf loss at batch {batch_idx + 1}")
                 print(f"  Loss value: {loss.item()}")
                 raise ValueError("NaN/Inf loss - training unstable")
 
-            # Backward pass
-            optimizer.zero_grad()
+            # Backward pass - accumulates gradients
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-            # Update weights
-            optimizer.step()
+            # Check if we should update weights (every accumulation_steps batches)
+            if accumulator.step():
+                # Clip gradients to prevent explosion
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-            # Update learning rate (MUST be called after optimizer.step())
-            # This adjusts the LR according to our warmup + cosine decay schedule
-            scheduler.step()
+                # Update weights
+                optimizer.step()
 
-            epoch_loss += loss.item()
+                # Update learning rate (MUST be called after optimizer.step())
+                # This adjusts the LR according to our warmup + cosine decay schedule
+                scheduler.step()
+
+                # Clear gradients for next accumulation cycle
+                optimizer.zero_grad()
+
+            # Track loss (unscaled for logging)
+            epoch_loss += loss.item() * accumulation_steps  # Unscale for display
             total_batches += 1
 
             # Debug: Check for NaN in weights after first batch
@@ -459,7 +550,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
             if (batch_idx + 1) % LOG_INTERVAL == 0:
                 avg_loss = epoch_loss / (batch_idx + 1)
                 current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
-                batch_perplexity = calculate_perplexity_from_loss(loss).item()
+                batch_perplexity = calculate_perplexity_from_loss(loss * accumulation_steps).item()
                 avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
 
                 # Repeat header every 30 log lines to keep it visible
@@ -468,24 +559,81 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
                     print_table_header()
 
                 # Determine phase (warmup or training)
-                phase = "warmup" if total_batches < warmup_steps else "learning"
+                step_in_cycle, total_in_cycle = accumulator.get_progress()
+                phase = "warmup" if total_batches < (warmup_steps * accumulation_steps) else "learning"
 
                 # Format batch count as "X/Y"
-                batch_str = f"{batch_idx + 1}/{steps_per_epoch}"
-                print(f"{batch_str:>10} {loss.item():8.4f} {batch_perplexity:8.2f} "
+                batch_str = f"{batch_idx + 1}/{batches_per_epoch}"
+                print(f"{batch_str:>10} {loss.item() * accumulation_steps:8.4f} {batch_perplexity:8.2f} "
                       f"{avg_loss:9.4f} {avg_perplexity:9.2f} {current_lr:10.6f} {phase:>10}")
                 log_lines_printed += 1
 
-        # Epoch summary (synchronize for accurate timing on CUDA)
+        # Training phase summary
         synchronize()
-        epoch_time = time.time() - epoch_start
-        avg_epoch_loss = epoch_loss / (batch_idx + 1)  # Use actual batch count
-        avg_epoch_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_epoch_loss)).item()
+        train_time = time.time() - epoch_start
+        avg_train_loss = epoch_loss / (batch_idx + 1)  # Use actual batch count
+        avg_train_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_train_loss)).item()
         current_lr = scheduler.get_last_lr()[0]
+
+        # ==============================================================================
+        # VALIDATION PHASE
+        # ==============================================================================
+        # Evaluate on validation data to check for overfitting/underfitting
+        # The model has NEVER seen this data during training, so this tells us
+        # if the model is truly learning patterns or just memorizing training data.
+        print()
+        print("Running validation...")
+        model.eval()  # Set to evaluation mode (disables dropout)
+
+        val_loss = 0.0
+        val_batches = 0
+        val_start = time.time()
+
+        with torch.no_grad():  # Don't compute gradients for validation (faster!)
+            for val_inputs, val_targets in val_dataloader:
+                val_inputs = val_inputs.to(device)
+                val_targets = val_targets.to(device)
+
+                # Forward pass only (no backward!)
+                with autocast_ctx:
+                    val_logits = model(val_inputs)
+
+                    # Calculate validation loss
+                    batch_size, seq_length, vocab_size = val_logits.shape
+                    batch_val_loss = criterion(
+                        val_logits.view(batch_size * seq_length, vocab_size),
+                        val_targets.view(batch_size * seq_length)
+                    )
+
+                val_loss += batch_val_loss.item()
+                val_batches += 1
+
+        synchronize()
+        val_time = time.time() - val_start
+        avg_val_loss = val_loss / val_batches
+        avg_val_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_val_loss)).item()
+
+        # Print epoch summary with both train and validation metrics
         print()
         print(f"Epoch {epoch + 1} Summary:")
-        print(f"  Avg Loss: {avg_epoch_loss:.4f}  |  Avg Perplexity: {avg_epoch_perplexity:.2f}")
-        print(f"  Learning Rate: {current_lr:.6f}  |  Time: {epoch_time:.1f}s")
+        print(f"  Train Loss: {avg_train_loss:.4f}  |  Train Perplexity: {avg_train_perplexity:.2f}")
+        print(f"  Val Loss:   {avg_val_loss:.4f}  |  Val Perplexity:   {avg_val_perplexity:.2f}")
+        print(f"  Learning Rate: {current_lr:.6f}")
+        print(f"  Time: {train_time:.1f}s train + {val_time:.1f}s val = {train_time + val_time:.1f}s total")
+
+        # Interpretation help for users
+        if avg_val_loss < avg_train_loss * 1.05:
+            # Validation loss is close to training loss (good!)
+            print(f"  Status: ✓ Model is learning well (val ≈ train)")
+        elif avg_val_loss < avg_train_loss * 1.15:
+            # Validation loss is slightly higher (normal)
+            print(f"  Status: ✓ Model is learning (val slightly > train, normal)")
+        elif avg_val_loss > avg_train_loss * 1.3:
+            # Validation loss much higher (possible overfitting)
+            print(f"  Status: ⚠ Possible overfitting (val >> train)")
+        else:
+            # In between
+            print(f"  Status: Model is training")
         print()
 
         # Save checkpoint with encoding in filename
@@ -496,17 +644,20 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),  # Save scheduler state
-            'loss': avg_epoch_loss,
-            'perplexity': avg_epoch_perplexity,  # Save perplexity for comparison
+            'train_loss': avg_train_loss,
+            'train_perplexity': avg_train_perplexity,
+            'val_loss': avg_val_loss,  # Save validation metrics
+            'val_perplexity': avg_val_perplexity,
             'current_lr': current_lr,  # Save current LR for reference
             'config': {
-                'vocab_size': dataset.vocab_size,
+                'vocab_size': train_dataset.vocab_size,
                 'd_model': D_MODEL,
                 'num_heads': NUM_HEADS,
                 'num_layers': NUM_LAYERS,
                 'd_ff': D_FF,
                 'dropout': DROPOUT,
                 'encoding': encoding,  # Store encoding for detection
+                'accumulation_steps': accumulation_steps,  # Store for reference
             }
         }, checkpoint_path)
         print(f"  Saved checkpoint: {checkpoint_path}")
@@ -538,7 +689,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train a decoder-only transformer on FineWeb")
+    parser = argparse.ArgumentParser(description="Train a decoder-only transformer on FineWeb with gradient accumulation and validation")
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -561,6 +712,19 @@ if __name__ == "__main__":
         action="store_true",
         help="Quick training mode: smaller model (4 layers, d_model=128) and fewer tokens (10M/epoch)"
     )
+    parser.add_argument(
+        "--accumulation-steps",
+        type=int,
+        default=16,
+        help="Number of batches to accumulate before updating weights. Higher = more stable training. "
+             "Effective batch size = batch_size × accumulation_steps. Recommended: 16-32 (default: 16)"
+    )
     args = parser.parse_args()
 
-    train(debug=args.debug, use_mps=args.mps, encoding=args.encoding, quick=args.quick)
+    train(
+        debug=args.debug,
+        use_mps=args.mps,
+        encoding=args.encoding,
+        quick=args.quick,
+        accumulation_steps=args.accumulation_steps
+    )

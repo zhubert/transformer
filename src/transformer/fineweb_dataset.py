@@ -1,8 +1,9 @@
 """
-FineWeb Dataset with Shard Caching
+FineWeb Dataset with Shard Caching and Train/Validation Split
 
 This module implements a streaming dataset for HuggingFace's FineWeb dataset
-with intelligent shard caching and LRU (Least Recently Used) cleanup.
+with intelligent shard caching, LRU (Least Recently Used) cleanup, and
+train/validation splitting for proper model evaluation.
 
 What is FineWeb?
 ----------------
@@ -23,6 +24,45 @@ Our Solution: Streaming + Caching
 1. STREAMING: Download shards on-demand from HuggingFace
 2. CACHING: Save downloaded shards to disk for reuse
 3. LRU CLEANUP: Automatically delete old shards when cache fills up
+
+Train/Validation Split
+----------------------
+Why do we need separate validation data?
+
+**The Problem: Overfitting**
+During training, the model might memorize the training data instead of learning
+general patterns. This is called "overfitting." The model looks good on training
+data but performs poorly on new, unseen data.
+
+Example:
+    A student who memorizes answers to practice problems without understanding
+    the concepts will fail on the actual exam with different problems.
+
+**The Solution: Validation Split**
+We set aside some data (typically 10%) that the model NEVER sees during training.
+After each epoch, we evaluate the model on this validation data to see if it's
+truly learning general patterns or just memorizing.
+
+**How to interpret training vs validation metrics:**
+
+Scenario 1: Both improving (Good! Model is learning)
+    Train Loss: 5.0 → 4.0 → 3.0
+    Val Loss:   5.2 → 4.2 → 3.2
+
+Scenario 2: Underfitting (Model is too simple or needs more training)
+    Train Loss: 5.0 → 4.5 → 4.3  (not improving much)
+    Val Loss:   5.2 → 4.7 → 4.5  (following train loss)
+
+Scenario 3: Overfitting (Model is memorizing training data)
+    Train Loss: 5.0 → 3.0 → 1.5  (still improving)
+    Val Loss:   5.2 → 3.5 → 4.0  (getting worse!)
+
+**Our Splitting Strategy:**
+We use a deterministic hash-based split:
+- Shard IDs are hashed to assign them to train or validation
+- 10% of shards go to validation, 90% to training
+- The split is deterministic (same split every time)
+- No data leakage (validation data never appears in training)
 
 Architecture:
 -------------
@@ -133,9 +173,11 @@ class FineWebDataset(IterableDataset):
         dataset_name: str = "HuggingFaceFW/fineweb",
         dataset_split: str = "sample-10BT",
         seed: Optional[int] = None,
+        split: str = "train",
+        validation_fraction: float = 0.1,
     ):
         """
-        Initialize FineWeb dataset with caching.
+        Initialize FineWeb dataset with caching and train/validation split.
 
         Args:
             cache_dir: Directory to cache downloaded shards
@@ -149,6 +191,10 @@ class FineWebDataset(IterableDataset):
             dataset_name: HuggingFace dataset identifier
             dataset_split: Which split/subset to use
             seed: Random seed for shard selection (None = random each time)
+            split: Which split to use - "train" or "validation"
+                  - "train": Use 90% of shards for training
+                  - "validation": Use 10% of shards for evaluation
+            validation_fraction: Fraction of data to reserve for validation (default 0.1 = 10%)
         """
         super().__init__()
 
@@ -160,6 +206,12 @@ class FineWebDataset(IterableDataset):
         self.max_cached_shards = max_cached_shards
         self.dataset_name = dataset_name
         self.dataset_split = dataset_split
+        self.split = split
+        self.validation_fraction = validation_fraction
+
+        # Validate split parameter
+        if split not in ["train", "validation"]:
+            raise ValueError(f"split must be 'train' or 'validation', got '{split}'")
 
         # Tokenizer setup
         self.tokenizer = tiktoken.get_encoding(encoding_name)
@@ -173,12 +225,13 @@ class FineWebDataset(IterableDataset):
         if seed is not None:
             random.seed(seed)
 
-        print(f"FineWeb Dataset initialized:")
+        print(f"FineWeb Dataset initialized ({split} split):")
         print(f"  Cache directory: {self.cache_dir}")
         print(f"  Tokens per epoch: {self.tokens_per_epoch:,}")
         print(f"  Sequences per epoch: ~{self.tokens_per_epoch // seq_length:,}")
         print(f"  Max cached shards: {max_cached_shards}")
         print(f"  Vocabulary size: {self.tokenizer.n_vocab:,}")
+        print(f"  Validation fraction: {validation_fraction:.1%}")
 
     def _load_metadata(self) -> dict:
         """Load cache metadata from disk."""
@@ -191,6 +244,49 @@ class FineWebDataset(IterableDataset):
         """Save cache metadata to disk."""
         with open(self.metadata_file, 'w') as f:
             json.dump(self.metadata, f, indent=2)
+
+    def _is_shard_in_split(self, shard_idx: int) -> bool:
+        """
+        Determine if a shard belongs to the current split (train or validation).
+
+        We use a deterministic hash-based split to ensure:
+        1. The split is consistent across runs (same shards always in validation)
+        2. No data leakage (validation shards never appear in training)
+        3. Roughly the desired validation fraction (e.g., 10%)
+
+        How it works:
+            - Hash the shard index to get a pseudo-random number [0, 1)
+            - If hash < validation_fraction: shard goes to validation
+            - Otherwise: shard goes to training
+
+        This gives us a deterministic split that's roughly the right proportion.
+
+        Args:
+            shard_idx: Index of the shard to check
+
+        Returns:
+            True if shard belongs to current split, False otherwise
+
+        Example:
+            # Shard 0 hashes to 0.123 < 0.1? No → training
+            # Shard 1 hashes to 0.034 < 0.1? Yes → validation
+            # Shard 2 hashes to 0.891 < 0.1? No → training
+            # ...and so on, giving us ~10% validation shards
+        """
+        # Use hash function to deterministically assign shard to split
+        # We use Python's built-in hash, which is deterministic within a Python session
+        # For cross-run consistency, we use a simple modulo operation instead
+        shard_hash = (shard_idx * 2654435761) % (2**32)  # Knuth's multiplicative hash
+        normalized_hash = shard_hash / (2**32)  # Normalize to [0, 1)
+
+        # Assign to validation if hash < validation_fraction
+        is_validation = normalized_hash < self.validation_fraction
+
+        # Return True if shard matches our current split
+        if self.split == "validation":
+            return is_validation
+        else:  # self.split == "train"
+            return not is_validation
 
     def _update_shard_access(self, shard_id: str):
         """Update last access timestamp for a shard."""
@@ -327,6 +423,7 @@ class FineWebDataset(IterableDataset):
         Iterate through the dataset, yielding (input, target) pairs.
 
         This streams shards on-demand until we've processed tokens_per_epoch tokens.
+        Only shards belonging to the current split (train or validation) are used.
 
         Yields:
             (input_tensor, target_tensor) pairs of shape (seq_length,)
@@ -336,15 +433,20 @@ class FineWebDataset(IterableDataset):
 
         # We don't know exact shard count, so we'll stream until we hit our token limit
         # Approximate max shards needed (assuming ~500K tokens per shard)
-        max_shards_needed = (self.tokens_per_epoch // 500_000) + 1
+        # We need to check MORE shards since some will be filtered out for validation
+        max_shards_to_check = int((self.tokens_per_epoch // 500_000) * 1.5) + 10
 
-        # Randomly select which shards to use (for variety across epochs)
+        # Randomly select which shards to check (for variety across epochs)
+        # Then filter to only include shards in our split
         if self.seed is None:
             # Random shards each epoch
-            shard_indices = random.sample(range(0, 1000), min(max_shards_needed, 1000))
+            candidate_indices = random.sample(range(0, 1000), min(max_shards_to_check, 1000))
         else:
             # Deterministic shard selection
-            shard_indices = list(range(max_shards_needed))
+            candidate_indices = list(range(max_shards_to_check))
+
+        # Filter to only shards in our split (train or validation)
+        shard_indices = [idx for idx in candidate_indices if self._is_shard_in_split(idx)]
 
         for shard_idx in shard_indices:
             if tokens_processed >= self.tokens_per_epoch:
