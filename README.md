@@ -84,9 +84,28 @@ Runs multiple scaled dot-product attention operations in parallel.
 
 **Tests**: 13/13 passing
 
+#### 6. Transformer Block (`src/transformer/block.py`)
+The fundamental building block that gets stacked to create the full transformer.
+
+- Combines multi-head attention and feed-forward network
+- Uses Pre-LN architecture (like GPT-2/GPT-3)
+- Implements residual connections (gradient highways!)
+- Applies layer normalization for training stability
+- Includes dropout for regularization
+- Input shape = Output shape (enables stacking)
+
+**Extremely comprehensive documentation** explaining:
+- What a transformer block is and its role
+- Architecture diagram with Pre-LN approach
+- **Gradient flow** and why residual connections are essential
+- Mathematical proof of residual gradient properties
+- Pre-LN vs Post-LN comparison
+- Division of labor between attention and FFN
+
+**Tests**: 14/14 passing
+
 ### 🚧 In Progress
 
-- Transformer Block
 - Complete Decoder-Only Transformer Model
 - Training script
 - Text generation
@@ -167,7 +186,7 @@ We're building **bottom-up**, starting with the simplest components and working 
 2. ✅ **Embeddings** - Token and positional representations
 3. ✅ **Feed-Forward Network** - Position-wise MLP
 4. ✅ **Multi-Head Attention** - Parallel attention heads
-5. 🚧 **Transformer Block** - Combining all components
+5. ✅ **Transformer Block** - Combining all components
 6. 🚧 **Complete Model** - Stacking blocks
 7. 🚧 **Training** - Training loop with a toy dataset
 8. 🚧 **Generation** - Autoregressive text generation
