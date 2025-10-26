@@ -1,7 +1,7 @@
 # Transformer Implementation - Educational Project
 
 ## Project Goal
-Implement a decoder-only transformer from scratch for educational purposes, building on our series about learning LLMs.
+Implement a decoder-only transformer incrementally with AI for educational purposes, building on our series about learning LLMs.
 
 ## What is a Transformer?
 A transformer is a neural network architecture introduced in "Attention is All You Need" (Vaswani et al., 2017). It revolutionized NLP and is the foundation of modern LLMs like GPT, BERT, and Claude.
@@ -15,7 +15,7 @@ A transformer is a neural network architecture introduced in "Attention is All Y
 6. **Decoder-Only Structure** - We'll implement this (like GPT), simpler than encoder-decoder
 
 ## Implementation Approach
-- Build from scratch to understand internals
+- Incrementally built with AI to understand internals
 - Use PyTorch for:
   - Automatic differentiation (autograd)
   - GPU acceleration

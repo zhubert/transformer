@@ -1,6 +1,6 @@
-# Transformer from Scratch
+# Transformer - Incrementally Built with AI
 
-An educational GPT-style transformer built from scratch in PyTorch. Every component is implemented by Claude's hand with comprehensive documentation to understand how modern LLMs work under the hood.
+An educational GPT-style transformer incrementally built with AI in PyTorch. Every component is implemented by Claude's hand with comprehensive documentation to understand how modern LLMs work under the hood.
 
 ## Quick Start
 
