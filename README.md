@@ -106,7 +106,8 @@ See `src/transformer/block.py` for detailed architecture diagrams and gradient f
 ### Quick Start
 
 ```bash
-# Default: 100M tokens/epoch, 6 layers, d_model=256, CPU
+# Default: 100M tokens/epoch, 6 layers, d_model=256
+# Auto-detects best device (CUDA > MPS > CPU)
 uv run python main.py train
 
 # Quick mode: 10M tokens/epoch, 4 layers, d_model=128
@@ -115,8 +116,8 @@ uv run python main.py train --quick
 # Use larger vocabulary (100K tokens vs 50K)
 uv run python main.py train --encoding cl100k_base
 
-# Apple Silicon GPU (experimental - see note below)
-uv run python main.py train --mps
+# Force specific device (optional - auto-detect is recommended)
+uv run python main.py train --mps    # Apple Silicon GPU
 ```
 
 ### Dataset: FineWeb
@@ -139,20 +140,25 @@ Epoch 10: Loss ~3.0, Perplexity ~20    (pretty good!)
 
 **Timing** (M1 MacBook Pro):
 - **CPU**: ~10-15 min/epoch (quick mode)
-- **MPS**: ~2-3 min/epoch (if stable)
+- **MPS (Apple Silicon)**: ~2-3 min/epoch (5-10x faster)
+- **CUDA**: Varies by GPU (~1-5 min/epoch on modern GPUs)
 
-### Apple Silicon GPU (MPS) - Known Issues
+### Device Support
 
-⚠️ **MPS has known NaN training issues** due to PyTorch bugs ([#107294](https://github.com/pytorch/pytorch/issues/107294), [#109457](https://github.com/pytorch/pytorch/issues/109457)):
+The training script automatically detects and uses the best available device:
 
-- Training may randomly fail with NaN loss
-- Affects transformer models (attention + layer norm interaction)
-- No official fix as of PyTorch 2.9.0
+1. **CUDA** (NVIDIA GPUs) - Preferred for maximum performance
+   - Automatic mixed precision (bfloat16) for ~2x speedup
+   - Memory tracking and synchronization utilities
 
-**Recommendations**:
-- ✅ **Use CPU** (default) - 100% reliable, good for learning
-- ⚠️ **Try MPS** with `--mps` flag - 5-10x faster but may crash
-- 🐛 **Debug mode**: `--mps --debug` forces synchronization (more stable, slower)
+2. **MPS** (Apple Silicon) - Excellent for Mac users
+   - Native GPU acceleration on M1/M2/M3 chips
+   - Significantly faster than CPU (5-10x)
+
+3. **CPU** - Universal fallback
+   - Works everywhere, good for learning and debugging
+
+The device is selected automatically, but you can force a specific device with `--mps` if needed.
 
 See `commands/train.py` for complete training documentation.
 
