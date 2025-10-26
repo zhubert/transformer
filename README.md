@@ -224,20 +224,20 @@ The transformer can be trained on any text file using the training script.
 ### Quick Start
 
 ```bash
-# Train on your text file (replace with your file path)
+# Train on your text file (default: CPU)
 uv run python examples/train.py
 ```
 
 ### Training Configuration
 
-The training script (`examples/train.py`) is configured for Apple Silicon M1/M2/M3 GPUs with MPS acceleration:
+The training script (`examples/train.py`) defaults to CPU for stability:
 
 - **Model size**: 6 layers, 256 dimensions, 4 attention heads (~30M parameters)
-- **Batch size**: 8 (optimized for M1 memory)
+- **Batch size**: 8
 - **Sequence length**: 128 tokens
 - **Learning rate**: 1e-4 (conservative for stability)
 - **Tokenization**: BPE using tiktoken `p50k_base` (same as GPT-3)
-- **Device**: Automatically uses MPS (Apple GPU), CUDA (NVIDIA GPU), or CPU
+- **Device**: CPU by default, CUDA if available, MPS opt-in (see Known Issues)
 
 ### What to Expect
 
@@ -250,7 +250,7 @@ Tokenized into 101,895 tokens
 Vocabulary size: 50,281 tokens
 Created 796 training sequences of length 128
 
-Device: MPS (Apple Silicon GPU)
+Device: CPU
 Model parameters: 30,598,761
 
 Epoch 1/3
@@ -265,19 +265,46 @@ Epoch 1/3
 - **Epoch 2**: Loss continues dropping to ~3-4 (learning patterns)
 - **Epoch 3**: Loss reaches ~2-3 (decent predictions)
 
-**Training Time** (on M1 MacBook Pro):
-- ~2-4 minutes per epoch
-- ~10-15 minutes total for 3 epochs
+**Training Time** (on M1 MacBook Pro, CPU mode):
+- ~10-15 minutes per epoch
+- ~30-45 minutes total for 3 epochs
+
+### Known Issues: MPS (Apple Silicon GPU)
+
+**MPS backend has known NaN training issues** (PyTorch bugs [#107294](https://github.com/pytorch/pytorch/issues/107294), [#109457](https://github.com/pytorch/pytorch/issues/109457)):
+
+- Training randomly fails with NaN loss (typically after a few batches)
+- Caused by asynchronous execution bugs in PyTorch's MPS backend
+- Affects transformer models specifically (attention + layer norm)
+- No official fix as of PyTorch 2.9.0
+
+**Workarounds**:
+- ✅ **Use CPU** (default) - stable, 100% reliable
+- ⚠️ **Try MPS** with `--mps` flag - 5-10x faster but may crash
+- 🐛 **Debug mode** helps MPS: `--mps --debug` (forces synchronization)
+
+```bash
+# Recommended: CPU mode (stable)
+uv run python examples/train.py
+
+# Experimental: MPS mode (faster but unstable)
+uv run python examples/train.py --mps
+
+# If MPS fails: debug mode forces sync (slower but more stable)
+uv run python examples/train.py --mps --debug
+```
+
+**Note**: CUDA (NVIDIA GPUs) does not have these issues.
 
 ### Debug Mode
 
-If you encounter NaN loss or training issues, enable debug mode for detailed diagnostics:
+Enable debug mode for detailed NaN diagnostics:
 
 ```bash
 uv run python examples/train.py --debug
 ```
 
-This will print diagnostic information at each step to help identify numerical stability issues.
+This prints diagnostic information at each step to help identify numerical stability issues.
 
 ### Using Your Own Text
 

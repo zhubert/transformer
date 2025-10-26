@@ -85,10 +85,18 @@ from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.dataset import TextDataset
 
 
-def get_device():
-    """Detect best available device for training."""
-    if torch.backends.mps.is_available():
-        return torch.device("mps"), "MPS (Apple Silicon GPU)"
+def get_device(use_mps=False):
+    """
+    Detect best available device for training.
+
+    Defaults to CPU for stability. MPS (Apple Silicon GPU) has known
+    issues with NaN during training (PyTorch bugs #107294, #109457).
+
+    Args:
+        use_mps: If True, try to use MPS despite known issues
+    """
+    if use_mps and torch.backends.mps.is_available():
+        return torch.device("mps"), "MPS (Apple Silicon GPU) - EXPERIMENTAL"
     elif torch.cuda.is_available():
         return torch.device("cuda"), "CUDA (NVIDIA GPU)"
     else:
@@ -109,13 +117,21 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu"):
     return generated_text
 
 
-def train(debug=False):
+def train(debug=False, use_mps=False):
     """
     Main training function.
 
     Args:
         debug: If True, print diagnostic information for debugging NaN issues
+        use_mps: If True, try MPS (experimental - has known NaN issues)
     """
+
+    # Set random seed for reproducibility
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(42)
+    if torch.backends.mps.is_available():
+        torch.mps.manual_seed(42)
 
     # Configuration
     TEXT_FILE = "Singular.txt"
@@ -141,8 +157,10 @@ def train(debug=False):
     print()
 
     # Device setup
-    device, device_name = get_device()
+    device, device_name = get_device(use_mps=use_mps)
     print(f"Device: {device_name}")
+    if use_mps:
+        print("  WARNING: MPS has known NaN issues. Use --debug if training fails.")
     print()
 
     # Load dataset
@@ -177,6 +195,16 @@ def train(debug=False):
 
     num_params = sum(p.numel() for p in model.parameters())
     print(f"  Model parameters: {num_params:,}")
+
+    # Check for NaN in initial weights
+    has_nan = False
+    for name, param in model.named_parameters():
+        if torch.isnan(param).any():
+            print(f"  WARNING: NaN in initial weights: {name}")
+            has_nan = True
+    if has_nan:
+        raise ValueError("Model has NaN in initial weights!")
+    print("  Initial weights: OK (no NaN)")
     print()
 
     # Loss and optimizer
@@ -241,9 +269,14 @@ def train(debug=False):
             epoch_loss += loss.item()
             total_batches += 1
 
-            # Clear MPS cache to prevent memory buildup
-            if device.type == "mps":
-                torch.mps.empty_cache()
+            # Debug: Check for NaN in weights after first batch
+            if batch_idx == 0 and not debug:
+                for name, param in model.named_parameters():
+                    if torch.isnan(param).any():
+                        print(f"  WARNING: NaN in weights after batch 1: {name}")
+                        print(f"  This means batch 1 corrupted the model!")
+                        raise ValueError("Weights corrupted after batch 1")
+                print("  After batch 1: Weights still OK")
 
             # Logging
             if (batch_idx + 1) % LOG_INTERVAL == 0:
@@ -311,6 +344,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable debug mode with diagnostic prints for NaN detection"
     )
+    parser.add_argument(
+        "--mps",
+        action="store_true",
+        help="Use MPS (Apple Silicon GPU) - EXPERIMENTAL, has known NaN issues"
+    )
     args = parser.parse_args()
 
-    train(debug=args.debug)
+    train(debug=args.debug, use_mps=args.mps)
