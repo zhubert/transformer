@@ -110,7 +110,7 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu"):
     input_ids = torch.tensor([prompt_tokens], dtype=torch.long).to(device)
 
     with torch.no_grad():
-        output_ids = model.generate(input_ids, max_length=max_length, temperature=0.8)
+        output_ids = model.generate(input_ids, max_length=max_length, temperature=0.5)
 
     generated_text = dataset.decode(output_ids[0])
     model.train()
@@ -142,8 +142,8 @@ def train(debug=False, use_mps=False):
     NUM_LAYERS = 6
     D_FF = 1024
     DROPOUT = 0.1
-    NUM_EPOCHS = 3
-    LEARNING_RATE = 1e-4        # Reduced from 3e-4 for large vocab stability
+    NUM_EPOCHS = 20             # Increased from 3 - more epochs for better learning
+    LEARNING_RATE = 3e-4        # Increased from 1e-4 - standard transformer learning rate
     WEIGHT_DECAY = 0.01
     LOG_INTERVAL = 10
     SAMPLE_INTERVAL = 100

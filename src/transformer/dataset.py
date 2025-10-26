@@ -198,7 +198,17 @@ class TextDataset(Dataset):
         if torch.is_tensor(token_ids):
             token_ids = token_ids.tolist()
 
-        return self.tokenizer.decode(token_ids)
+        # Filter out invalid token IDs (out of vocabulary range)
+        # This prevents errors from model generating invalid tokens
+        valid_tokens = [t for t in token_ids if 0 <= t < self.vocab_size]
+
+        # Decode with error handling for invalid byte sequences
+        # 'ignore' skips invalid sequences instead of showing � replacement char
+        try:
+            return self.tokenizer.decode(valid_tokens, errors='ignore')
+        except Exception:
+            # Fallback if decode fails entirely
+            return "[decoding error]"
 
     @property
     def vocab_size(self):
