@@ -251,8 +251,6 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
     WEIGHT_DECAY = 0.01
     MAX_CACHED_SHARDS = 5           # Keep 5 shards in cache (~2GB)
     LOG_INTERVAL = 10
-    SAMPLE_INTERVAL = 100
-    SAMPLE_PROMPT = "The"
     CHECKPOINT_DIR.mkdir(exist_ok=True)
 
     print("=" * 80)
@@ -385,12 +383,21 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
     total_batches = 0
     start_time = time.time()
 
+    def print_table_header():
+        """Print the table header for training metrics."""
+        print(f"{'Batch':>10} {'Loss':>8} {'PPL':>8} {'Avg Loss':>9} {'Avg PPL':>9} {'LR':>10} {'Phase':>10}")
+        print("-" * 90)
+
     for epoch in range(NUM_EPOCHS):
         print(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
-        print("-" * 80)
+        print("-" * 90)
+
+        # Print initial table header
+        print_table_header()
 
         epoch_loss = 0.0
         epoch_start = time.time()
+        log_lines_printed = 0  # Track how many log lines we've printed
 
         for batch_idx, (inputs, targets) in enumerate(dataloader):
             # Move to device
@@ -442,7 +449,6 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
                         print(f"  WARNING: NaN in weights after batch 1: {name}")
                         print(f"  This means batch 1 corrupted the model!")
                         raise ValueError("Weights corrupted after batch 1")
-                print("  After batch 1: Weights still OK")
 
             # Logging
             if (batch_idx + 1) % LOG_INTERVAL == 0:
@@ -450,29 +456,30 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False):
                 current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
                 batch_perplexity = calculate_perplexity_from_loss(loss).item()
                 avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
-                print(f"  Batch {batch_idx + 1}/{steps_per_epoch}, "
-                      f"Loss: {loss.item():.4f}, Perplexity: {batch_perplexity:.2f}, "
-                      f"Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.2f}, "
-                      f"LR: {current_lr:.6f}")
 
-            # Sample generation
-            if (batch_idx + 1) % SAMPLE_INTERVAL == 0:
-                print(f"\n  Sample (after {total_batches} batches):")
-                sample = generate_sample(model, dataset, SAMPLE_PROMPT,
-                                       max_length=50, device=device)
-                print(f"  '{sample}'")
-                print()
+                # Repeat header every 30 log lines to keep it visible
+                if log_lines_printed > 0 and log_lines_printed % 30 == 0:
+                    print()
+                    print_table_header()
+
+                # Determine phase (warmup or training)
+                phase = "warmup" if total_batches < warmup_steps else "learning"
+
+                # Format batch count as "X/Y"
+                batch_str = f"{batch_idx + 1}/{steps_per_epoch}"
+                print(f"{batch_str:>10} {loss.item():8.4f} {batch_perplexity:8.2f} "
+                      f"{avg_loss:9.4f} {avg_perplexity:9.2f} {current_lr:10.6f} {phase:>10}")
+                log_lines_printed += 1
 
         # Epoch summary
         epoch_time = time.time() - epoch_start
         avg_epoch_loss = epoch_loss / (batch_idx + 1)  # Use actual batch count
         avg_epoch_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_epoch_loss)).item()
         current_lr = scheduler.get_last_lr()[0]
-        print(f"\n  Epoch {epoch + 1} complete!")
-        print(f"  Average Loss: {avg_epoch_loss:.4f}")
-        print(f"  Average Perplexity: {avg_epoch_perplexity:.2f}")
-        print(f"  Current LR: {current_lr:.6f}")
-        print(f"  Time: {epoch_time:.1f}s")
+        print()
+        print(f"Epoch {epoch + 1} Summary:")
+        print(f"  Avg Loss: {avg_epoch_loss:.4f}  |  Avg Perplexity: {avg_epoch_perplexity:.2f}")
+        print(f"  Learning Rate: {current_lr:.6f}  |  Time: {epoch_time:.1f}s")
         print()
 
         # Save checkpoint with encoding in filename
@@ -532,9 +539,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--encoding",
         type=str,
-        default="p50k_base",
+        default="cl100k_base",
         choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: p50k_base, ~50K vocab; cl100k_base: ~100K vocab)"
+        help="Tokenizer encoding to use (default: cl100k_base, ~100K vocab; p50k_base: ~50K vocab)"
     )
     parser.add_argument(
         "--quick",

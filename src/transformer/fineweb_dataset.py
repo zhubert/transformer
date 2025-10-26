@@ -99,8 +99,16 @@ from pathlib import Path
 import json
 import time
 from datasets import load_dataset
+from datasets.utils import disable_progress_bars
 from typing import Iterator, Tuple, Optional
 import random
+import logging
+import warnings
+
+# Suppress HuggingFace datasets progress bars and warnings
+disable_progress_bars()
+logging.getLogger("datasets").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore", category=UserWarning, module="datasets")
 
 
 class FineWebDataset(IterableDataset):
@@ -220,7 +228,7 @@ class FineWebDataset(IterableDataset):
             shard_file = self.cache_dir / f"{shard_id}.parquet"
             if shard_file.exists():
                 shard_file.unlink()
-                print(f"  [Cache cleanup] Removed old shard: {shard_id}")
+                # Silently remove old shard
 
             # Remove from metadata
             del self.metadata["shards"][shard_id]
@@ -242,15 +250,14 @@ class FineWebDataset(IterableDataset):
 
         # Try to load from cache
         if shard_file.exists():
-            print(f"  [Cache HIT] Loading {shard_id} from disk")
+            # Silently load from cache
             import pyarrow.parquet as pq
             table = pq.read_table(shard_file)
             texts = table['text'].to_pylist()
             self._update_shard_access(shard_id)
             return texts
 
-        # Cache miss - stream from HuggingFace
-        print(f"  [Cache MISS] Streaming {shard_id} from HuggingFace...")
+        # Cache miss - stream from HuggingFace (silently)
 
         # Load dataset in streaming mode
         dataset = load_dataset(
@@ -280,7 +287,7 @@ class FineWebDataset(IterableDataset):
 
             table = pa.table({'text': texts})
             pq.write_table(table, shard_file)
-            print(f"  [Cache SAVE] Saved {shard_id} to disk ({len(texts)} examples)")
+            # Silently save to cache
 
             self._update_shard_access(shard_id)
             self._cleanup_old_shards()
@@ -354,7 +361,7 @@ class FineWebDataset(IterableDataset):
                 yield input_seq, target_seq
                 tokens_processed += self.seq_length
 
-        print(f"\nEpoch complete: Processed {tokens_processed:,} tokens")
+        # Epoch complete (silently)
 
     def decode(self, token_ids):
         """
