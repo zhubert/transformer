@@ -4,7 +4,7 @@
 
 # Transformer - Built with AI
 
-An educational GPT-style transformer built with AI in PyTorch. Every component is implemented by Claude's hand with comprehensive documentation to understand how modern LLMs work under the hood.
+An educational GPT-style transformer built with AI in PyTorch. Every component includes comprehensive documentation to understand how modern LLMs work under the hood.
 
 ## Quick Start
 
@@ -54,10 +54,13 @@ src/transformer/
 └── fineweb_dataset.py  # FineWeb streaming with caching & train/val split
 
 commands/
-├── train.py            # Training command - see file for complete guide
-├── generate.py         # Text generation with preset strategies
+├── train.py                 # Training command - see file for complete guide
+├── generate.py              # Text generation with preset strategies
 ├── sampling_comparison.py   # Demo of different sampling strategies
-└── evaluate_perplexity.py   # Model evaluation and comparison
+├── evaluate_perplexity.py   # Model evaluation and comparison
+├── benchmark_generation.py  # KV-cache speedup benchmarking
+├── analyze_checkpoints.py   # Checkpoint analysis utilities
+└── test_fineweb.py          # FineWeb dataset testing
 
 tests/                  # Test suite for core components
 ```
