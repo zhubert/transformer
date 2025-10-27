@@ -26,10 +26,10 @@ make generate
 This project implements a complete decoder-only transformer (GPT architecture) with:
 
 - **Core Components** - Attention, embeddings, feed-forward networks, transformer blocks
-- **Training Pipeline** - FineWeb dataset streaming, learning rate scheduling, checkpointing
-- **Text Generation** - Advanced sampling strategies (greedy, top-k, top-p, combined)
+- **Training Pipeline** - FineWeb dataset streaming, gradient accumulation, train/val split, learning rate scheduling
+- **Text Generation** - KV-Cache optimization (2-50x faster!), advanced sampling strategies (greedy, top-k, top-p)
 - **Evaluation** - Perplexity calculation and model comparison tools
-- **Comprehensive Tests** - 98/98 tests passing across all components
+- **Testing** - Test suite covering core components and functionality
 
 **All components include extensive educational documentation** - read the source files to learn!
 
@@ -45,9 +45,9 @@ src/transformer/
 ├── sampling.py         # Advanced sampling strategies (top-k, top-p, combined)
 ├── perplexity.py       # Perplexity calculation and evaluation metrics
 ├── scheduler.py        # Learning rate scheduling (warmup + cosine decay)
-├── training_utils.py   # Gradient accumulation for stable training (Phase 1)
+├── training_utils.py   # Gradient accumulation for stable training
 ├── dataset.py          # Dataset utilities
-└── fineweb_dataset.py  # FineWeb streaming with caching & train/val split (Phase 1)
+└── fineweb_dataset.py  # FineWeb streaming with caching & train/val split
 
 commands/
 ├── train.py            # Training command - see file for complete guide
@@ -55,7 +55,7 @@ commands/
 ├── sampling_comparison.py   # Demo of different sampling strategies
 └── evaluate_perplexity.py   # Model evaluation and comparison
 
-tests/                  # Comprehensive test suite (98 tests)
+tests/                  # Test suite for core components
 ```
 
 ## Learning Path
@@ -100,7 +100,7 @@ Next Token Predictions
 - Residual connections (gradient highways!)
 - Dropout for regularization
 
-See `src/transformer/block.py` for detailed architecture diagrams and gradient flow explanation.
+See [`src/transformer/block.py`](src/transformer/block.py) for detailed architecture diagrams and gradient flow explanation.
 
 ## Training
 
@@ -149,7 +149,7 @@ The training script automatically detects and uses the best available device:
 
 The device is selected automatically, but you can force a specific device with `--mps` if needed.
 
-See `commands/train.py` for complete training documentation.
+See [`commands/train.py`](commands/train.py) for complete training documentation.
 
 ## Text Generation
 
@@ -167,6 +167,8 @@ uv run python main.py generate \
     --top-k 50 --top-p 0.9 --temperature 0.8
 ```
 
+See [`src/transformer/attention.py`](src/transformer/attention.py) for KV-Cache implementation details and [`commands/benchmark_generation.py`](commands/benchmark_generation.py) to benchmark the speedup.
+
 ## Development
 
 ### Requirements
@@ -178,7 +180,7 @@ uv run python main.py generate \
 ### Running Tests
 
 ```bash
-# All tests (98 tests)
+# All tests
 uv run pytest
 
 # Specific components
