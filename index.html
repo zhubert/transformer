@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Building a Transformer Incrementally with AI</title>
+    <title>Building a Transformer with AI</title>
     <style>
         * {
             margin: 0;
@@ -35,7 +35,22 @@
             justify-content: center;
             background: linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
             padding: 120px 0;
+        }
+
+        .hero-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 48px;
             text-align: center;
+        }
+
+        .hero-image {
+            flex-shrink: 0;
+        }
+
+        .hero-text {
+            flex: 1;
         }
 
         .hero h1 {
@@ -67,8 +82,31 @@
             max-width: 300px;
             width: 100%;
             height: auto;
-            margin-bottom: 32px;
             filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+        }
+
+        /* Side-by-side layout on wider screens */
+        @media (min-width: 1024px) {
+            .hero-content {
+                flex-direction: row;
+                align-items: center;
+                gap: 64px;
+                text-align: left;
+            }
+
+            .hero-text {
+                max-width: 600px;
+            }
+
+            .hero p,
+            .hero .subtitle {
+                margin-left: 0;
+                margin-right: 0;
+            }
+
+            .hero-mascot {
+                max-width: 350px;
+            }
         }
 
         /* Section Styles */
@@ -556,10 +594,16 @@
     <!-- Hero Section -->
     <div class="hero">
         <div class="container">
-            <img src="assets/mascot.png" alt="Transformer Mascot" class="hero-mascot">
-            <h1>Building a Transformer Incrementally with AI</h1>
-            <p>An educational journey through the architecture that powers modern AI</p>
-            <p class="subtitle">Learn how transformers work by building one in PyTorch, from attention mechanisms to complete text generation</p>
+            <div class="hero-content">
+                <div class="hero-image">
+                    <img src="assets/mascot.png" alt="Transformer Mascot" class="hero-mascot">
+                </div>
+                <div class="hero-text">
+                    <h1>Building a Transformer with AI</h1>
+                    <p>An educational journey through the architecture that powers modern AI</p>
+                    <p class="subtitle">Learn how transformers work by building one in PyTorch, from attention mechanisms to complete text generation</p>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -2,9 +2,9 @@
   <img src="assets/mascot.png" alt="Transformer Mascot" width="300">
 </div>
 
-# Transformer - Incrementally Built with AI
+# Transformer - Built with AI
 
-An educational GPT-style transformer incrementally built with AI in PyTorch. Every component is implemented by Claude's hand with comprehensive documentation to understand how modern LLMs work under the hood.
+An educational GPT-style transformer built with AI in PyTorch. Every component is implemented by Claude's hand with comprehensive documentation to understand how modern LLMs work under the hood.
 
 ## Quick Start
 
