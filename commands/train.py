@@ -121,6 +121,12 @@ from pathlib import Path
 import sys
 import time
 import argparse
+from rich.console import Console, Group
+from rich.table import Table
+from rich.live import Live
+from rich.panel import Panel
+from rich.text import Text
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TaskProgressColumn
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -277,25 +283,33 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     LOG_INTERVAL = 10
     CHECKPOINT_DIR.mkdir(exist_ok=True)
 
-    print("=" * 80)
-    print("TRANSFORMER TRAINING")
-    print("=" * 80)
-    print()
+    # Initialize Rich console
+    console = Console()
 
+    # Display header
+    header_text = "TRANSFORMER TRAINING"
     if quick:
-        print("Quick mode enabled: smaller model, fewer tokens")
-        print()
-
-    print(f"Tokenizer encoding: {encoding}")
-    print()
+        header_text += " [yellow](Quick Mode)[/yellow]"
+    console.print(Panel(header_text, style="bold blue", expand=False))
+    console.print()
 
     # Device setup with proper initialization
     device_type_str = get_device_type_from_args(use_mps)
     device, device_name = init_device(device_type_str, seed=42)
-    print(f"Device: {device_name}")
+
+    # Create setup configuration table
+    setup_table = Table(title="Setup Configuration", show_header=True, header_style="bold cyan")
+    setup_table.add_column("Setting", style="cyan", no_wrap=True)
+    setup_table.add_column("Value", style="white")
+
+    setup_table.add_row("Tokenizer", encoding)
+    device_display = device_name
     if use_mps:
-        print("  WARNING: MPS has known NaN issues. Use --debug if training fails.")
-    print()
+        device_display += " [yellow](⚠ Experimental - may have NaN issues)[/yellow]"
+    setup_table.add_row("Device", device_display)
+
+    console.print(setup_table)
+    console.print()
 
     # Get device-specific utilities
     autocast_ctx = get_autocast_context(device.type)
@@ -303,8 +317,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     get_max_memory = get_memory_stats_fn(device.type)
 
     # Load datasets (train and validation)
-    print("Loading FineWeb dataset...")
-    print()
+    console.print("[bold]Loading FineWeb dataset...[/bold]")
 
     # Training dataset (90% of data)
     train_dataset = FineWebDataset(
@@ -317,7 +330,6 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         split="train",  # Use training split
         validation_fraction=0.1  # 10% reserved for validation
     )
-    print()
 
     # Validation dataset (10% of data)
     # Use fewer tokens for validation to save time
@@ -332,7 +344,41 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         split="validation",  # Use validation split (different shards!)
         validation_fraction=0.1
     )
-    print()
+
+    # Create dataset info table
+    dataset_table = Table(title="Dataset Configuration", show_header=True, header_style="bold green")
+    dataset_table.add_column("Parameter", style="cyan", no_wrap=True)
+    dataset_table.add_column("Train", style="green", justify="right")
+    dataset_table.add_column("Validation", style="yellow", justify="right")
+
+    dataset_table.add_row(
+        "Tokens per epoch",
+        f"{TOKENS_PER_EPOCH:,}",
+        f"{val_tokens_per_epoch:,}"
+    )
+    dataset_table.add_row(
+        "Sequences per epoch",
+        f"~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}",
+        f"~{val_tokens_per_epoch // SEQ_LENGTH:,}"
+    )
+    dataset_table.add_row(
+        "Vocabulary size",
+        f"{train_dataset.vocab_size:,}",
+        f"{val_dataset.vocab_size:,}"
+    )
+    dataset_table.add_row(
+        "Cache directory",
+        "data/fineweb_cache",
+        "data/fineweb_cache"
+    )
+    dataset_table.add_row(
+        "Max cached shards",
+        str(MAX_CACHED_SHARDS),
+        str(MAX_CACHED_SHARDS)
+    )
+
+    console.print(dataset_table)
+    console.print()
 
     # Create dataloaders
     # IterableDataset requires different DataLoader setup
@@ -354,18 +400,33 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     # Calculate effective batch size with gradient accumulation
     effective_batch_size = BATCH_SIZE * SEQ_LENGTH * accumulation_steps
 
-    print(f"Training configuration:")
-    print(f"  Tokens per epoch (train): {TOKENS_PER_EPOCH:,}")
-    print(f"  Tokens per epoch (val): {val_tokens_per_epoch:,}")
-    print(f"  Approximate sequences per epoch: ~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}")
-    print(f"  Batch size: {BATCH_SIZE} sequences ({BATCH_SIZE * SEQ_LENGTH:,} tokens)")
-    print(f"  Gradient accumulation steps: {accumulation_steps}")
-    print(f"  Effective batch size: {BATCH_SIZE * accumulation_steps} sequences ({effective_batch_size:,} tokens)")
-    print(f"  → {accumulation_steps}x more stable than without accumulation!")
-    print()
+    # Create training configuration table
+    train_config_table = Table(title="Training Configuration", show_header=True, header_style="bold magenta")
+    train_config_table.add_column("Parameter", style="cyan", no_wrap=True)
+    train_config_table.add_column("Value", style="white")
+
+    train_config_table.add_row(
+        "Batch size",
+        f"{BATCH_SIZE} sequences ({BATCH_SIZE * SEQ_LENGTH:,} tokens)"
+    )
+    train_config_table.add_row(
+        "Gradient accumulation",
+        f"{accumulation_steps} steps"
+    )
+    train_config_table.add_row(
+        "Effective batch size",
+        f"[bold]{BATCH_SIZE * accumulation_steps}[/bold] sequences ({effective_batch_size:,} tokens)"
+    )
+    train_config_table.add_row(
+        "Stability improvement",
+        f"[green]✓ {accumulation_steps}x more stable than without accumulation[/green]"
+    )
+
+    console.print(train_config_table)
+    console.print()
 
     # Create model
-    print("Creating model...")
+    console.print("[bold]Creating model...[/bold]")
     model = DecoderOnlyTransformer(
         vocab_size=train_dataset.vocab_size,
         d_model=D_MODEL,
@@ -378,18 +439,32 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     model = model.to(device)
 
     num_params = sum(p.numel() for p in model.parameters())
-    print(f"  Model parameters: {num_params:,}")
 
     # Check for NaN in initial weights
     has_nan = False
     for name, param in model.named_parameters():
         if torch.isnan(param).any():
-            print(f"  WARNING: NaN in initial weights: {name}")
+            console.print(f"[red]WARNING: NaN in initial weights: {name}[/red]")
             has_nan = True
     if has_nan:
         raise ValueError("Model has NaN in initial weights!")
-    print("  Initial weights: OK (no NaN)")
-    print()
+
+    # Create model info table
+    model_table = Table(title="Model Architecture", show_header=True, header_style="bold blue")
+    model_table.add_column("Parameter", style="cyan", no_wrap=True)
+    model_table.add_column("Value", style="white", justify="right")
+
+    model_table.add_row("Embedding dimension (d_model)", str(D_MODEL))
+    model_table.add_row("Number of layers", str(NUM_LAYERS))
+    model_table.add_row("Attention heads", str(NUM_HEADS))
+    model_table.add_row("Feed-forward dimension", str(D_FF))
+    model_table.add_row("Dropout", str(DROPOUT))
+    model_table.add_row("Max sequence length", str(SEQ_LENGTH * 2))
+    model_table.add_row("[bold]Total parameters[/bold]", f"[bold]{num_params:,}[/bold]")
+    model_table.add_row("Weight initialization", "[green]✓ No NaN detected[/green]")
+
+    console.print(model_table)
+    console.print()
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -432,14 +507,22 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
     warmup_steps = int(0.05 * total_steps)  # 5% of training for warmup
     min_lr = LEARNING_RATE * 0.1  # Final LR = 10% of peak
 
-    print(f"Learning rate schedule:")
-    print(f"  Batches per epoch: ~{batches_per_epoch:,}")
-    print(f"  Weight updates per epoch: ~{steps_per_epoch:,} (with accumulation)")
-    print(f"  Total training steps: {total_steps:,}")
-    print(f"  Warmup steps: {warmup_steps:,} (5% of training)")
-    print(f"  Max learning rate: {LEARNING_RATE:.6f}")
-    print(f"  Min learning rate: {min_lr:.6f}")
-    print()
+    # Create learning rate schedule table
+    lr_table = Table(title="Learning Rate Schedule", show_header=True, header_style="bold yellow")
+    lr_table.add_column("Parameter", style="cyan", no_wrap=True)
+    lr_table.add_column("Value", style="white", justify="right")
+
+    lr_table.add_row("Batches per epoch", f"~{batches_per_epoch:,}")
+    lr_table.add_row("Weight updates per epoch", f"~{steps_per_epoch:,}")
+    lr_table.add_row("Total epochs", str(NUM_EPOCHS))
+    lr_table.add_row("[bold]Total training steps[/bold]", f"[bold]{total_steps:,}[/bold]")
+    lr_table.add_row("Warmup steps", f"{warmup_steps:,} (5%)")
+    lr_table.add_row("Max learning rate", f"{LEARNING_RATE:.6f}")
+    lr_table.add_row("Min learning rate", f"{min_lr:.6f}")
+    lr_table.add_row("Schedule type", "Warmup + Cosine Decay")
+
+    console.print(lr_table)
+    console.print()
 
     scheduler = get_cosine_schedule_with_warmup(
         optimizer=optimizer,
@@ -449,124 +532,174 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         min_lr=min_lr
     )
 
-    print("=" * 80)
-    print("STARTING TRAINING")
-    print("=" * 80)
-    print()
+    # Starting training panel
+    console.print(Panel("[bold green]STARTING TRAINING[/bold green]", style="bold green", expand=False))
+    console.print()
 
     total_batches = 0
     start_time = time.time()
 
-    def print_table_header():
-        """Print the table header for training metrics."""
-        print(f"{'Batch':>10} {'Loss':>8} {'PPL':>8} {'Avg Loss':>9} {'Avg PPL':>9} {'LR':>10} {'Phase':>10}")
-        print("-" * 90)
+    def create_metrics_table(rows, epoch_num, num_epochs):
+        """Create a Rich table with training metrics and fixed header.
+
+        Args:
+            rows: List of tuples (batch_str, loss, ppl, avg_loss, avg_ppl, lr)
+            epoch_num: Current epoch number (1-indexed)
+            num_epochs: Total number of epochs
+
+        Returns:
+            Rich Table with the metrics
+        """
+        table = Table(title=f"Epoch {epoch_num}/{num_epochs}", show_header=True, header_style="bold magenta")
+        table.add_column("Batch", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Loss", justify="right", style="green")
+        table.add_column("PPL", justify="right", style="green")
+        table.add_column("Avg Loss", justify="right", style="yellow")
+        table.add_column("Avg PPL", justify="right", style="yellow")
+        table.add_column("LR", justify="right", style="blue")
+
+        # Only show last 15 rows to keep display clean
+        for row in rows[-15:]:
+            batch_str, loss, ppl, avg_loss, avg_ppl, lr = row
+            table.add_row(
+                batch_str,
+                f"{loss:.4f}",
+                f"{ppl:.2f}",
+                f"{avg_loss:.4f}",
+                f"{avg_ppl:.2f}",
+                f"{lr:.2e}"
+            )
+
+        return table
+
+    # Create overall progress tracker for epochs and batches
+    overall_progress = Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        console=console
+    )
+    epoch_task = overall_progress.add_task(f"[cyan]Overall Progress", total=NUM_EPOCHS)
 
     for epoch in range(NUM_EPOCHS):
-        print(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
-        print("-" * 90)
-
         # ==============================================================================
         # TRAINING PHASE
         # ==============================================================================
         model.train()  # Set to training mode
 
-        # Print initial table header
-        print_table_header()
-
         epoch_loss = 0.0
         epoch_start = time.time()
-        log_lines_printed = 0  # Track how many log lines we've printed
+        training_rows = []  # Store training metrics for Rich table display
 
         # Reset gradient accumulator for new epoch
         accumulator.reset()
         optimizer.zero_grad()  # Clear gradients once at epoch start
 
-        for batch_idx, (inputs, targets) in enumerate(train_dataloader):
-            # Move to device
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+        # Add batch progress task for this epoch
+        batch_task = overall_progress.add_task(
+            f"[green]Epoch {epoch + 1}/{NUM_EPOCHS}",
+            total=batches_per_epoch
+        )
 
-            # Forward pass with autocast (mixed precision on CUDA, no-op on MPS/CPU)
-            with autocast_ctx:
-                logits = model(inputs, debug=debug)
+        # Create Live display for this epoch
+        # Combines the metrics table with overall progress bars
+        with Live(Group(create_metrics_table(training_rows, epoch + 1, NUM_EPOCHS), overall_progress), console=console, refresh_per_second=4) as live:
+            for batch_idx, (inputs, targets) in enumerate(train_dataloader):
+                # Move to device
+                inputs = inputs.to(device)
+                targets = targets.to(device)
 
-                # NaN detection (defensive check)
-                if torch.isnan(logits).any() or torch.isinf(logits).any():
-                    print(f"\n  ERROR: NaN/Inf detected in logits at batch {batch_idx + 1}")
-                    print(f"  Logits stats: min={logits.min().item():.4f}, "
-                          f"max={logits.max().item():.4f}, mean={logits.mean().item():.4f}")
-                    raise ValueError("NaN/Inf in logits - training unstable")
+                # Forward pass with autocast (mixed precision on CUDA, no-op on MPS/CPU)
+                with autocast_ctx:
+                    logits = model(inputs, debug=debug)
 
-                # Calculate loss
-                batch_size, seq_length, vocab_size = logits.shape
-                loss = criterion(
-                    logits.view(batch_size * seq_length, vocab_size),
-                    targets.view(batch_size * seq_length)
-                )
+                    # NaN detection (defensive check)
+                    if torch.isnan(logits).any() or torch.isinf(logits).any():
+                        print(f"\n  ERROR: NaN/Inf detected in logits at batch {batch_idx + 1}")
+                        print(f"  Logits stats: min={logits.min().item():.4f}, "
+                              f"max={logits.max().item():.4f}, mean={logits.mean().item():.4f}")
+                        raise ValueError("NaN/Inf in logits - training unstable")
 
-                # IMPORTANT: Scale loss for gradient accumulation
-                # This ensures accumulated gradients have correct magnitude
-                # See training_utils.py for detailed explanation
-                loss = accumulator.scale_loss(loss)
+                    # Calculate loss
+                    batch_size, seq_length, vocab_size = logits.shape
+                    loss = criterion(
+                        logits.view(batch_size * seq_length, vocab_size),
+                        targets.view(batch_size * seq_length)
+                    )
 
-            # Check loss for NaN
-            if torch.isnan(loss) or torch.isinf(loss):
-                print(f"\n  ERROR: NaN/Inf loss at batch {batch_idx + 1}")
-                print(f"  Loss value: {loss.item()}")
-                raise ValueError("NaN/Inf loss - training unstable")
+                    # IMPORTANT: Scale loss for gradient accumulation
+                    # This ensures accumulated gradients have correct magnitude
+                    # See training_utils.py for detailed explanation
+                    loss = accumulator.scale_loss(loss)
 
-            # Backward pass - accumulates gradients
-            loss.backward()
+                # Check loss for NaN
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"\n  ERROR: NaN/Inf loss at batch {batch_idx + 1}")
+                    print(f"  Loss value: {loss.item()}")
+                    raise ValueError("NaN/Inf loss - training unstable")
 
-            # Check if we should update weights (every accumulation_steps batches)
-            if accumulator.step():
-                # Clip gradients to prevent explosion
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                # Backward pass - accumulates gradients
+                loss.backward()
 
-                # Update weights
-                optimizer.step()
+                # Check if we should update weights (every accumulation_steps batches)
+                if accumulator.step():
+                    # Clip gradients to prevent explosion
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-                # Update learning rate (MUST be called after optimizer.step())
-                # This adjusts the LR according to our warmup + cosine decay schedule
-                scheduler.step()
+                    # Update weights
+                    optimizer.step()
 
-                # Clear gradients for next accumulation cycle
-                optimizer.zero_grad()
+                    # Update learning rate (MUST be called after optimizer.step())
+                    # This adjusts the LR according to our warmup + cosine decay schedule
+                    scheduler.step()
 
-            # Track loss (unscaled for logging)
-            epoch_loss += loss.item() * accumulation_steps  # Unscale for display
-            total_batches += 1
+                    # Clear gradients for next accumulation cycle
+                    optimizer.zero_grad()
 
-            # Debug: Check for NaN in weights after first batch
-            if batch_idx == 0 and not debug:
-                for name, param in model.named_parameters():
-                    if torch.isnan(param).any():
-                        print(f"  WARNING: NaN in weights after batch 1: {name}")
-                        print(f"  This means batch 1 corrupted the model!")
-                        raise ValueError("Weights corrupted after batch 1")
+                # Track loss (unscaled for logging)
+                epoch_loss += loss.item() * accumulation_steps  # Unscale for display
+                total_batches += 1
 
-            # Logging
-            if (batch_idx + 1) % LOG_INTERVAL == 0:
-                avg_loss = epoch_loss / (batch_idx + 1)
-                current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
-                batch_perplexity = calculate_perplexity_from_loss(loss * accumulation_steps).item()
-                avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
+                # Debug: Check for NaN in weights after first batch
+                if batch_idx == 0 and not debug:
+                    for name, param in model.named_parameters():
+                        if torch.isnan(param).any():
+                            print(f"  WARNING: NaN in weights after batch 1: {name}")
+                            print(f"  This means batch 1 corrupted the model!")
+                            raise ValueError("Weights corrupted after batch 1")
 
-                # Repeat header every 30 log lines to keep it visible
-                if log_lines_printed > 0 and log_lines_printed % 30 == 0:
-                    print()
-                    print_table_header()
+                # Logging
+                if (batch_idx + 1) % LOG_INTERVAL == 0:
+                    avg_loss = epoch_loss / (batch_idx + 1)
+                    current_lr = scheduler.get_last_lr()[0]  # Get current LR from scheduler
+                    batch_perplexity = calculate_perplexity_from_loss(loss * accumulation_steps).item()
+                    avg_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_loss)).item()
 
-                # Determine phase (warmup or training)
-                step_in_cycle, total_in_cycle = accumulator.get_progress()
-                phase = "warmup" if total_batches < (warmup_steps * accumulation_steps) else "learning"
+                    # Check if we're in warmup phase
+                    current_optimizer_step = total_batches // accumulation_steps
+                    in_warmup = current_optimizer_step < warmup_steps
 
-                # Format batch count as "X/Y"
-                batch_str = f"{batch_idx + 1}/{batches_per_epoch}"
-                print(f"{batch_str:>10} {loss.item() * accumulation_steps:8.4f} {batch_perplexity:8.2f} "
-                      f"{avg_loss:9.4f} {avg_perplexity:9.2f} {current_lr:10.6f} {phase:>10}")
-                log_lines_printed += 1
+                    # Format batch count as "X/Y", with asterisk if in warmup
+                    batch_str = f"{batch_idx + 1}/{batches_per_epoch}"
+                    if in_warmup:
+                        batch_str = f"*{batch_str}"
+
+                    # Add row to training data
+                    training_rows.append((
+                        batch_str,
+                        loss.item() * accumulation_steps,
+                        batch_perplexity,
+                        avg_loss,
+                        avg_perplexity,
+                        current_lr
+                    ))
+
+                    # Update the live display with new table and progress
+                    live.update(Group(create_metrics_table(training_rows, epoch + 1, NUM_EPOCHS), overall_progress))
+
+                # Update batch progress (do this for every batch, not just logged ones)
+                overall_progress.update(batch_task, completed=batch_idx + 1)
 
         # Training phase summary
         synchronize()
@@ -581,8 +714,8 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         # Evaluate on validation data to check for overfitting/underfitting
         # The model has NEVER seen this data during training, so this tells us
         # if the model is truly learning patterns or just memorizing training data.
-        print()
-        print("Running validation...")
+        console.print()
+        console.print("[bold]Running validation...[/bold]")
         model.eval()  # Set to evaluation mode (disables dropout)
 
         val_loss = 0.0
@@ -613,28 +746,39 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         avg_val_loss = val_loss / val_batches
         avg_val_perplexity = calculate_perplexity_from_loss(torch.tensor(avg_val_loss)).item()
 
-        # Print epoch summary with both train and validation metrics
-        print()
-        print(f"Epoch {epoch + 1} Summary:")
-        print(f"  Train Loss: {avg_train_loss:.4f}  |  Train Perplexity: {avg_train_perplexity:.2f}")
-        print(f"  Val Loss:   {avg_val_loss:.4f}  |  Val Perplexity:   {avg_val_perplexity:.2f}")
-        print(f"  Learning Rate: {current_lr:.6f}")
-        print(f"  Time: {train_time:.1f}s train + {val_time:.1f}s val = {train_time + val_time:.1f}s total")
+        # Create epoch summary table
+        console.print()
+        summary_table = Table(show_header=True, header_style="bold cyan", box=None)
+        summary_table.add_column("Metric", style="cyan", no_wrap=True)
+        summary_table.add_column("Train", style="green", justify="right")
+        summary_table.add_column("Validation", style="yellow", justify="right")
 
-        # Interpretation help for users
+        summary_table.add_row("Loss", f"{avg_train_loss:.4f}", f"{avg_val_loss:.4f}")
+        summary_table.add_row("Perplexity", f"{avg_train_perplexity:.2f}", f"{avg_val_perplexity:.2f}")
+        summary_table.add_row("Time", f"{train_time:.1f}s", f"{val_time:.1f}s")
+
+        # Determine status message with color
         if avg_val_loss < avg_train_loss * 1.05:
-            # Validation loss is close to training loss (good!)
-            print(f"  Status: ✓ Model is learning well (val ≈ train)")
+            status = "[green]✓ Model is learning well (val ≈ train)[/green]"
         elif avg_val_loss < avg_train_loss * 1.15:
-            # Validation loss is slightly higher (normal)
-            print(f"  Status: ✓ Model is learning (val slightly > train, normal)")
+            status = "[green]✓ Model is learning (val slightly > train, normal)[/green]"
         elif avg_val_loss > avg_train_loss * 1.3:
-            # Validation loss much higher (possible overfitting)
-            print(f"  Status: ⚠ Possible overfitting (val >> train)")
+            status = "[yellow]⚠ Possible overfitting (val >> train)[/yellow]"
         else:
-            # In between
-            print(f"  Status: Model is training")
-        print()
+            status = "Model is training"
+
+        # Create panel with summary
+        panel_content = f"[bold]Learning Rate:[/bold] {current_lr:.6f}\n"
+        panel_content += f"[bold]Total Time:[/bold] {train_time + val_time:.1f}s\n"
+        panel_content += f"[bold]Status:[/bold] {status}"
+
+        console.print(Panel(
+            summary_table,
+            title=f"[bold]Epoch {epoch + 1}/{NUM_EPOCHS} Summary[/bold]",
+            subtitle=panel_content,
+            border_style="blue"
+        ))
+        console.print()
 
         # Save checkpoint with encoding in filename
         encoding_short = get_encoding_short_name(encoding)
@@ -660,32 +804,52 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
                 'accumulation_steps': accumulation_steps,  # Store for reference
             }
         }, checkpoint_path)
-        print(f"  Saved checkpoint: {checkpoint_path}")
-        print()
+        console.print(f"[dim]Saved checkpoint: {checkpoint_path}[/dim]")
+        console.print()
+
+        # Update overall progress and remove batch task for this epoch
+        overall_progress.update(epoch_task, advance=1)
+        overall_progress.remove_task(batch_task)
 
     # Training complete
     synchronize()  # Ensure all operations complete
     total_time = time.time() - start_time
-    print("=" * 80)
-    print("TRAINING COMPLETE!")
-    print("=" * 80)
-    print(f"Total time: {total_time / 60:.1f} minutes")
+
+    # Create training complete summary
+    complete_table = Table(show_header=False, box=None)
+    complete_table.add_column("", style="cyan", no_wrap=True)
+    complete_table.add_column("", style="white", justify="right")
+
+    complete_table.add_row("Total time", f"{total_time / 60:.1f} minutes")
+    complete_table.add_row("Epochs completed", str(NUM_EPOCHS))
+    complete_table.add_row("Final train loss", f"{avg_train_loss:.4f}")
+    complete_table.add_row("Final train perplexity", f"{avg_train_perplexity:.2f}")
+    complete_table.add_row("Final val loss", f"{avg_val_loss:.4f}")
+    complete_table.add_row("Final val perplexity", f"{avg_val_perplexity:.2f}")
 
     # Device-specific stats (CUDA only for now)
     if device.type == "cuda":
         peak_memory_gb = get_max_memory() / (1024**3)
-        print(f"Peak GPU memory: {peak_memory_gb:.2f} GB")
+        complete_table.add_row("Peak GPU memory", f"{peak_memory_gb:.2f} GB")
 
-    print()
+    console.print(Panel(
+        complete_table,
+        title="[bold green]TRAINING COMPLETE![/bold green]",
+        border_style="green",
+        expand=False
+    ))
+    console.print()
 
     # Final samples
-    print("Final sample generations:")
-    print("-" * 80)
+    console.print(Panel("[bold]Final Sample Generations[/bold]", style="bold magenta", expand=False))
+    console.print()
+
     for prompt in ["The", "In the", "She was"]:
-        sample = generate_sample(model, dataset, prompt, max_length=100, device=device, autocast_ctx=autocast_ctx)
-        print(f"\nPrompt: '{prompt}'")
-        print(f"Generated: '{sample}'")
-    print()
+        sample = generate_sample(model, train_dataset, prompt, max_length=100, device=device, autocast_ctx=autocast_ctx)
+        console.print(f"[cyan]Prompt:[/cyan] '{prompt}'")
+        console.print(f"[green]Generated:[/green] '{sample}'")
+        console.print()
+    console.print()
 
 
 if __name__ == "__main__":
