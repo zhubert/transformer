@@ -29,7 +29,7 @@ This project implements a complete decoder-only transformer (GPT architecture) w
 - **Training Pipeline** - FineWeb dataset streaming, learning rate scheduling, checkpointing
 - **Text Generation** - Advanced sampling strategies (greedy, top-k, top-p, combined)
 - **Evaluation** - Perplexity calculation and model comparison tools
-- **Comprehensive Tests** - 86/86 tests passing across all components
+- **Comprehensive Tests** - 98/98 tests passing across all components
 
 **All components include extensive educational documentation** - read the source files to learn!
 
@@ -55,21 +55,21 @@ commands/
 ├── sampling_comparison.py   # Demo of different sampling strategies
 └── evaluate_perplexity.py   # Model evaluation and comparison
 
-tests/                  # Comprehensive test suite (86 tests)
+tests/                  # Comprehensive test suite (98 tests)
 ```
 
 ## Learning Path
 
 Want to understand transformers deeply? Read the code in this order:
 
-1. **`src/transformer/attention.py`** - Start here! The core self-attention mechanism
-2. **`src/transformer/embeddings.py`** - How tokens and positions are represented
-3. **`src/transformer/feedforward.py`** - Position-wise neural networks
-4. **`src/transformer/block.py`** - How components combine (with gradient flow explanation!)
-5. **`src/transformer/model.py`** - The complete architecture
-6. **`src/transformer/sampling.py`** - How to generate high-quality text
-7. **`src/transformer/perplexity.py`** - How to evaluate language models
-8. **`commands/train.py`** - How to train the model
+1. **[`src/transformer/attention.py`](src/transformer/attention.py)** - Start here! The core self-attention mechanism
+2. **[`src/transformer/embeddings.py`](src/transformer/embeddings.py)** - How tokens and positions are represented
+3. **[`src/transformer/feedforward.py`](src/transformer/feedforward.py)** - Position-wise neural networks
+4. **[`src/transformer/block.py`](src/transformer/block.py)** - How components combine (with gradient flow explanation!)
+5. **[`src/transformer/model.py`](src/transformer/model.py)** - The complete architecture
+6. **[`src/transformer/sampling.py`](src/transformer/sampling.py)** - How to generate high-quality text
+7. **[`src/transformer/perplexity.py`](src/transformer/perplexity.py)** - How to evaluate language models
+8. **[`commands/train.py`](commands/train.py)** - How to train the model
 
 Each file has extensive documentation explaining concepts, design decisions, and mathematical details.
 
@@ -132,28 +132,6 @@ We use HuggingFace's [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW
 - **Smart caching**: Keeps 5 recent shards (~2GB), automatically cleans up old ones
 - **Configurable**: Default 100M tokens per epoch, adjust as needed
 
-### What to Expect
-
-**Training Progress** (quick mode, CPU, with gradient accumulation):
-```
-Epoch 1:  Train Loss ~8.0, Val Loss ~8.2, Perplexity ~3000  (random guessing)
-Epoch 3:  Train Loss ~5.0, Val Loss ~5.3, Perplexity ~150   (learning patterns)
-Epoch 5:  Train Loss ~4.0, Val Loss ~4.2, Perplexity ~55    (getting decent)
-Epoch 10: Train Loss ~3.0, Val Loss ~3.2, Perplexity ~20    (pretty good!)
-         Status: ✓ Model is learning (val slightly > train, normal)
-```
-
-**With gradient accumulation:**
-- **20-30% lower final loss** compared to without accumulation
-- **Much smoother training curves** (less noise)
-- **Validation tracking** helps detect overfitting early
-
-**Timing** (M1 MacBook Pro):
-- **CPU**: ~10-15 min/epoch (quick mode)
-- **MPS (Apple Silicon)**: ~2-3 min/epoch (5-10x faster)
-- **CUDA**: Varies by GPU (~1-5 min/epoch on modern GPUs)
-- **Gradient accumulation**: Near zero time overhead!
-
 ### Device Support
 
 The training script automatically detects and uses the best available device:
@@ -189,55 +167,6 @@ uv run python main.py generate \
     --top-k 50 --top-p 0.9 --temperature 0.8
 ```
 
-### Sampling Strategies
-
-We implement four sampling strategies:
-
-1. **Greedy** - Always pick most probable token (deterministic, repetitive)
-2. **Top-k** - Sample from k most probable tokens (simple, effective)
-3. **Top-p (Nucleus)** - Adaptive sampling based on cumulative probability
-4. **Combined Top-k + Top-p** - **RECOMMENDED** - Best quality and diversity
-
-**When to use which strategy?**
-
-| Use Case | Strategy | Settings |
-|----------|----------|----------|
-| Creative writing | `top_k_top_p` | `k=100, p=0.95, temp=1.2` |
-| Balanced/general | `top_k_top_p` | `k=50, p=0.9, temp=1.0` |
-| Factual/technical | `top_k_top_p` | `k=40, p=0.85, temp=0.7` |
-| Debugging | `greedy` | (deterministic) |
-
-For detailed explanations of how each strategy works, see **`src/transformer/sampling.py`**.
-
-## Evaluation: Perplexity
-
-**Perplexity** measures how "confused" a model is when predicting text. Lower is better.
-
-**Intuition**: Perplexity of 20 means "the model is as confused as choosing from 20 words at each step."
-
-| Perplexity | Quality | Interpretation |
-|------------|---------|----------------|
-| 1.0 | Perfect | Always correct with 100% confidence (impossible!) |
-| 10-30 | Excellent | GPT-2 level performance |
-| 50-100 | Decent | Model has learned patterns, room for improvement |
-| 200+ | Poor | Model is quite confused |
-| ~50,000 | Random | Just guessing (vocab_size) |
-
-### Evaluate Your Model
-
-```bash
-# Evaluate latest checkpoint
-uv run python main.py evaluate
-
-# Evaluate specific checkpoint
-uv run python main.py evaluate --checkpoint checkpoints/model_epoch_10_p50k.pt
-
-# Compare all checkpoints to find best model
-uv run python main.py compare
-```
-
-For the complete perplexity tutorial (math, examples, overfitting detection), see **`src/transformer/perplexity.py`**.
-
 ## Development
 
 ### Requirements
@@ -249,7 +178,7 @@ For the complete perplexity tutorial (math, examples, overfitting detection), se
 ### Running Tests
 
 ```bash
-# All tests (86 tests)
+# All tests (98 tests)
 uv run pytest
 
 # Specific components
@@ -260,49 +189,6 @@ uv run pytest tests/test_perplexity.py -v
 # With coverage
 uv run pytest --cov=src/transformer
 ```
-
-### Project Configuration
-
-This project uses `uv` for Python environment management:
-
-```bash
-# Install dependencies
-uv sync
-
-# Add new dependency
-uv add <package-name>
-
-# Run any command in the environment
-uv run <command>
-```
-
-## Design Decisions
-
-### Why Learned Positional Embeddings?
-We use learned positional embeddings (like GPT-2/3, BERT) instead of sinusoidal encodings because:
-- Simpler to implement and understand
-- Used in modern production systems (GPT-2, GPT-3, BERT)
-- Works well in practice
-
-### Why GELU Activation?
-We use GELU instead of ReLU because:
-- Used in GPT-2, GPT-3, and BERT
-- Smoother gradients than ReLU
-- Better performance in transformers
-
-### Why Decoder-Only?
-We implement decoder-only (GPT) instead of encoder-decoder because:
-- Simpler architecture (easier to learn)
-- What modern LLMs actually use (GPT, Claude, etc.)
-- Sufficient for autoregressive generation
-
-### Why Pre-LN Architecture?
-We use Pre-LN (layer norm before attention/FFN) instead of Post-LN because:
-- More stable training (used in GPT-2, GPT-3)
-- Better gradient flow
-- Industry standard for large models
-
-See `src/transformer/block.py` for detailed explanation with gradient flow math.
 
 ## Learning Resources
 
