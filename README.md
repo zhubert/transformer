@@ -6,19 +6,19 @@ An educational GPT-style transformer incrementally built with AI in PyTorch. Eve
 
 ```bash
 # Install dependencies
-uv sync
+make install
 
 # Run all tests
-uv run pytest
+make test
 
 # Train on FineWeb (100M tokens per epoch)
-uv run python main.py train
+make train
 
 # Quick training (smaller model, 10M tokens/epoch)
-uv run python main.py train --quick
+make train-quick
 
-# Generate text
-uv run python main.py generate --checkpoint checkpoints/model_epoch_10_cl100k.pt
+# Generate text (interactive mode)
+make generate
 ```
 
 ## What's Inside
