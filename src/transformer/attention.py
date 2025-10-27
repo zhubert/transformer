@@ -158,26 +158,108 @@ class MultiHeadAttention(nn.Module):
         # Final output projection
         self.W_o = nn.Linear(d_model, d_model)
 
-    def forward(self, x, mask=None, debug=False):
+    def forward(self, x, mask=None, cache=None, debug=False):
         """
-        Apply multi-head attention.
+        Apply multi-head attention with optional KV-cache for efficient generation.
+
+        KV-Cache Optimization:
+        ----------------------
+        During autoregressive generation, we repeatedly compute attention for growing
+        sequences. Without caching, this is wasteful:
+
+            Step 1: Input [tok1, tok2]       → Compute K[1,2], V[1,2]
+            Step 2: Input [tok1, tok2, tok3] → Compute K[1,2,3], V[1,2,3] ← Redundant!
+            Step 3: Input [tok1, tok2, tok3, tok4] → Compute K[1,2,3,4], V[1,2,3,4] ← Redundant!
+
+        KEY INSIGHT: K and V for past tokens never change! We can cache and reuse them.
+
+        With cache:
+            Step 1 (PREFILL): Input [tok1, tok2]
+                - Compute Q[1,2], K[1,2], V[1,2]
+                - Cache K[1,2], V[1,2]
+                - Return output + cache
+
+            Step 2 (DECODE): Input [tok3] only!
+                - Compute Q[3], K[3], V[3] for new token only
+                - Load K_past[1,2], V_past[1,2] from cache
+                - Concatenate: K = [K_past[1,2], K[3]], V = [V_past[1,2], V[3]]
+                - Attention: Q[3] @ K[1,2,3]^T → only query from new token!
+                - Update cache: K[1,2,3], V[1,2,3]
+                - Return output + updated cache
+
+        This reduces time complexity from O(n²) to O(n) for generation!
+
+        Two Modes:
+        ----------
+        1. PREFILL MODE (cache=None):
+           - Process full input sequence
+           - Compute Q, K, V for all tokens
+           - Initialize cache with K, V
+           - Used for: initial prompt, training, non-cached generation
+
+        2. DECODE MODE (cache provided):
+           - Process only new token(s) (typically 1 token)
+           - Compute Q, K, V only for new token(s)
+           - Concatenate new K, V with cached K, V
+           - Use cached K, V from previous positions
+           - Used for: fast autoregressive generation
 
         Args:
             x: Input tensor of shape (batch, seq_len, d_model)
-            mask: Optional causal mask of shape (seq_len, seq_len) or (batch, seq_len, seq_len)
-                  Positions with True/1 are masked (can't attend)
+               - Prefill mode: seq_len = full prompt length
+               - Decode mode: seq_len = 1 (single new token)
+            mask: Optional causal mask
+                  - Prefill mode: (seq_len, seq_len) full causal mask
+                  - Decode mode: (1, cached_len + 1) or None
+            cache: Optional cache dict with 'keys' and 'values' tensors
+                   - None: Prefill mode (initialize cache)
+                   - Dict: Decode mode (use and update cache)
+                   Structure: {'keys': (batch, num_heads, cached_seq_len, d_k),
+                              'values': (batch, num_heads, cached_seq_len, d_k)}
             debug: If True, enable diagnostic prints for NaN detection
 
         Returns:
             output: Multi-head attention output of shape (batch, seq_len, d_model)
+            new_cache: Updated cache dict with extended keys and values
+                      {'keys': (batch, num_heads, total_seq_len, d_k),
+                       'values': (batch, num_heads, total_seq_len, d_k)}
+                      where total_seq_len = cached_seq_len + seq_len
+
+        Example Usage:
+        --------------
+        # Prefill: Process prompt "The cat"
+        x_prompt = embeddings([The, cat])  # (1, 2, d_model)
+        output, cache = attention(x_prompt, mask=causal_mask, cache=None)
+        # cache now contains K[The, cat], V[The, cat]
+
+        # Decode: Generate next token
+        x_new = embeddings([sat])  # (1, 1, d_model) - only new token!
+        output, cache = attention(x_new, mask=None, cache=cache)
+        # cache now contains K[The, cat, sat], V[The, cat, sat]
+
+        # Continue generation
+        x_new = embeddings([on])  # (1, 1, d_model)
+        output, cache = attention(x_new, mask=None, cache=cache)
+        # cache now contains K[The, cat, sat, on], V[The, cat, sat, on]
+
+        Speedup:
+        --------
+        - Without cache: O(n²) time for generating n tokens
+        - With cache: O(n) time for generating n tokens
+        - Typical speedup: 10-50x for sequences of 100+ tokens
+        - Memory overhead: 2 * num_heads * seq_len * d_k * 4 bytes per layer
         """
         batch_size, seq_len, d_model = x.shape
 
+        # Determine mode based on cache presence
+        is_prefill = (cache is None)
+
         # 1. Project input to Q, K, V
-        # Each: (batch, seq_len, d_model)
-        Q = self.W_q(x)
-        K = self.W_k(x)
-        V = self.W_v(x)
+        # PREFILL: Projects all tokens in prompt
+        # DECODE: Projects only the new token(s)
+        Q = self.W_q(x)  # (batch, seq_len, d_model)
+        K = self.W_k(x)  # (batch, seq_len, d_model)
+        V = self.W_v(x)  # (batch, seq_len, d_model)
 
         # 2. Split into multiple heads
         # Reshape: (batch, seq_len, d_model) → (batch, seq_len, num_heads, d_k)
@@ -186,7 +268,25 @@ class MultiHeadAttention(nn.Module):
         K = K.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
         V = V.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
 
-        # 3. Adjust mask dimensions if needed
+        # 3. Handle KV-cache: concatenate with cached K, V
+        if not is_prefill:
+            # DECODE MODE: We have cached K, V from previous tokens
+            # Concatenate cached K, V with new K, V along sequence dimension
+            #
+            # Example:
+            #   Cached: K[tok1, tok2] shape (batch, num_heads, 2, d_k)
+            #   New: K[tok3] shape (batch, num_heads, 1, d_k)
+            #   Result: K[tok1, tok2, tok3] shape (batch, num_heads, 3, d_k)
+            K_cached = cache['keys']    # (batch, num_heads, cached_len, d_k)
+            V_cached = cache['values']  # (batch, num_heads, cached_len, d_k)
+
+            K = torch.cat([K_cached, K], dim=2)  # Concat along seq dimension
+            V = torch.cat([V_cached, V], dim=2)  # (batch, num_heads, cached_len + seq_len, d_k)
+
+            # Note: Q is NOT cached! We only use the new token's query.
+            # The new token queries ALL past tokens (cached + current).
+
+        # 4. Adjust mask dimensions if needed
         if mask is not None:
             # Add head dimension: (seq_len, seq_len) → (1, 1, seq_len, seq_len)
             # or (batch, seq_len, seq_len) → (batch, 1, seq_len, seq_len)
@@ -195,19 +295,33 @@ class MultiHeadAttention(nn.Module):
             elif mask.dim() == 3:
                 mask = mask.unsqueeze(1)
 
-        # 4. Apply scaled dot-product attention to each head in parallel
-        # Q, K, V: (batch, num_heads, seq_len, d_k)
-        # output: (batch, num_heads, seq_len, d_k)
-        # attn_weights: (batch, num_heads, seq_len, seq_len)
+        # 5. Apply scaled dot-product attention to each head in parallel
+        # PREFILL: Q, K, V all have same seq_len (full prompt)
+        # DECODE: Q has seq_len=1 (new token), K,V have cached_len+1 (all tokens)
+        #
+        # Attention computes: softmax(Q @ K^T / √d_k) @ V
+        # In decode mode:
+        #   Q: (batch, num_heads, 1, d_k)        ← New token only
+        #   K: (batch, num_heads, cached_len+1, d_k)  ← All tokens
+        #   K^T: (batch, num_heads, d_k, cached_len+1)
+        #   Q @ K^T: (batch, num_heads, 1, cached_len+1) ← Attend to all!
+        #   output: (batch, num_heads, 1, d_k)   ← Output for new token only
         output, attn_weights = self.attention(Q, K, V, mask, debug=debug)
 
-        # 5. Concatenate heads
+        # 6. Concatenate heads
         # Transpose: (batch, num_heads, seq_len, d_k) → (batch, seq_len, num_heads, d_k)
-        # Reshape: (batch, seq_len, num_heads, d_k) → (batch, seq_len, num_heads * d_k)
-        #        = (batch, seq_len, d_model)
-        output = output.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
+        # Reshape: (batch, seq_len, num_heads, d_k) → (batch, seq_len, d_model)
+        current_seq_len = output.size(2)  # Could be 1 (decode) or longer (prefill)
+        output = output.transpose(1, 2).contiguous().view(batch_size, current_seq_len, d_model)
 
-        # 6. Final linear projection
+        # 7. Final linear projection
         output = self.W_o(output)
 
-        return output
+        # 8. Create/update cache with current K, V
+        # This cache will be passed to the next generation step
+        new_cache = {
+            'keys': K,      # (batch, num_heads, total_seq_len, d_k)
+            'values': V     # (batch, num_heads, total_seq_len, d_k)
+        }
+
+        return output, new_cache

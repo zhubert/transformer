@@ -134,51 +134,107 @@ class TransformerBlock(nn.Module):
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
-    def forward(self, x, mask=None, debug=False):
+    def forward(self, x, mask=None, cache=None, debug=False):
         """
-        Apply transformer block with Pre-LN architecture.
+        Apply transformer block with Pre-LN architecture and optional KV-cache.
 
-        Data flow:
+        KV-Cache Threading:
+        -------------------
+        Each transformer block contains an attention layer that can use KV-cache.
+        This method threads the cache through:
+
+        1. Receive cache from previous layer/iteration (or None for prefill)
+        2. Pass cache to attention layer
+        3. Receive updated cache from attention
+        4. Return updated cache to next layer/iteration
+
+        The cache is only used in the attention sub-layer (not FFN), because
+        only attention depends on past token representations. The FFN processes
+        each position independently, so there's nothing to cache.
+
+        Data flow WITHOUT cache (training/prefill):
             Input (batch, seq_len, d_model)
                 ↓
             First sub-layer (attention with residual):
                 residual = x
                 x = norm1(x)
-                x = attention(x, mask)
+                x, cache = attention(x, mask, cache=None)  ← Initialize cache
                 x = dropout(x)
                 x = x + residual  ← Gradient highway
                 ↓
             Second sub-layer (FFN with residual):
                 residual = x
                 x = norm2(x)
-                x = ffn(x)
+                x = ffn(x)  ← No cache needed
                 x = dropout(x)
                 x = x + residual  ← Gradient highway
                 ↓
-            Output (batch, seq_len, d_model)
+            Output (batch, seq_len, d_model), cache
+
+        Data flow WITH cache (generation/decode):
+            Input (batch, 1, d_model)  ← Only new token!
+                ↓
+            First sub-layer (attention with residual):
+                residual = x
+                x = norm1(x)
+                x, cache = attention(x, mask, cache=cache)  ← Use + update cache
+                x = dropout(x)
+                x = x + residual
+                ↓
+            Second sub-layer (FFN with residual):
+                residual = x
+                x = norm2(x)
+                x = ffn(x)  ← No cache needed
+                x = dropout(x)
+                x = x + residual
+                ↓
+            Output (batch, 1, d_model), updated_cache
 
         Args:
             x: Input tensor of shape (batch, seq_len, d_model)
+               - Prefill mode: seq_len = full prompt length
+               - Decode mode: seq_len = 1 (single new token)
             mask: Optional causal mask of shape (seq_len, seq_len) or (batch, seq_len, seq_len)
                   Prevents attending to future positions in decoder
+            cache: Optional KV-cache from previous iteration
+                   - None: Prefill mode (initialize cache)
+                   - Dict: Decode mode (use and update cache)
+                   Structure: {'keys': tensor, 'values': tensor}
             debug: If True, enable diagnostic prints for NaN detection
 
         Returns:
             output: Block output of shape (batch, seq_len, d_model)
                    (same shape as input - enables stacking blocks)
+            new_cache: Updated cache dict with keys and values for this layer
+                      Will be passed to next iteration during generation
+
+        Example:
+        --------
+        # Prefill: Process initial prompt
+        output, cache = block(prompt_embeddings, mask=causal_mask, cache=None)
+        # cache now contains K, V for all prompt tokens
+
+        # Decode: Generate next token
+        output, cache = block(new_token_embedding, mask=None, cache=cache)
+        # cache now extended with K, V for new token
         """
         # First sub-layer: Multi-head self-attention with residual connection
         residual = x  # Save input for skip connection
         x = self.norm1(x)  # Pre-LN: normalize before attention
-        x = self.attention(x, mask=mask, debug=debug)  # Multi-head attention
+
+        # Attention with KV-cache support
+        # Returns both output and updated cache
+        x, new_cache = self.attention(x, mask=mask, cache=cache, debug=debug)
+
         x = self.dropout1(x)  # Dropout for regularization
         x = x + residual  # Residual connection (gradient highway!)
 
         # Second sub-layer: Feed-forward network with residual connection
+        # NOTE: FFN doesn't use cache - it processes each position independently
         residual = x  # Save for next skip connection
         x = self.norm2(x)  # Pre-LN: normalize before FFN
         x = self.ffn(x)  # Position-wise feed-forward
         x = self.dropout2(x)  # Dropout for regularization
         x = x + residual  # Residual connection (gradient highway!)
 
-        return x
+        return x, new_cache

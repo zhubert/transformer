@@ -1257,6 +1257,174 @@ accumulation_steps = <span class="string">16</span>
         </div>
     </section>
 
+    <!-- Step 8: KV-Cache -->
+    <section id="kv-cache">
+        <div class="container">
+            <h2>Step 8: Fast Generation with KV-Cache</h2>
+            <div class="card">
+                <p><strong>The Problem: Slow Autoregressive Generation</strong></p>
+                <p>When generating text, transformers produce one token at a time. After generating each token, we feed the entire sequence back through the model to predict the next token. This means we repeatedly recompute the same values!</p>
+
+                <p><strong>Example without cache:</strong></p>
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="comment"># Generate "The cat sat"</span>
+<span class="comment"># Step 1: Generate token 3</span>
+Input: [The, cat]
+Compute: K[The], V[The], K[cat], V[cat]
+Output: "sat" ✓
+
+<span class="comment"># Step 2: Generate token 4</span>
+Input: [The, cat, sat]
+Compute: K[The], V[The], K[cat], V[cat], K[sat], V[sat]  <span class="comment">← Redundant!</span>
+Output: "on"
+
+<span class="comment"># Step 3: Generate token 5</span>
+Input: [The, cat, sat, on]
+Compute: K[The], V[The], K[cat], V[cat], K[sat], V[sat], K[on], V[on]  <span class="comment">← Redundant!</span>
+Output: "the"</code></pre>
+                    </div>
+                </div>
+
+                <p>For generating n tokens, we process 1 + 2 + 3 + ... + n = O(n²) tokens total. Very slow!</p>
+
+                <h3>The Solution: KV-Cache</h3>
+                <p><strong>Key Insight:</strong> In attention, K (Key) and V (Value) for past tokens never change! Only the new token's query matters. We can cache K and V from previous steps and reuse them.</p>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 700 500" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Title -->
+                        <text x="350" y="30" text-anchor="middle" font-family="SF Pro Display" font-size="20" font-weight="600" fill="#1D1D1F">KV-Cache: Reuse Past Computations</text>
+
+                        <!-- Without Cache (left side) -->
+                        <text x="150" y="70" text-anchor="middle" font-family="SF Pro Display" font-size="16" font-weight="600" fill="#FF2D55">Without Cache: O(n²)</text>
+
+                        <!-- Step boxes -->
+                        <rect x="50" y="90" width="200" height="60" fill="#FF2D55" opacity="0.2" rx="8" stroke="#FF2D55" stroke-width="2"/>
+                        <text x="150" y="115" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#1D1D1F">Step 1: Process [tok1, tok2]</text>
+                        <text x="150" y="135" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 2 tokens</text>
+
+                        <rect x="50" y="160" width="200" height="60" fill="#FF2D55" opacity="0.2" rx="8" stroke="#FF2D55" stroke-width="2"/>
+                        <text x="150" y="185" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#1D1D1F">Step 2: Process [tok1, tok2, tok3]</text>
+                        <text x="150" y="205" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 3 tokens ❌</text>
+
+                        <rect x="50" y="230" width="200" height="60" fill="#FF2D55" opacity="0.2" rx="8" stroke="#FF2D55" stroke-width="2"/>
+                        <text x="150" y="255" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#1D1D1F">Step 3: Process all 4 tokens</text>
+                        <text x="150" y="275" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 4 tokens ❌</text>
+
+                        <text x="150" y="310" text-anchor="middle" font-family="SF Pro Display" font-size="13" fill="#FF2D55">Total: 2+3+4 = 9 token computations</text>
+
+                        <!-- With Cache (right side) -->
+                        <text x="525" y="70" text-anchor="middle" font-family="SF Pro Display" font-size="16" font-weight="600" fill="#32D74B">With Cache: O(n)</text>
+
+                        <rect x="425" y="90" width="200" height="60" fill="#32D74B" opacity="0.2" rx="8" stroke="#32D74B" stroke-width="2"/>
+                        <text x="525" y="115" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#1D1D1F">Step 1: Process [tok1, tok2]</text>
+                        <text x="525" y="135" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute & cache K,V for 2</text>
+
+                        <rect x="425" y="160" width="200" height="60" fill="#32D74B" opacity="0.2" rx="8" stroke="#32D74B" stroke-width="2"/>
+                        <text x="525" y="185" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#1D1D1F">Step 2: Process [tok3] only!</text>
+                        <text x="525" y="205" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 1, reuse cache ✓</text>
+
+                        <rect x="425" y="230" width="200" height="60" fill="#32D74B" opacity="0.2" rx="8" stroke="#32D74B" stroke-width="2"/>
+                        <text x="525" y="255" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#1D1D1F">Step 3: Process [tok4] only!</text>
+                        <text x="525" y="275" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 1, reuse cache ✓</text>
+
+                        <text x="525" y="310" text-anchor="middle" font-family="SF Pro Display" font-size="13" fill="#32D74B">Total: 2+1+1 = 4 token computations</text>
+
+                        <!-- Speedup annotation -->
+                        <rect x="200" y="340" width="300" height="100" fill="#007AFF" opacity="0.1" rx="8"/>
+                        <text x="350" y="370" text-anchor="middle" font-family="SF Pro Display" font-size="18" font-weight="600" fill="#007AFF">2.25x Speedup!</text>
+                        <text x="350" y="395" text-anchor="middle" font-family="SF Mono" font-size="13" fill="#666">9 computations → 4 computations</text>
+                        <text x="350" y="420" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#666">For 200 tokens: ~50x speedup!</text>
+                    </svg>
+                </div>
+
+                <h3>How It Works</h3>
+                <p><strong>Two Modes:</strong></p>
+                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                    <li><strong>PREFILL:</strong> Process initial prompt, compute and cache K, V for all tokens</li>
+                    <li><strong>DECODE:</strong> For each new token, compute only its K, V, concatenate with cached values</li>
+                </ul>
+
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="comment"># PREFILL: Process prompt "The cat"</span>
+prompt = [The, cat]
+K_all = [K_The, K_cat]  <span class="comment"># Cache these!</span>
+V_all = [V_The, V_cat]  <span class="comment"># Cache these!</span>
+Output: "sat"
+
+<span class="comment"># DECODE: Generate next token</span>
+new_token = [sat]
+K_new = [K_sat]  <span class="comment"># Only compute for new token</span>
+V_new = [V_sat]
+K_all = concat(K_cached, K_new)  <span class="comment"># = [K_The, K_cat, K_sat]</span>
+V_all = concat(V_cached, V_new)  <span class="comment"># = [V_The, V_cat, V_sat]</span>
+Output: "on"
+
+<span class="comment"># Continue...</span></code></pre>
+                    </div>
+                </div>
+
+                <h3>Memory vs Speed Tradeoff</h3>
+                <p><strong>Memory Cost:</strong> For each layer, we cache K and V tensors with shape (batch, num_heads, seq_len, d_k). For a 6-layer model with d_model=256, 4 heads, and 200-token sequence, this is only ~3 MB per example. Very affordable!</p>
+
+                <p><strong>Speed Benefit:</strong> Reduces time complexity from O(n²) to O(n) for generating n tokens. Typical speedups:</p>
+                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                    <li>Short sequences (10-20 tokens): 2-5x faster</li>
+                    <li>Medium sequences (50-100 tokens): 10-20x faster</li>
+                    <li>Long sequences (200+ tokens): 20-50x faster</li>
+                </ul>
+
+                <div class="highlight">
+                    <p><strong>Why ALL production LLMs use KV-cache:</strong> The memory cost is tiny compared to the model weights, but the speed improvement is massive. Every production system (GPT, Claude, etc.) uses KV-cache for generation!</p>
+                </div>
+
+                <h3>Using KV-Cache</h3>
+                <div class="code-window">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <div class="code-content">
+                        <pre><code><span class="comment"># KV-cache is enabled by default!</span>
+generated = model.generate(
+    start_tokens,
+    max_length=<span class="string">100</span>,
+    sampling_strategy=<span class="string">"greedy"</span>,
+    use_cache=<span class="keyword">True</span>  <span class="comment"># ← Default!</span>
+)
+
+<span class="comment"># Disable cache (for debugging/comparison)</span>
+generated = model.generate(
+    start_tokens,
+    max_length=<span class="string">100</span>,
+    use_cache=<span class="keyword">False</span>  <span class="comment"># ← Much slower!</span>
+)
+
+<span class="comment"># Benchmark the speedup yourself</span>
+<span class="keyword">uv run python</span> commands/benchmark_generation.py</code></pre>
+                    </div>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Implementation Detail:</strong> The cache must correctly handle positional encodings! When processing token at position N, it must receive position embedding for N, not 0. Our implementation tracks the cache length and adjusts positions automatically.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Try It Yourself -->
     <section>
         <div class="container">

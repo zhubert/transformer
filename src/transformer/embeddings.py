@@ -28,21 +28,31 @@ class PositionalEncoding(nn.Module):
         self.pos_embedding = nn.Embedding(max_seq_len, d_model)
         self.d_model = d_model
 
-    def forward(self, x):
+    def forward(self, x, start_pos=0):
         """
         Add positional embeddings to input.
 
         Args:
             x: Input tensor of shape (batch, seq_len, d_model)
                (typically token embeddings)
+            start_pos: Starting position index (default: 0)
+                      - Prefill mode: start_pos=0 (positions start from 0)
+                      - Decode mode: start_pos=N (new token is at position N)
 
         Returns:
             output: Input with positional encoding added, shape (batch, seq_len, d_model)
+
+        Example:
+            # Prefill: tokens at positions [0, 1, 2, 3, 4]
+            forward(x, start_pos=0)  # positions = [0, 1, 2, 3, 4]
+
+            # Decode: new token at position 5
+            forward(x, start_pos=5)  # positions = [5]
         """
         batch_size, seq_len, d_model = x.shape
 
-        # Create position indices: [0, 1, 2, ..., seq_len-1]
-        positions = torch.arange(seq_len, device=x.device)
+        # Create position indices: [start_pos, start_pos+1, ..., start_pos+seq_len-1]
+        positions = torch.arange(start_pos, start_pos + seq_len, device=x.device)
 
         # Get position embeddings: (seq_len, d_model)
         pos_emb = self.pos_embedding(positions)

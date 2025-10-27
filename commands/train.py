@@ -612,7 +612,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
 
                 # Forward pass with autocast (mixed precision on CUDA, no-op on MPS/CPU)
                 with autocast_ctx:
-                    logits = model(inputs, debug=debug)
+                    logits, _ = model(inputs, debug=debug)  # Unpack (logits, caches)
 
                     # NaN detection (defensive check)
                     if torch.isnan(logits).any() or torch.isinf(logits).any():
@@ -729,7 +729,7 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
 
                 # Forward pass only (no backward!)
                 with autocast_ctx:
-                    val_logits = model(val_inputs)
+                    val_logits, _ = model(val_inputs)  # Unpack (logits, caches)
 
                     # Calculate validation loss
                     batch_size, seq_length, vocab_size = val_logits.shape
