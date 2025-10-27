@@ -40,6 +40,10 @@ make train
 # Quick training (smaller model, 10M tokens/epoch)
 make train-quick
 
+# Resume training from latest checkpoint
+make resume          # Resume standard training
+make resume-quick    # Resume quick training
+
 # Generate text (interactive mode)
 make generate
 ```
@@ -148,6 +152,10 @@ uv run python main.py train
 
 # Quick mode: 10M tokens/epoch, 4 layers, d_model=128
 uv run python main.py train --quick
+
+# Resume training from latest checkpoint
+uv run python main.py train --resume
+uv run python main.py train --quick --resume  # Resume quick training
 
 # Use smaller vocabulary (50K tokens vs 100K default)
 uv run python main.py train --encoding p50k_base

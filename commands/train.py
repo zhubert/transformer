@@ -200,6 +200,100 @@ def get_device_type_from_args(use_mps=False):
     return None  # Autodetect
 
 
+def find_latest_checkpoint(checkpoint_dir, encoding):
+    """
+    Find the latest checkpoint for a given encoding.
+
+    Args:
+        checkpoint_dir: Directory containing checkpoints
+        encoding: Encoding name (e.g., 'cl100k_base')
+
+    Returns:
+        Path to latest checkpoint, or None if no checkpoints found
+    """
+    encoding_short = get_encoding_short_name(encoding)
+    pattern = f"model_epoch_*_{encoding_short}.pt"
+    checkpoints = list(checkpoint_dir.glob(pattern))
+
+    if not checkpoints:
+        return None
+
+    # Extract epoch numbers and find maximum
+    epoch_numbers = []
+    for ckpt in checkpoints:
+        # Parse: model_epoch_5_cl100k.pt -> epoch 5
+        try:
+            parts = ckpt.stem.split('_')
+            epoch_idx = parts.index('epoch') + 1
+            epoch_num = int(parts[epoch_idx])
+            epoch_numbers.append((epoch_num, ckpt))
+        except (ValueError, IndexError):
+            continue
+
+    if not epoch_numbers:
+        return None
+
+    # Return path to checkpoint with highest epoch number
+    latest_epoch, latest_path = max(epoch_numbers, key=lambda x: x[0])
+    return latest_path
+
+
+def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, console):
+    """
+    Load checkpoint to resume training.
+
+    Args:
+        checkpoint_path: Path to checkpoint file
+        model: Model to load weights into
+        optimizer: Optimizer to load state into
+        scheduler: Scheduler to load state into
+        console: Rich console for printing
+
+    Returns:
+        start_epoch: Epoch number to resume from (next epoch after checkpoint)
+        checkpoint: Full checkpoint dict for additional info
+    """
+    console.print(f"[bold cyan]Loading checkpoint:[/bold cyan] {checkpoint_path}")
+
+    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+
+    # Load model weights
+    model.load_state_dict(checkpoint['model_state_dict'])
+
+    # Load optimizer state
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    # Load scheduler state if available
+    if 'scheduler_state_dict' in checkpoint:
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+
+    # Get resume epoch (next epoch after the saved one)
+    saved_epoch = checkpoint['epoch']
+    start_epoch = saved_epoch  # Will start from this epoch (0-indexed in loop)
+
+    # Display checkpoint info
+    info_table = Table(title="Checkpoint Info", show_header=True, header_style="bold green")
+    info_table.add_column("Metric", style="cyan", no_wrap=True)
+    info_table.add_column("Value", style="white")
+
+    info_table.add_row("Completed epochs", str(saved_epoch))
+    info_table.add_row("Resuming from epoch", str(saved_epoch + 1))
+    info_table.add_row("Train loss", f"{checkpoint['train_loss']:.4f}")
+    info_table.add_row("Train perplexity", f"{checkpoint['train_perplexity']:.2f}")
+
+    if 'val_loss' in checkpoint:
+        info_table.add_row("Val loss", f"{checkpoint['val_loss']:.4f}")
+        info_table.add_row("Val perplexity", f"{checkpoint['val_perplexity']:.2f}")
+
+    if 'current_lr' in checkpoint:
+        info_table.add_row("Learning rate", f"{checkpoint['current_lr']:.6f}")
+
+    console.print(info_table)
+    console.print()
+
+    return start_epoch, checkpoint
+
+
 def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", autocast_ctx=None):
     """Generate sample text to see how the model is learning."""
     from contextlib import nullcontext
@@ -218,7 +312,7 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accumulation_steps=16):
+def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accumulation_steps=16, resume=False):
     """
     Main training function with gradient accumulation and validation.
 
@@ -231,6 +325,7 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
                            Effective batch size = BATCH_SIZE × accumulation_steps
                            Higher values = more stable training but slower updates
                            Recommended: 16-32 for hobby hardware
+        resume: If True, resume training from the latest checkpoint
 
     What is Gradient Accumulation?
     ------------------------------
@@ -532,6 +627,24 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
         min_lr=min_lr
     )
 
+    # Resume from checkpoint if requested
+    # ------------------------------------
+    # Check if we should resume training from a previous checkpoint
+    start_epoch = 0  # Default: start from epoch 0
+    if resume:
+        latest_checkpoint = find_latest_checkpoint(CHECKPOINT_DIR, encoding)
+        if latest_checkpoint is None:
+            console.print(f"[yellow]Warning: --resume flag set but no checkpoints found in {CHECKPOINT_DIR}[/yellow]")
+            console.print(f"[yellow]Starting training from scratch instead.[/yellow]")
+            console.print()
+        else:
+            # Load checkpoint and get starting epoch
+            start_epoch, loaded_checkpoint = load_checkpoint_for_resume(
+                latest_checkpoint, model, optimizer, scheduler, console
+            )
+            console.print(f"[green]✓ Successfully resumed from checkpoint[/green]")
+            console.print()
+
     # Starting training panel
     console.print(Panel("[bold green]STARTING TRAINING[/bold green]", style="bold green", expand=False))
     console.print()
@@ -580,9 +693,9 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
         TimeRemainingColumn(),
         console=console
     )
-    epoch_task = overall_progress.add_task(f"[cyan]Overall Progress", total=NUM_EPOCHS)
+    epoch_task = overall_progress.add_task(f"[cyan]Overall Progress", total=NUM_EPOCHS, completed=start_epoch)
 
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(start_epoch, NUM_EPOCHS):
         # ==============================================================================
         # TRAINING PHASE
         # ==============================================================================
@@ -883,6 +996,11 @@ if __name__ == "__main__":
         help="Number of batches to accumulate before updating weights. Higher = more stable training. "
              "Effective batch size = batch_size × accumulation_steps. Recommended: 16-32 (default: 16)"
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from the latest checkpoint. Automatically loads model, optimizer, and scheduler state."
+    )
     args = parser.parse_args()
 
     train(
@@ -890,5 +1008,6 @@ if __name__ == "__main__":
         use_mps=args.mps,
         encoding=args.encoding,
         quick=args.quick,
-        accumulation_steps=args.accumulation_steps
+        accumulation_steps=args.accumulation_steps,
+        resume=args.resume
     )
