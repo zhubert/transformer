@@ -8,10 +8,13 @@ An educational GPT-style transformer built with AI in PyTorch. Every component i
 
 ## Quick Start
 
-### Prerequisites
+### Requirements & Installation
 
-This project uses [UV](https://docs.astral.sh/uv/) for fast, reliable Python package management. Install it first:
+**Prerequisites:**
+- **Python 3.13+** - Specified in `.python-version`
+- **UV** - Fast Python package manager ([docs](https://docs.astral.sh/uv/))
 
+**Install UV:**
 ```bash
 # macOS/Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -23,10 +26,9 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 pip install uv
 ```
 
-### Installation
-
+**Install Project Dependencies:**
 ```bash
-# Install dependencies
+# Install dependencies (PyTorch, tiktoken, NumPy, datasets, rich)
 make install
 
 # Run all tests
@@ -194,12 +196,6 @@ uv run python main.py generate \
 See [`src/transformer/attention.py`](src/transformer/attention.py) for KV-Cache implementation details and [`commands/benchmark_generation.py`](commands/benchmark_generation.py) to benchmark the speedup.
 
 ## Development
-
-### Requirements
-
-- **Python 3.13+** - Specified in `.python-version`
-- **UV** - Fast Python package manager (see Prerequisites above for installation)
-- **Dependencies** - PyTorch, tiktoken, NumPy, datasets, rich (auto-installed via `make install`)
 
 ### Running Tests
 
