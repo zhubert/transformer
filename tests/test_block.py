@@ -19,7 +19,7 @@ class TestTransformerBlock:
         seq_len = 10
         x = torch.randn(batch_size, seq_len, d_model)
 
-        output = block(x)
+        output, _ = block(x)
 
         # Critical: output shape must equal input shape for stacking
         assert output.shape == (batch_size, seq_len, d_model)
@@ -41,7 +41,7 @@ class TestTransformerBlock:
             seq_len = 5
             x = torch.randn(batch_size, seq_len, d_model)
 
-            output = block(x)
+            output, _ = block(x)
 
             assert output.shape == (batch_size, seq_len, d_model)
 
@@ -55,7 +55,7 @@ class TestTransformerBlock:
         for batch_size in [1, 4, 8]:
             for seq_len in [1, 10, 50]:
                 x = torch.randn(batch_size, seq_len, d_model)
-                output = block(x)
+                output, _ = block(x)
                 assert output.shape == (batch_size, seq_len, d_model)
 
     def test_causal_masking_works(self):
@@ -73,7 +73,7 @@ class TestTransformerBlock:
         mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool()
 
         # Should not raise an error
-        output = block(x, mask=mask)
+        output, _ = block(x, mask=mask)
 
         assert output.shape == (batch_size, seq_len, d_model)
 
@@ -91,7 +91,7 @@ class TestTransformerBlock:
         block.eval()  # Disable dropout for deterministic behavior
 
         with torch.no_grad():
-            output = block(x)
+            output, _ = block(x)
 
             # Output should be different from just attention+ffn
             # (because of residuals adding the original x)
@@ -113,7 +113,7 @@ class TestTransformerBlock:
         block = TransformerBlock(d_model, num_heads, d_ff)
 
         x = torch.randn(2, 5, d_model, requires_grad=True)
-        output = block(x)
+        output, _ = block(x)
 
         # Compute dummy loss and backpropagate
         loss = output.sum()
@@ -152,8 +152,8 @@ class TestTransformerBlock:
 
         # Training mode: dropout is active
         block.train()
-        output1 = block(x)
-        output2 = block(x)
+        output1, _ = block(x)
+        output2, _ = block(x)
 
         # Outputs should be different due to dropout randomness
         assert not torch.allclose(output1, output2)
@@ -161,8 +161,8 @@ class TestTransformerBlock:
         # Eval mode: dropout is disabled
         block.eval()
         with torch.no_grad():
-            output3 = block(x)
-            output4 = block(x)
+            output3, _ = block(x)
+            output4, _ = block(x)
 
         # Outputs should be identical in eval mode
         assert torch.allclose(output3, output4)
@@ -175,7 +175,7 @@ class TestTransformerBlock:
         block = TransformerBlock(d_model, num_heads, d_ff)
 
         x = torch.randn(2, 10, d_model)
-        output = block(x)
+        output, _ = block(x)
 
         assert not torch.isnan(output).any()
         assert not torch.isinf(output).any()
@@ -196,13 +196,13 @@ class TestTransformerBlock:
         x = torch.randn(batch_size, seq_len, d_model)
 
         # Pass through all blocks sequentially
-        x = block1(x)
+        x, _ = block1(x)
         assert x.shape == (batch_size, seq_len, d_model)
 
-        x = block2(x)
+        x, _ = block2(x)
         assert x.shape == (batch_size, seq_len, d_model)
 
-        x = block3(x)
+        x, _ = block3(x)
         assert x.shape == (batch_size, seq_len, d_model)
 
     def test_uses_multihead_attention(self):
@@ -238,8 +238,8 @@ class TestTransformerBlock:
 
         # Even in training mode, should be deterministic with dropout=0
         block.train()
-        output1 = block(x)
-        output2 = block(x)
+        output1, _ = block(x)
+        output2, _ = block(x)
 
         assert torch.allclose(output1, output2)
 
@@ -257,6 +257,6 @@ class TestTransformerBlock:
 
         # Run a forward pass to ensure it works
         x = torch.randn(2, 5, d_model)
-        output = block(x)
+        output, _ = block(x)
 
         assert output.shape == x.shape

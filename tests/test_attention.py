@@ -202,7 +202,7 @@ class TestMultiHeadAttention:
         seq_len = 10
         x = torch.randn(batch_size, seq_len, d_model)
 
-        output = mha(x)
+        output, _ = mha(x)
 
         # Output should have same shape as input
         assert output.shape == (batch_size, seq_len, d_model)
@@ -218,7 +218,7 @@ class TestMultiHeadAttention:
             seq_len = 5
             x = torch.randn(batch_size, seq_len, d_model)
 
-            output = mha(x)
+            output, _ = mha(x)
 
             assert output.shape == (batch_size, seq_len, d_model)
             assert mha.d_k == d_model // num_heads
@@ -235,7 +235,7 @@ class TestMultiHeadAttention:
                 seq_len = 5
                 x = torch.randn(batch_size, seq_len, d_model)
 
-                output = mha(x)
+                output, _ = mha(x)
 
                 assert output.shape == (batch_size, seq_len, d_model)
 
@@ -262,7 +262,7 @@ class TestMultiHeadAttention:
         mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool()
 
         # This should not raise an error
-        output = mha(x, mask=mask)
+        output, _ = mha(x, mask=mask)
 
         assert output.shape == (batch_size, seq_len, d_model)
 
@@ -275,7 +275,7 @@ class TestMultiHeadAttention:
         for batch_size in [1, 4, 8]:
             for seq_len in [1, 10, 50]:
                 x = torch.randn(batch_size, seq_len, d_model)
-                output = mha(x)
+                output, _ = mha(x)
                 assert output.shape == (batch_size, seq_len, d_model)
 
     def test_gradients_flow_through_all_projections(self):
@@ -285,7 +285,7 @@ class TestMultiHeadAttention:
         mha = MultiHeadAttention(d_model, num_heads)
 
         x = torch.randn(2, 5, d_model, requires_grad=True)
-        output = mha(x)
+        output, _ = mha(x)
 
         # Compute dummy loss and backpropagate
         loss = output.sum()
@@ -307,7 +307,7 @@ class TestMultiHeadAttention:
         mha = MultiHeadAttention(d_model, num_heads)
 
         x = torch.randn(2, 10, d_model)
-        output = mha(x)
+        output, _ = mha(x)
 
         assert not torch.isnan(output).any()
         assert not torch.isinf(output).any()
@@ -343,7 +343,7 @@ class TestMultiHeadAttention:
         mha = MultiHeadAttention(d_model, num_heads)
 
         x = torch.randn(2, 5, d_model)
-        output = mha(x)
+        output, _ = mha(x)
 
         assert output.shape == (2, 5, d_model)
         assert mha.d_k == d_model  # Single head uses full dimension
@@ -361,7 +361,7 @@ class TestMultiHeadAttention:
         # Create causal mask with batch dimension
         mask = torch.triu(torch.ones(batch_size, seq_len, seq_len), diagonal=1).bool()
 
-        output = mha(x, mask=mask)
+        output, _ = mha(x, mask=mask)
 
         assert output.shape == (batch_size, seq_len, d_model)
 

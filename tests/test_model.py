@@ -17,7 +17,7 @@ class TestDecoderOnlyTransformer:
         seq_len = 10
         x = torch.randint(0, vocab_size, (batch_size, seq_len))
 
-        logits = model(x)
+        logits, _ = model(x)
 
         assert logits.shape == (batch_size, seq_len, vocab_size)
 
@@ -38,7 +38,7 @@ class TestDecoderOnlyTransformer:
             seq_len = 5
             x = torch.randint(0, vocab_size, (batch_size, seq_len))
 
-            logits = model(x)
+            logits, _ = model(x)
 
             assert logits.shape == (batch_size, seq_len, vocab_size)
 
@@ -50,7 +50,7 @@ class TestDecoderOnlyTransformer:
         batch_size = 2
         for seq_len in [1, 5, 10, 50]:
             x = torch.randint(0, vocab_size, (batch_size, seq_len))
-            logits = model(x)
+            logits, _ = model(x)
             assert logits.shape == (batch_size, seq_len, vocab_size)
 
     def test_causal_mask_is_created(self):
@@ -86,7 +86,7 @@ class TestDecoderOnlyTransformer:
         # Create custom mask
         mask = model.create_causal_mask(seq_len)
 
-        logits = model(x, mask=mask)
+        logits, _ = model(x, mask=mask)
 
         assert logits.shape == (batch_size, seq_len, vocab_size)
 
@@ -100,7 +100,7 @@ class TestDecoderOnlyTransformer:
         x = torch.randint(0, vocab_size, (batch_size, seq_len))
 
         # No mask provided - should create one automatically
-        logits = model(x)
+        logits, _ = model(x)
 
         assert logits.shape == (batch_size, seq_len, vocab_size)
 
@@ -122,7 +122,7 @@ class TestDecoderOnlyTransformer:
             seq_len = 5
             x = torch.randint(0, vocab_size, (batch_size, seq_len))
 
-            logits = model(x)
+            logits, _ = model(x)
 
             assert logits.shape == (batch_size, seq_len, vocab_size)
 
@@ -154,7 +154,7 @@ class TestDecoderOnlyTransformer:
         seq_len = 5
         x = torch.randint(0, vocab_size, (batch_size, seq_len))
 
-        logits = model(x)
+        logits, _ = model(x)
 
         # Compute dummy loss and backpropagate
         loss = logits.sum()
@@ -177,7 +177,7 @@ class TestDecoderOnlyTransformer:
         seq_len = 10
         x = torch.randint(0, vocab_size, (batch_size, seq_len))
 
-        logits = model(x)
+        logits, _ = model(x)
 
         assert not torch.isnan(logits).any()
         assert not torch.isinf(logits).any()
@@ -191,7 +191,7 @@ class TestDecoderOnlyTransformer:
         seq_len = 3
         x = torch.randint(0, vocab_size, (batch_size, seq_len))
 
-        logits = model(x)
+        logits, _ = model(x)
 
         # Logits can be any value (not restricted to [0, 1])
         # and don't sum to 1 along vocab dimension
@@ -215,7 +215,7 @@ class TestDecoderOnlyTransformer:
             seq_len = 5
             x = torch.randint(0, vocab_size, (batch_size, seq_len))
 
-            logits = model(x)
+            logits, _ = model(x)
 
             assert logits.shape == (batch_size, seq_len, vocab_size)
 
