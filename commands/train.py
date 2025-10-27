@@ -121,11 +121,12 @@ from pathlib import Path
 import sys
 import time
 import argparse
-from rich.console import Console
+from rich.console import Console, Group
 from rich.table import Table
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TaskProgressColumn
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -571,6 +572,16 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
 
         return table
 
+    # Create overall progress tracker for epochs and batches
+    overall_progress = Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        console=console
+    )
+    epoch_task = overall_progress.add_task(f"[cyan]Overall Progress", total=NUM_EPOCHS)
+
     for epoch in range(NUM_EPOCHS):
         # ==============================================================================
         # TRAINING PHASE
@@ -585,9 +596,15 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         accumulator.reset()
         optimizer.zero_grad()  # Clear gradients once at epoch start
 
+        # Add batch progress task for this epoch
+        batch_task = overall_progress.add_task(
+            f"[green]Epoch {epoch + 1}/{NUM_EPOCHS}",
+            total=batches_per_epoch
+        )
+
         # Create Live display for this epoch
-        # This keeps the table header fixed at top while rows scroll
-        with Live(create_metrics_table(training_rows, epoch + 1, NUM_EPOCHS), console=console, refresh_per_second=4) as live:
+        # Combines the metrics table with overall progress bars
+        with Live(Group(create_metrics_table(training_rows, epoch + 1, NUM_EPOCHS), overall_progress), console=console, refresh_per_second=4) as live:
             for batch_idx, (inputs, targets) in enumerate(train_dataloader):
                 # Move to device
                 inputs = inputs.to(device)
@@ -678,8 +695,11 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
                         current_lr
                     ))
 
-                    # Update the live display with new table
-                    live.update(create_metrics_table(training_rows, epoch + 1, NUM_EPOCHS))
+                    # Update the live display with new table and progress
+                    live.update(Group(create_metrics_table(training_rows, epoch + 1, NUM_EPOCHS), overall_progress))
+
+                # Update batch progress (do this for every batch, not just logged ones)
+                overall_progress.update(batch_task, completed=batch_idx + 1)
 
         # Training phase summary
         synchronize()
@@ -786,6 +806,10 @@ def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumul
         }, checkpoint_path)
         console.print(f"[dim]Saved checkpoint: {checkpoint_path}[/dim]")
         console.print()
+
+        # Update overall progress and remove batch task for this epoch
+        overall_progress.update(epoch_task, advance=1)
+        overall_progress.remove_task(batch_task)
 
     # Training complete
     synchronize()  # Ensure all operations complete
