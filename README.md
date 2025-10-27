@@ -18,7 +18,7 @@ uv run python main.py train
 uv run python main.py train --quick
 
 # Generate text
-uv run python main.py generate --checkpoint checkpoints/model_epoch_10_p50k.pt
+uv run python main.py generate --checkpoint checkpoints/model_epoch_10_cl100k.pt
 ```
 
 ## What's Inside
@@ -114,8 +114,8 @@ uv run python main.py train
 # Quick mode: 10M tokens/epoch, 4 layers, d_model=128
 uv run python main.py train --quick
 
-# Use larger vocabulary (100K tokens vs 50K)
-uv run python main.py train --encoding cl100k_base
+# Use smaller vocabulary (50K tokens vs 100K default)
+uv run python main.py train --encoding p50k_base
 
 # Custom gradient accumulation (higher = more stable training)
 uv run python main.py train --accumulation-steps 32
@@ -157,12 +157,12 @@ See `commands/train.py` for complete training documentation.
 
 ```bash
 # Use preset strategies
-uv run python main.py generate --checkpoint checkpoints/model_epoch_10_p50k.pt --preset creative
-uv run python main.py generate --checkpoint checkpoints/model_epoch_10_p50k.pt --preset precise
+uv run python main.py generate --checkpoint checkpoints/model_epoch_10_cl100k.pt --preset creative
+uv run python main.py generate --checkpoint checkpoints/model_epoch_10_cl100k.pt --preset precise
 
 # Custom parameters
 uv run python main.py generate \
-    --checkpoint checkpoints/model_epoch_10_p50k.pt \
+    --checkpoint checkpoints/model_epoch_10_cl100k.pt \
     --strategy top_k_top_p \
     --top-k 50 --top-p 0.9 --temperature 0.8
 ```

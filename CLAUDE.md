@@ -100,7 +100,7 @@ uv run python commands/train.py --mps
 - Default: 100M tokens per epoch
 - Cache: Keeps 5 most recent shards (~2GB)
 - Sequence length: 128 tokens
-- Tokenizer: tiktoken p50k_base (~50K vocab)
+- Tokenizer: tiktoken cl100k_base (~100K vocab)
 
 ## Phase 1: Training at Scale (Educational Focus)
 

@@ -218,7 +218,7 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, encoding="p50k_base", quick=False, accumulation_steps=16):
+def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accumulation_steps=16):
     """
     Main training function with gradient accumulation and validation.
 
