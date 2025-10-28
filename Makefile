@@ -1,4 +1,4 @@
-.PHONY: help install test test-cov clean train train-quick generate evaluate compare demo-sampling
+.PHONY: help install test test-cov clean train train-quick resume resume-quick generate evaluate compare demo-sampling
 
 # Default target
 help:
@@ -15,6 +15,8 @@ help:
 	@echo "Transformer Operations:"
 	@echo "  make train         - Train a transformer model (100M tokens/epoch)"
 	@echo "  make train-quick   - Quick training (10M tokens/epoch, smaller model)"
+	@echo "  make resume        - Resume training from latest checkpoint"
+	@echo "  make resume-quick  - Resume quick training from latest checkpoint"
 	@echo "  make generate      - Generate text (interactive mode)"
 	@echo "  make evaluate      - Evaluate latest checkpoint"
 	@echo "  make compare       - Compare all checkpoints"
@@ -54,6 +56,12 @@ train:
 
 train-quick:
 	uv run python commands/train.py --quick
+
+resume:
+	uv run python main.py train --resume
+
+resume-quick:
+	uv run python commands/train.py --quick --resume
 
 generate:
 	@echo "Starting interactive generation mode..."
