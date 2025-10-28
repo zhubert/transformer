@@ -1,102 +1,161 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Building a Transformer with AI</title>
-    <link rel="stylesheet" href="assets/styles.css">
-</head>
-<body>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
     <!-- Hero Section -->
     <div class="hero">
-        <div class="container">
-            <div class="hero-content">
-                <div class="hero-image">
-                    <img src="assets/mascot.png" alt="Transformer Mascot" class="hero-mascot">
-                </div>
-                <div class="hero-text">
-                    <h1>Building a Transformer with AI</h1>
-                    <p>An educational journey through the architecture that powers modern AI</p>
-                    <p class="subtitle">Learn how transformers work by building one in PyTorch, from attention mechanisms to complete text generation</p>
-                </div>
-            </div>
+      <div class="container">
+        <div class="hero-content">
+          <div class="hero-image">
+            <img
+              src="assets/mascot.png"
+              alt="Transformer Mascot"
+              class="hero-mascot"
+            />
+          </div>
+          <div class="hero-text">
+            <h1>Building a Transformer with AI</h1>
+            <p>
+              An educational journey through the architecture that powers modern
+              AI
+            </p>
+            <p class="subtitle">
+              Learn how transformers work by building one in PyTorch, from
+              attention mechanisms to complete text generation
+            </p>
+          </div>
         </div>
+      </div>
     </div>
 
     <!-- Introduction -->
     <section>
-        <div class="container">
-            <h2>What is a Transformer?</h2>
-            <div class="card">
-                <p><strong>What is a transformer?</strong> A transformer is a type of neural network architecture introduced in the landmark paper <em>"Attention is All You Need"</em> (Vaswani et al., 2017). It revolutionized artificial intelligence and is now the foundation of virtually all modern large language models, including GPT, BERT, Claude, and many others.</p>
+      <div class="container">
+        <h2>What is a Transformer?</h2>
+        <div class="card">
+          <p>
+            <strong>What is a transformer?</strong> A transformer is a type of
+            neural network architecture introduced in the landmark paper
+            <em>"Attention is All You Need"</em> (Vaswani et al., 2017). It
+            revolutionized artificial intelligence and is now the foundation of
+            virtually all modern large language models, including GPT, BERT,
+            Claude, and many others.
+          </p>
 
-                <p><strong>What makes transformers special?</strong> Previous approaches to language modeling used recurrent neural networks (RNNs), which process text one word at a time in sequence—like reading a sentence from left to right. Transformers instead use a mechanism called <strong>attention</strong> that allows them to process all words simultaneously <em>while still understanding their relationships</em>. This parallel processing makes them much faster to train and more effective at capturing long-range dependencies in text.</p>
-            </div>
-
-            <h3>Learning Path</h3>
-            <div class="grid-3">
-                <a href="#embeddings" class="grid-item">
-                    <h4>Step 1: Token Embeddings</h4>
-                    <p>Convert text to vectors and add position information</p>
-                </a>
-                <a href="#attention" class="grid-item">
-                    <h4>Step 2: Attention</h4>
-                    <p>Learn how tokens attend to each other using Query, Key, Value</p>
-                </a>
-                <a href="#multi-head" class="grid-item">
-                    <h4>Step 3: Multi-Head Attention</h4>
-                    <p>Run parallel attention heads to capture different relationships</p>
-                </a>
-                <a href="#feedforward" class="grid-item">
-                    <h4>Step 4: Feed-Forward Networks</h4>
-                    <p>Process attended information through position-wise MLPs</p>
-                </a>
-                <a href="#transformer-block" class="grid-item">
-                    <h4>Step 5: Transformer Block</h4>
-                    <p>Combine attention, FFN, layer norm, and residual connections</p>
-                </a>
-                <a href="#complete-model" class="grid-item">
-                    <h4>Step 6: Complete Model</h4>
-                    <p>Stack blocks and add embedding/output layers</p>
-                </a>
-                <a href="#training" class="grid-item">
-                    <h4>Step 7: Training at Scale</h4>
-                    <p>Use gradient accumulation and validation splits for stable training</p>
-                </a>
-                <a href="#kv-cache" class="grid-item">
-                    <h4>Step 8: KV-Cache</h4>
-                    <p>Optimize inference speed by caching key-value pairs</p>
-                </a>
-                <a href="#interpretability" class="grid-item">
-                    <h4>Step 9: Interpretability</h4>
-                    <p>Analyze attention patterns and understand what the model learns</p>
-                </a>
-            </div>
+          <p>
+            <strong>What makes transformers special?</strong> Previous
+            approaches to language modeling used recurrent neural networks
+            (RNNs), which process text one word at a time in sequence—like
+            reading a sentence from left to right. Transformers instead use a
+            mechanism called <strong>attention</strong> that allows them to
+            process all words simultaneously
+            <em>while still understanding their relationships</em>. This
+            parallel processing makes them much faster to train and more
+            effective at capturing long-range dependencies in text.
+          </p>
         </div>
+
+        <h3>Learning Path</h3>
+        <div class="grid-3">
+          <a href="#embeddings" class="grid-item">
+            <h4>Step 1: Token Embeddings</h4>
+            <p>Convert text to vectors and add position information</p>
+          </a>
+          <a href="#attention" class="grid-item">
+            <h4>Step 2: Attention</h4>
+            <p>Learn how tokens attend to each other using Query, Key, Value</p>
+          </a>
+          <a href="#multi-head" class="grid-item">
+            <h4>Step 3: Multi-Head Attention</h4>
+            <p>
+              Run parallel attention heads to capture different relationships
+            </p>
+          </a>
+          <a href="#feedforward" class="grid-item">
+            <h4>Step 4: Feed-Forward Networks</h4>
+            <p>Process attended information through position-wise MLPs</p>
+          </a>
+          <a href="#transformer-block" class="grid-item">
+            <h4>Step 5: Transformer Block</h4>
+            <p>Combine attention, FFN, layer norm, and residual connections</p>
+          </a>
+          <a href="#complete-model" class="grid-item">
+            <h4>Step 6: Complete Model</h4>
+            <p>Stack blocks and add embedding/output layers</p>
+          </a>
+          <a href="#training" class="grid-item">
+            <h4>Step 7: Training at Scale</h4>
+            <p>
+              Use gradient accumulation and validation splits for stable
+              training
+            </p>
+          </a>
+          <a href="#kv-cache" class="grid-item">
+            <h4>Step 8: KV-Cache</h4>
+            <p>Optimize inference speed by caching key-value pairs</p>
+          </a>
+          <a href="#interpretability" class="grid-item">
+            <h4>Step 9: Interpretability</h4>
+            <p>
+              Analyze attention patterns and understand what the model learns
+            </p>
+          </a>
+        </div>
+      </div>
     </section>
 
     <!-- Step 1: Embeddings -->
     <section id="embeddings">
-        <div class="container">
-            <h2>Step 1: Token Embeddings & Positional Encoding</h2>
-            <div class="card">
-                <h3>Token Embeddings</h3>
-                <p><strong>What are tokens?</strong> Before we can process text with a neural network, we need to break it into pieces called tokens. A token might be a word ("hello"), a subword ("ing"), or even a single character. For example, the sentence "The cat sat" might be tokenized as ["The", "cat", "sat"], and each token gets assigned a unique number (ID) from a vocabulary—perhaps "The"=5, "cat"=142, "sat"=89.</p>
+      <div class="container">
+        <h2>Step 1: Token Embeddings & Positional Encoding</h2>
+        <div class="card">
+          <h3>Token Embeddings</h3>
+          <p>
+            <strong>What are tokens?</strong> Before we can process text with a
+            neural network, we need to break it into pieces called tokens. A
+            token might be a word ("hello"), a subword ("ing"), or even a single
+            character. For example, the sentence "The cat sat" might be
+            tokenized as ["The", "cat", "sat"], and each token gets assigned a
+            unique number (ID) from a vocabulary—perhaps "The"=5, "cat"=142,
+            "sat"=89.
+          </p>
 
-                <p><strong>Why do we need embeddings?</strong> Computers can't directly understand these token IDs—they're just arbitrary numbers. We need to convert them into meaningful representations that capture semantic relationships. That's where embeddings come in.</p>
+          <p>
+            <strong>Why do we need embeddings?</strong> Computers can't directly
+            understand these token IDs—they're just arbitrary numbers. We need
+            to convert them into meaningful representations that capture
+            semantic relationships. That's where embeddings come in.
+          </p>
 
-                <p><strong>What is an embedding?</strong> An embedding is a learned vector representation (a list of numbers) for each token. Instead of representing "cat" as the ID 142, we represent it as a dense vector like [0.2, -0.5, 0.8, ...] with <code>d_model</code> dimensions (typically 512 or 768). These vectors are learned during training so that similar words end up with similar vectors.</p>
+          <p>
+            <strong>What is an embedding?</strong> An embedding is a learned
+            vector representation (a list of numbers) for each token. Instead of
+            representing "cat" as the ID 142, we represent it as a dense vector
+            like [0.2, -0.5, 0.8, ...] with <code>d_model</code> dimensions
+            (typically 512 or 768). These vectors are learned during training so
+            that similar words end up with similar vectors.
+          </p>
 
-                <p>Think of this as giving each word a unique coordinate in a high-dimensional space. Words with similar meanings (like "cat" and "kitten") end up close together, while unrelated words (like "cat" and "democracy") are far apart.</p>
+          <p>
+            Think of this as giving each word a unique coordinate in a
+            high-dimensional space. Words with similar meanings (like "cat" and
+            "kitten") end up close together, while unrelated words (like "cat"
+            and "democracy") are far apart.
+          </p>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="keyword">class</span> <span class="class">TokenEmbedding</span>(nn.Module):
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">class</span> <span class="class">TokenEmbedding</span>(nn.Module):
     <span class="string">"""Convert token indices to dense vectors."""</span>
 
     <span class="keyword">def</span> <span class="function">__init__</span>(self, vocab_size, d_model):
@@ -108,26 +167,51 @@
         <span class="comment"># x: (batch, seq_len) - token indices</span>
         <span class="comment"># returns: (batch, seq_len, d_model) - embeddings</span>
         <span class="keyword">return</span> self.embedding(x)</code></pre>
-                    </div>
-                </div>
+            </div>
+          </div>
 
-                <h3>Positional Encoding</h3>
-                <p><strong>Why do we need positional information?</strong> Consider the sentences "The cat ate the mouse" vs "The mouse ate the cat"—same words, completely different meanings! The order matters. Traditional recurrent neural networks (RNNs) process words one at a time in sequence, so they naturally know the order. But transformers process all tokens simultaneously in parallel (which is faster), so they have no inherent notion of position.</p>
+          <h3>Positional Encoding</h3>
+          <p>
+            <strong>Why do we need positional information?</strong> Consider the
+            sentences "The cat ate the mouse" vs "The mouse ate the cat"—same
+            words, completely different meanings! The order matters. Traditional
+            recurrent neural networks (RNNs) process words one at a time in
+            sequence, so they naturally know the order. But transformers process
+            all tokens simultaneously in parallel (which is faster), so they
+            have no inherent notion of position.
+          </p>
 
-                <p><strong>The solution: Positional encodings.</strong> We add positional information to our embeddings by creating special "position vectors" that encode where each token appears in the sequence. For position 0, we create one vector. For position 1, a different vector. And so on.</p>
+          <p>
+            <strong>The solution: Positional encodings.</strong> We add
+            positional information to our embeddings by creating special
+            "position vectors" that encode where each token appears in the
+            sequence. For position 0, we create one vector. For position 1, a
+            different vector. And so on.
+          </p>
 
-                <p><strong>Two approaches:</strong> The original transformer paper used fixed sinusoidal patterns (mathematical functions that encode position), but modern models like GPT-2, GPT-3, and BERT use <em>learned</em> positional embeddings—each position gets its own embedding that the model learns during training, just like token embeddings.</p>
+          <p>
+            <strong>Two approaches:</strong> The original transformer paper used
+            fixed sinusoidal patterns (mathematical functions that encode
+            position), but modern models like GPT-2, GPT-3, and BERT use
+            <em>learned</em> positional embeddings—each position gets its own
+            embedding that the model learns during training, just like token
+            embeddings.
+          </p>
 
-                <p>We add (not concatenate) these position embeddings to the token embeddings, so each token now carries information about both <em>what</em> it is and <em>where</em> it is in the sequence.</p>
+          <p>
+            We add (not concatenate) these position embeddings to the token
+            embeddings, so each token now carries information about both
+            <em>what</em> it is and <em>where</em> it is in the sequence.
+          </p>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="keyword">class</span> <span class="class">PositionalEncoding</span>(nn.Module):
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">class</span> <span class="class">PositionalEncoding</span>(nn.Module):
     <span class="string">"""Add position information to token embeddings."""</span>
 
     <span class="keyword">def</span> <span class="function">__init__</span>(self, d_model, max_seq_len=<span class="string">5000</span>):
@@ -144,50 +228,99 @@
         <span class="comment"># Get position embeddings and add to input</span>
         pos_emb = self.pos_embedding(positions)
         <span class="keyword">return</span> x + pos_emb  <span class="comment"># Broadcasting handles batch</span></code></pre>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/embeddings.py" target="_blank">src/transformer/embeddings.py</a></p>
-                </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>📄 Implementation:</strong>
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/embeddings.py"
+                target="_blank"
+                >src/transformer/embeddings.py</a
+              >
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Step 2: Attention -->
     <section id="attention">
-        <div class="container">
-            <h2>Step 2: Scaled Dot-Product Attention</h2>
-            <div class="card">
-                <p><strong>The core innovation of transformers:</strong> Attention is the mechanism that allows each word to "look at" and gather information from all other words in the sentence. This is what makes transformers so powerful.</p>
+      <div class="container">
+        <h2>Step 2: Scaled Dot-Product Attention</h2>
+        <div class="card">
+          <p>
+            <strong>The core innovation of transformers:</strong> Attention is
+            the mechanism that allows each word to "look at" and gather
+            information from all other words in the sentence. This is what makes
+            transformers so powerful.
+          </p>
 
-                <p><strong>A concrete example:</strong> Consider the sentence "The animal didn't cross the street because it was too tired." What does "it" refer to? A human knows "it" refers to "the animal" (not "the street"). Attention allows the model to learn this—when processing "it", the model can attend strongly to "animal" and incorporate that information.</p>
+          <p>
+            <strong>A concrete example:</strong> Consider the sentence "The
+            animal didn't cross the street because it was too tired." What does
+            "it" refer to? A human knows "it" refers to "the animal" (not "the
+            street"). Attention allows the model to learn this—when processing
+            "it", the model can attend strongly to "animal" and incorporate that
+            information.
+          </p>
 
-                <p><strong>How does attention work?</strong> The mechanism uses three components for each token, derived from the input embeddings through learned linear transformations:</p>
-                <ul>
-                    <li><strong>Query (Q):</strong> "What am I looking for?" - represents what the current token wants to know</li>
-                    <li><strong>Key (K):</strong> "What do I contain?" - represents what information each token offers</li>
-                    <li><strong>Value (V):</strong> "What information do I have?" - the actual content that gets passed along</li>
-                </ul>
+          <p>
+            <strong>How does attention work?</strong> The mechanism uses three
+            components for each token, derived from the input embeddings through
+            learned linear transformations:
+          </p>
+          <ul>
+            <li>
+              <strong>Query (Q):</strong> "What am I looking for?" - represents
+              what the current token wants to know
+            </li>
+            <li>
+              <strong>Key (K):</strong> "What do I contain?" - represents what
+              information each token offers
+            </li>
+            <li>
+              <strong>Value (V):</strong> "What information do I have?" - the
+              actual content that gets passed along
+            </li>
+          </ul>
 
-                <p><strong>The process:</strong> For each token, we compare its Query against all Keys (using dot products) to compute attention scores—how much should we pay attention to each other token? We normalize these scores with softmax to get probabilities (weights that sum to 1), then use these weights to take a weighted average of all Values.</p>
+          <p>
+            <strong>The process:</strong> For each token, we compare its Query
+            against all Keys (using dot products) to compute attention
+            scores—how much should we pay attention to each other token? We
+            normalize these scores with softmax to get probabilities (weights
+            that sum to 1), then use these weights to take a weighted average of
+            all Values.
+          </p>
 
-                <p>The formula is elegant: <strong>Attention(Q, K, V) = softmax(Q·Kᵀ / √d_k) · V</strong></p>
+          <p>
+            The formula is elegant:
+            <strong>Attention(Q, K, V) = softmax(Q·Kᵀ / √d_k) · V</strong>
+          </p>
 
-                <p>The division by √d_k is a scaling factor that prevents very large dot products in high dimensions, which would cause the softmax to produce near-zero gradients and make training difficult.</p>
+          <p>
+            The division by √d_k is a scaling factor that prevents very large
+            dot products in high dimensions, which would cause the softmax to
+            produce near-zero gradients and make training difficult.
+          </p>
 
-                <div class="diagram">
-                    <img src="assets/attention-flow.svg" alt="Attention mechanism flow diagram showing Query, Key, and Value transformations">
-                </div>
+          <div class="diagram">
+            <img
+              src="assets/attention-flow.svg"
+              alt="Attention mechanism flow diagram showing Query, Key, and Value transformations"
+            />
+          </div>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, query, key, value, mask=None):
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, query, key, value, mask=None):
     <span class="comment"># Get dimension for scaling</span>
     d_k = query.size(-<span class="string">1</span>)
 
@@ -206,50 +339,96 @@
     output = torch.matmul(attention_weights, value)
 
     <span class="keyword">return</span> output, attention_weights</code></pre>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Causal masking for language models:</strong> In decoder-only transformers (like GPT), we add a mask to prevent tokens from attending to future positions. This is essential for autoregressive generation—when predicting the next word, the model shouldn't "cheat" by looking ahead! The mask sets future attention scores to -∞ before softmax, making those positions receive zero attention weight.</p>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py" target="_blank">src/transformer/attention.py</a></p>
-                </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Causal masking for language models:</strong> In
+              decoder-only transformers (like GPT), we add a mask to prevent
+              tokens from attending to future positions. This is essential for
+              autoregressive generation—when predicting the next word, the model
+              shouldn't "cheat" by looking ahead! The mask sets future attention
+              scores to -∞ before softmax, making those positions receive zero
+              attention weight.
+            </p>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>📄 Implementation:</strong>
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py"
+                target="_blank"
+                >src/transformer/attention.py</a
+              >
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Step 3: Multi-Head Attention -->
     <section id="multi-head">
-        <div class="container">
-            <h2>Step 3: Multi-Head Attention</h2>
-            <div class="card">
-                <p><strong>Why multiple heads?</strong> A single attention mechanism is powerful, but it can only learn one way of relating tokens. Multi-head attention runs several attention mechanisms in parallel (typically 8 or 16), each called a "head." This gives the model multiple "perspectives" to understand relationships between words.</p>
+      <div class="container">
+        <h2>Step 3: Multi-Head Attention</h2>
+        <div class="card">
+          <p>
+            <strong>Why multiple heads?</strong> A single attention mechanism is
+            powerful, but it can only learn one way of relating tokens.
+            Multi-head attention runs several attention mechanisms in parallel
+            (typically 8 or 16), each called a "head." This gives the model
+            multiple "perspectives" to understand relationships between words.
+          </p>
 
-                <p><strong>What do different heads learn?</strong> Through training, different heads naturally specialize in different types of relationships. Research shows that real models develop heads that focus on:</p>
+          <p>
+            <strong>What do different heads learn?</strong> Through training,
+            different heads naturally specialize in different types of
+            relationships. Research shows that real models develop heads that
+            focus on:
+          </p>
 
-                <ul>
-                    <li><strong>Syntactic relationships:</strong> One head might track subject-verb agreement</li>
-                    <li><strong>Semantic relationships:</strong> Another head might connect related concepts</li>
-                    <li><strong>Long-range dependencies:</strong> A head might link pronouns to their antecedents</li>
-                    <li><strong>Local patterns:</strong> Another head might attend to adjacent words in phrases</li>
-                </ul>
+          <ul>
+            <li>
+              <strong>Syntactic relationships:</strong> One head might track
+              subject-verb agreement
+            </li>
+            <li>
+              <strong>Semantic relationships:</strong> Another head might
+              connect related concepts
+            </li>
+            <li>
+              <strong>Long-range dependencies:</strong> A head might link
+              pronouns to their antecedents
+            </li>
+            <li>
+              <strong>Local patterns:</strong> Another head might attend to
+              adjacent words in phrases
+            </li>
+          </ul>
 
-                <p><strong>How it works:</strong> We split the d_model dimensions across heads. With d_model=512 and 8 heads, each head operates on 64 dimensions (512/8). All heads process the input in parallel, then we concatenate their outputs and apply a final linear transformation.</p>
+          <p>
+            <strong>How it works:</strong> We split the d_model dimensions
+            across heads. With d_model=512 and 8 heads, each head operates on 64
+            dimensions (512/8). All heads process the input in parallel, then we
+            concatenate their outputs and apply a final linear transformation.
+          </p>
 
-                <div class="diagram">
-                    <img src="assets/multi-head-attention.svg" alt="Multi-head attention architecture showing parallel attention heads">
-                </div>
+          <div class="diagram">
+            <img
+              src="assets/multi-head-attention.svg"
+              alt="Multi-head attention architecture showing parallel attention heads"
+            />
+          </div>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
     batch_size, seq_len, d_model = x.shape
 
     <span class="comment"># 1. Project input to Q, K, V</span>
@@ -274,46 +453,89 @@
     output = self.W_o(output)
 
     <span class="keyword">return</span> output</code></pre>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Why don't heads learn the same thing?</strong> Different random initializations, different learned projections, and the optimization process all encourage diversity. Redundancy doesn't help reduce loss, so heads naturally specialize.</p>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py" target="_blank">src/transformer/attention.py</a></p>
-                </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Why don't heads learn the same thing?</strong> Different
+              random initializations, different learned projections, and the
+              optimization process all encourage diversity. Redundancy doesn't
+              help reduce loss, so heads naturally specialize.
+            </p>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>📄 Implementation:</strong>
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py"
+                target="_blank"
+                >src/transformer/attention.py</a
+              >
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Step 4: Feed-Forward Networks -->
     <section id="feedforward">
-        <div class="container">
-            <h2>Step 4: Position-Wise Feed-Forward Networks</h2>
-            <div class="card">
-                <p><strong>What is a feed-forward network?</strong> After attention gathers information from across the sequence, we need to actually <em>process</em> that information. The feed-forward network (FFN) is a simple two-layer neural network—also called a Multi-Layer Perceptron (MLP)—that transforms each token's representation independently.</p>
+      <div class="container">
+        <h2>Step 4: Position-Wise Feed-Forward Networks</h2>
+        <div class="card">
+          <p>
+            <strong>What is a feed-forward network?</strong> After attention
+            gathers information from across the sequence, we need to actually
+            <em>process</em> that information. The feed-forward network (FFN) is
+            a simple two-layer neural network—also called a Multi-Layer
+            Perceptron (MLP)—that transforms each token's representation
+            independently.
+          </p>
 
-                <p><strong>Why do we need it?</strong> Think of the attention layer as "communication" between tokens—gathering relevant context. The FFN is the "computation" step—processing that gathered information to extract useful features and patterns. Without the FFN, the model would only shuffle information around without transforming it.</p>
+          <p>
+            <strong>Why do we need it?</strong> Think of the attention layer as
+            "communication" between tokens—gathering relevant context. The FFN
+            is the "computation" step—processing that gathered information to
+            extract useful features and patterns. Without the FFN, the model
+            would only shuffle information around without transforming it.
+          </p>
 
-                <p><strong>The architecture:</strong></p>
-                <ol>
-                    <li><strong>Expand:</strong> Project from d_model (e.g., 512) to d_ff (typically 4× larger, e.g., 2048). This expansion gives the model more "capacity" to learn complex patterns.</li>
-                    <li><strong>Activate:</strong> Apply GELU activation—a smooth nonlinear function that allows the model to learn non-linear relationships. Without this nonlinearity, stacking layers would be pointless (multiple linear transformations collapse to one).</li>
-                    <li><strong>Project back:</strong> Compress back down from d_ff to d_model so the output shape matches the input, allowing us to stack more layers.</li>
-                </ol>
+          <p><strong>The architecture:</strong></p>
+          <ol>
+            <li>
+              <strong>Expand:</strong> Project from d_model (e.g., 512) to d_ff
+              (typically 4× larger, e.g., 2048). This expansion gives the model
+              more "capacity" to learn complex patterns.
+            </li>
+            <li>
+              <strong>Activate:</strong> Apply GELU activation—a smooth
+              nonlinear function that allows the model to learn non-linear
+              relationships. Without this nonlinearity, stacking layers would be
+              pointless (multiple linear transformations collapse to one).
+            </li>
+            <li>
+              <strong>Project back:</strong> Compress back down from d_ff to
+              d_model so the output shape matches the input, allowing us to
+              stack more layers.
+            </li>
+          </ol>
 
-                <p><strong>Position-wise:</strong> Crucially, the <em>same</em> FFN (same weights) is applied to every position independently. This is efficient and helps the model learn general transformations that work regardless of position.</p>
+          <p>
+            <strong>Position-wise:</strong> Crucially, the <em>same</em> FFN
+            (same weights) is applied to every position independently. This is
+            efficient and helps the model learn general transformations that
+            work regardless of position.
+          </p>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="keyword">class</span> <span class="class">FeedForward</span>(nn.Module):
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">class</span> <span class="class">FeedForward</span>(nn.Module):
     <span class="string">"""Position-wise feed-forward network."""</span>
 
     <span class="keyword">def</span> <span class="function">__init__</span>(self, d_model, d_ff, dropout=<span class="string">0.1</span>):
@@ -338,50 +560,91 @@
         x = self.linear2(x)        <span class="comment"># → (batch, seq_len, d_model)</span>
         x = self.dropout2(x)
         <span class="keyword">return</span> x</code></pre>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Division of labor:</strong> Attention answers "What should I pay attention to?" while the FFN answers "Now that I have this information, what should I do with it?"</p>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/feedforward.py" target="_blank">src/transformer/feedforward.py</a></p>
-                </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Division of labor:</strong> Attention answers "What should
+              I pay attention to?" while the FFN answers "Now that I have this
+              information, what should I do with it?"
+            </p>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>📄 Implementation:</strong>
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/feedforward.py"
+                target="_blank"
+                >src/transformer/feedforward.py</a
+              >
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Step 5: Transformer Block -->
     <section id="transformer-block">
-        <div class="container">
-            <h2>Step 5: Transformer Block</h2>
-            <div class="card">
-                <p><strong>Bringing it all together:</strong> A transformer block combines all our components into one repeatable unit. The full transformer model is just many of these blocks stacked on top of each other (GPT-3 has 96 blocks!).</p>
+      <div class="container">
+        <h2>Step 5: Transformer Block</h2>
+        <div class="card">
+          <p>
+            <strong>Bringing it all together:</strong> A transformer block
+            combines all our components into one repeatable unit. The full
+            transformer model is just many of these blocks stacked on top of
+            each other (GPT-3 has 96 blocks!).
+          </p>
 
-                <p><strong>What's in a block?</strong> Each block contains four key components:</p>
+          <p>
+            <strong>What's in a block?</strong> Each block contains four key
+            components:
+          </p>
 
-                <ul>
-                    <li><strong>Multi-head attention:</strong> Communication layer—tokens gather information from other tokens</li>
-                    <li><strong>Feed-forward network:</strong> Computation layer—each token processes its gathered information</li>
-                    <li><strong>Layer normalization:</strong> Stabilizes training by normalizing activations (prevents them from growing too large or small)</li>
-                    <li><strong>Residual connections:</strong> "Skip connections" that create gradient highways for training deep networks</li>
-                </ul>
+          <ul>
+            <li>
+              <strong>Multi-head attention:</strong> Communication layer—tokens
+              gather information from other tokens
+            </li>
+            <li>
+              <strong>Feed-forward network:</strong> Computation layer—each
+              token processes its gathered information
+            </li>
+            <li>
+              <strong>Layer normalization:</strong> Stabilizes training by
+              normalizing activations (prevents them from growing too large or
+              small)
+            </li>
+            <li>
+              <strong>Residual connections:</strong> "Skip connections" that
+              create gradient highways for training deep networks
+            </li>
+          </ul>
 
-                <p><strong>Pre-LN architecture:</strong> We use the Pre-LN (Pre-Layer Normalization) approach used in modern models like GPT-2 and GPT-3. This means we apply layer normalization <em>before</em> each sub-layer (attention or FFN) rather than after. This makes training more stable, especially for very deep networks.</p>
+          <p>
+            <strong>Pre-LN architecture:</strong> We use the Pre-LN (Pre-Layer
+            Normalization) approach used in modern models like GPT-2 and GPT-3.
+            This means we apply layer normalization <em>before</em> each
+            sub-layer (attention or FFN) rather than after. This makes training
+            more stable, especially for very deep networks.
+          </p>
 
-                <div class="diagram">
-                    <img src="assets/transformer-block.svg" alt="Transformer block architecture with residual connections">
-                </div>
+          <div class="diagram">
+            <img
+              src="assets/transformer-block.svg"
+              alt="Transformer block architecture with residual connections"
+            />
+          </div>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
     <span class="comment"># First sub-layer: Multi-head attention with residual</span>
     residual = x
     x = self.norm1(x)                    <span class="comment"># Pre-LN</span>
@@ -397,48 +660,98 @@
     x = x + residual                     <span class="comment"># Residual connection</span>
 
     <span class="keyword">return</span> x</code></pre>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Why residual connections?</strong> They create gradient "highways" that allow gradients to flow directly from the output back to early layers. Without them, deep networks struggle to learn: ∂(x + f(x))/∂x = 1 + ∂f(x)/∂x—the "1" ensures gradients always flow!</p>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/block.py" target="_blank">src/transformer/block.py</a></p>
-                </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Why residual connections?</strong> They create gradient
+              "highways" that allow gradients to flow directly from the output
+              back to early layers. Without them, deep networks struggle to
+              learn: ∂(x + f(x))/∂x = 1 + ∂f(x)/∂x—the "1" ensures gradients
+              always flow!
+            </p>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>📄 Implementation:</strong>
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/block.py"
+                target="_blank"
+                >src/transformer/block.py</a
+              >
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Step 6: Complete Model -->
     <section id="complete-model">
-        <div class="container">
-            <h2>Step 6: The Complete Transformer</h2>
-            <div class="card">
-                <p><strong>The complete picture:</strong> We now assemble all our components into a working decoder-only transformer (GPT-style). This is a complete language model that can be trained to predict the next word in a sequence.</p>
+      <div class="container">
+        <h2>Step 6: The Complete Transformer</h2>
+        <div class="card">
+          <p>
+            <strong>The complete picture:</strong> We now assemble all our
+            components into a working decoder-only transformer (GPT-style). This
+            is a complete language model that can be trained to predict the next
+            word in a sequence.
+          </p>
 
-                <p><strong>What is "decoder-only"?</strong> The original transformer paper had both an encoder (for reading input) and decoder (for generating output), used for translation. Modern language models like GPT use only the decoder part, which is simpler and works great for text generation. The key difference is that decoder-only models use causal masking—they can only look at previous tokens, not future ones.</p>
+          <p>
+            <strong>What is "decoder-only"?</strong> The original transformer
+            paper had both an encoder (for reading input) and decoder (for
+            generating output), used for translation. Modern language models
+            like GPT use only the decoder part, which is simpler and works great
+            for text generation. The key difference is that decoder-only models
+            use causal masking—they can only look at previous tokens, not future
+            ones.
+          </p>
 
-                <p><strong>How data flows through the model:</strong></p>
-                <ol>
-                    <li><strong>Token Embedding:</strong> Convert input token IDs (integers) to dense vectors</li>
-                    <li><strong>Positional Encoding:</strong> Add position information to tell the model where each token is</li>
-                    <li><strong>Transformer Blocks (×N):</strong> Stack multiple identical blocks (we use 6; GPT-3 uses 96). Each block refines the representations through attention and feed-forward processing</li>
-                    <li><strong>Final LayerNorm:</strong> One last normalization to stabilize the final outputs</li>
-                    <li><strong>Output Projection:</strong> Project from d_model dimensions to vocabulary size, giving us scores (logits) for every possible next token</li>
-                </ol>
+          <p><strong>How data flows through the model:</strong></p>
+          <ol>
+            <li>
+              <strong>Token Embedding:</strong> Convert input token IDs
+              (integers) to dense vectors
+            </li>
+            <li>
+              <strong>Positional Encoding:</strong> Add position information to
+              tell the model where each token is
+            </li>
+            <li>
+              <strong>Transformer Blocks (×N):</strong> Stack multiple identical
+              blocks (we use 6; GPT-3 uses 96). Each block refines the
+              representations through attention and feed-forward processing
+            </li>
+            <li>
+              <strong>Final LayerNorm:</strong> One last normalization to
+              stabilize the final outputs
+            </li>
+            <li>
+              <strong>Output Projection:</strong> Project from d_model
+              dimensions to vocabulary size, giving us scores (logits) for every
+              possible next token
+            </li>
+          </ol>
 
-                <p><strong>What are logits?</strong> The model outputs "logits"—raw, unnormalized scores for each token in the vocabulary. Higher scores mean the model thinks that token is more likely to come next. We can convert these to probabilities using softmax, then either pick the highest (greedy decoding) or sample from the distribution (for more creative generation).</p>
+          <p>
+            <strong>What are logits?</strong> The model outputs "logits"—raw,
+            unnormalized scores for each token in the vocabulary. Higher scores
+            mean the model thinks that token is more likely to come next. We can
+            convert these to probabilities using softmax, then either pick the
+            highest (greedy decoding) or sample from the distribution (for more
+            creative generation).
+          </p>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="keyword">def</span> <span class="function">__init__</span>(
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">def</span> <span class="function">__init__</span>(
     self, vocab_size, d_model=<span class="string">512</span>, num_heads=<span class="string">8</span>,
     num_layers=<span class="string">6</span>, d_ff=<span class="string">2048</span>, max_seq_len=<span class="string">5000</span>, dropout=<span class="string">0.1</span>
 ):
@@ -457,17 +770,17 @@
     <span class="comment"># Final layer norm and output projection</span>
     self.ln_f = nn.LayerNorm(d_model)
     self.output_proj = nn.Linear(d_model, vocab_size)</code></pre>
-                    </div>
-                </div>
+            </div>
+          </div>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">def</span> <span class="function">forward</span>(self, x, mask=None):
     <span class="comment"># Create causal mask if not provided</span>
     <span class="keyword">if</span> mask <span class="keyword">is</span> None:
         mask = self.create_causal_mask(x.size(<span class="string">1</span>)).to(x.device)
@@ -485,71 +798,154 @@
     logits = self.output_proj(x)     <span class="comment"># (batch, seq, d_model) → (batch, seq, vocab_size)</span>
 
     <span class="keyword">return</span> logits</code></pre>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Training the model:</strong> During training, we feed the model sequences of text and ask it to predict the next token at each position. We compare its predictions (logits) against the actual next tokens using cross-entropy loss, then use backpropagation to adjust all the weights (embeddings, attention projections, FFN weights, etc.). After training on billions of tokens, the model learns to predict plausible next words based on context.</p>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Model scale:</strong> Our implementation uses 6 layers with d_model=512, similar to the original transformer paper. For comparison, GPT-3 has 96 layers with d_model=12,288. The architecture scales beautifully—the same fundamental components work at wildly different scales!</p>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/model.py" target="_blank">src/transformer/model.py</a></p>
-                </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Training the model:</strong> During training, we feed the
+              model sequences of text and ask it to predict the next token at
+              each position. We compare its predictions (logits) against the
+              actual next tokens using cross-entropy loss, then use
+              backpropagation to adjust all the weights (embeddings, attention
+              projections, FFN weights, etc.). After training on billions of
+              tokens, the model learns to predict plausible next words based on
+              context.
+            </p>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Model scale:</strong> Our implementation uses 6 layers
+              with d_model=512, similar to the original transformer paper. For
+              comparison, GPT-3 has 96 layers with d_model=12,288. The
+              architecture scales beautifully—the same fundamental components
+              work at wildly different scales!
+            </p>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>📄 Implementation:</strong>
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/model.py"
+                target="_blank"
+                >src/transformer/model.py</a
+              >
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Step 7: Training at Scale -->
     <section id="training">
-        <div class="container">
-            <h2>Step 7: Training at Scale</h2>
-            <div class="card">
-                <p>Building the transformer architecture is only half the battle. To train it effectively, we need techniques that make training stable, prevent over fitting, and work within the constraints of hobby-scale hardware. This section covers two critical techniques: <strong>gradient accumulation</strong> and <strong>validation splits</strong>.</p>
+      <div class="container">
+        <h2>Step 7: Training at Scale</h2>
+        <div class="card">
+          <p>
+            Building the transformer architecture is only half the battle. To
+            train it effectively, we need techniques that make training stable,
+            prevent over fitting, and work within the constraints of hobby-scale
+            hardware. This section covers two critical techniques:
+            <strong>gradient accumulation</strong> and
+            <strong>validation splits</strong>.
+          </p>
 
-                <h3>The Challenge: Small Batches, Noisy Training</h3>
-                <p><strong>What is a batch?</strong> During training, we process multiple examples together in a "batch." The model makes predictions for all examples, we compute the average loss, then we calculate gradients and update weights. Larger batches give us more stable gradient estimates because we're averaging over more examples.</p>
+          <h3>The Challenge: Small Batches, Noisy Training</h3>
+          <p>
+            <strong>What is a batch?</strong> During training, we process
+            multiple examples together in a "batch." The model makes predictions
+            for all examples, we compute the average loss, then we calculate
+            gradients and update weights. Larger batches give us more stable
+            gradient estimates because we're averaging over more examples.
+          </p>
 
-                <p><strong>The problem with small batches:</strong> On hobby hardware (like an M1 Mac or consumer GPU), we're limited to small batches—typically just 8 sequences at a time. Small batches lead to <em>noisy gradients</em>: each batch gives a slightly different signal about which direction to update the weights, causing erratic training.</p>
+          <p>
+            <strong>The problem with small batches:</strong> On hobby hardware
+            (like an M1 Mac or consumer GPU), we're limited to small
+            batches—typically just 8 sequences at a time. Small batches lead to
+            <em>noisy gradients</em>: each batch gives a slightly different
+            signal about which direction to update the weights, causing erratic
+            training.
+          </p>
 
-                <div class="highlight">
-                    <p><strong>Memory bottleneck:</strong> Why can't we just use bigger batches? Each example in a batch requires storing activations in memory for the backward pass. M1 Macs have ~8GB unified memory, and a batch of 8 sequences already uses ~4GB. Doubling to 16 would run out of memory!</p>
-                </div>
+          <div class="highlight">
+            <p>
+              <strong>Memory bottleneck:</strong> Why can't we just use bigger
+              batches? Each example in a batch requires storing activations in
+              memory for the backward pass. M1 Macs have ~8GB unified memory,
+              and a batch of 8 sequences already uses ~4GB. Doubling to 16 would
+              run out of memory!
+            </p>
+          </div>
 
-                <h3>Gradient Accumulation: Large Batches Without the Memory Cost</h3>
-                <p><strong>The key insight:</strong> We don't need to process all examples simultaneously! Gradient accumulation lets us simulate large batch sizes by accumulating gradients over multiple small batches before updating weights.</p>
+          <h3>Gradient Accumulation: Large Batches Without the Memory Cost</h3>
+          <p>
+            <strong>The key insight:</strong> We don't need to process all
+            examples simultaneously! Gradient accumulation lets us simulate
+            large batch sizes by accumulating gradients over multiple small
+            batches before updating weights.
+          </p>
 
-                <p><strong>How it works:</strong></p>
-                <ol>
-                    <li><strong>Process batch 1:</strong> Forward pass → Loss → Backward pass → Store gradients (don't update yet!)</li>
-                    <li><strong>Process batch 2:</strong> Forward pass → Loss → Backward pass → <em>Add</em> gradients to stored ones</li>
-                    <li><strong>Repeat</strong> for N batches (e.g., 16 times)</li>
-                    <li><strong>Update weights:</strong> Use the accumulated (averaged) gradients</li>
-                </ol>
+          <p><strong>How it works:</strong></p>
+          <ol>
+            <li>
+              <strong>Process batch 1:</strong> Forward pass → Loss → Backward
+              pass → Store gradients (don't update yet!)
+            </li>
+            <li>
+              <strong>Process batch 2:</strong> Forward pass → Loss → Backward
+              pass → <em>Add</em> gradients to stored ones
+            </li>
+            <li><strong>Repeat</strong> for N batches (e.g., 16 times)</li>
+            <li>
+              <strong>Update weights:</strong> Use the accumulated (averaged)
+              gradients
+            </li>
+          </ol>
 
-                <div class="diagram">
-                    <img src="assets/gradient-accumulation.svg" alt="Gradient accumulation comparison diagram">
-                </div>
+          <div class="diagram">
+            <img
+              src="assets/gradient-accumulation.svg"
+              alt="Gradient accumulation comparison diagram"
+            />
+          </div>
 
-                <p><strong>Why this works mathematically:</strong> Gradients are linear, so averaging gradients from N separate batches gives the same result as computing the gradient on one large batch containing all N×batch_size examples. The key formula:</p>
+          <p>
+            <strong>Why this works mathematically:</strong> Gradients are
+            linear, so averaging gradients from N separate batches gives the
+            same result as computing the gradient on one large batch containing
+            all N×batch_size examples. The key formula:
+          </p>
 
-                <p style="text-align: center; font-family: 'SF Mono', monospace; background: #f5f5f7; padding: 16px; border-radius: 8px; margin: 24px 0;">
-                    ∇(L₁ + L₂ + ... + Lₙ) = ∇L₁ + ∇L₂ + ... + ∇Lₙ
-                </p>
+          <p
+            style="
+              text-align: center;
+              font-family: &quot;SF Mono&quot;, monospace;
+              background: #f5f5f7;
+              padding: 16px;
+              border-radius: 8px;
+              margin: 24px 0;
+            "
+          >
+            ∇(L₁ + L₂ + ... + Lₙ) = ∇L₁ + ∇L₂ + ... + ∇Lₙ
+          </p>
 
-                <p>By accumulating gradients over 16 batches of 8 sequences each, we get gradients equivalent to a batch of 128 sequences—16× more stable!—while only ever holding 8 sequences in memory at once.</p>
+          <p>
+            By accumulating gradients over 16 batches of 8 sequences each, we
+            get gradients equivalent to a batch of 128 sequences—16× more
+            stable!—while only ever holding 8 sequences in memory at once.
+          </p>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="comment"># Without accumulation (noisy)</span>
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="comment"># Without accumulation (noisy)</span>
 <span class="keyword">for</span> batch <span class="keyword">in</span> dataloader:
     loss = compute_loss(batch)
     loss.backward()           <span class="comment"># Compute gradients</span>
@@ -566,62 +962,108 @@ accumulation_steps = <span class="string">16</span>
     <span class="keyword">if</span> (i + <span class="string">1</span>) % accumulation_steps == <span class="string">0</span>:
         optimizer.step()              <span class="comment"># Update every 16 batches (stable!)</span>
         optimizer.zero_grad()</code></pre>
-                    </div>
-                </div>
+            </div>
+          </div>
 
-                <h3>Validation: Detecting Overfitting</h3>
-                <p><strong>The problem: Memorization vs. Learning</strong></p>
-                <p>Imagine a student preparing for an exam. They could:</p>
-                <ul>
-                    <li><strong>Memorize answers</strong> to practice problems → Fails on new problems (overfitting)</li>
-                    <li><strong>Learn concepts</strong> from practice problems → Succeeds on new problems (good generalization)</li>
-                </ul>
+          <h3>Validation: Detecting Overfitting</h3>
+          <p><strong>The problem: Memorization vs. Learning</strong></p>
+          <p>Imagine a student preparing for an exam. They could:</p>
+          <ul>
+            <li>
+              <strong>Memorize answers</strong> to practice problems → Fails on
+              new problems (overfitting)
+            </li>
+            <li>
+              <strong>Learn concepts</strong> from practice problems → Succeeds
+              on new problems (good generalization)
+            </li>
+          </ul>
 
-                <p>The same happens with neural networks. As training progresses, the model might start memorizing the training data instead of learning general patterns. This is called <strong>overfitting</strong>.</p>
+          <p>
+            The same happens with neural networks. As training progresses, the
+            model might start memorizing the training data instead of learning
+            general patterns. This is called <strong>overfitting</strong>.
+          </p>
 
-                <p><strong>The solution: Validation split</strong></p>
-                <p>We set aside 10% of our data that the model <em>never</em> sees during training. After each epoch, we evaluate the model on this "validation" data. If the model is truly learning patterns (not memorizing), it should perform well on both training and validation data.</p>
+          <p><strong>The solution: Validation split</strong></p>
+          <p>
+            We set aside 10% of our data that the model <em>never</em> sees
+            during training. After each epoch, we evaluate the model on this
+            "validation" data. If the model is truly learning patterns (not
+            memorizing), it should perform well on both training and validation
+            data.
+          </p>
 
-                <div class="diagram">
-                    <img src="assets/training-validation.svg" alt="Training vs validation loss curves">
-                </div>
+          <div class="diagram">
+            <img
+              src="assets/training-validation.svg"
+              alt="Training vs validation loss curves"
+            />
+          </div>
 
-                <p><strong>How to interpret the curves:</strong></p>
-                <div class="grid">
-                    <div class="grid-item">
-                        <h4 style="color: #32D74B;">✓ Good Training</h4>
-                        <p style="font-family: 'SF Mono', monospace; font-size: 0.9em; color: #666;">
-                            Train: 5.0 → 4.0 → 3.0<br/>
-                            Val:   5.2 → 4.2 → 3.2
-                        </p>
-                        <p>Both losses decreasing together. Model is learning general patterns that work on new data!</p>
-                    </div>
-                    <div class="grid-item">
-                        <h4 style="color: #FF9500;">⚠ Underfitting</h4>
-                        <p style="font-family: 'SF Mono', monospace; font-size: 0.9em; color: #666;">
-                            Train: 5.0 → 4.8 → 4.7<br/>
-                            Val:   5.2 → 5.0 → 4.9
-                        </p>
-                        <p>Both losses barely improving. Model is too simple or needs more training epochs.</p>
-                    </div>
-                    <div class="grid-item">
-                        <h4 style="color: #FF2D55;">⚠ Overfitting</h4>
-                        <p style="font-family: 'SF Mono', monospace; font-size: 0.9em; color: #666;">
-                            Train: 5.0 → 3.0 → 1.5<br/>
-                            Val:   5.2 → 3.5 → 4.0
-                        </p>
-                        <p>Training loss decreasing but validation increasing. Model is memorizing training data!</p>
-                    </div>
-                </div>
+          <p><strong>How to interpret the curves:</strong></p>
+          <div class="grid">
+            <div class="grid-item">
+              <h4 style="color: #32d74b">✓ Good Training</h4>
+              <p
+                style="
+                  font-family: &quot;SF Mono&quot;, monospace;
+                  font-size: 0.9em;
+                  color: #666;
+                "
+              >
+                Train: 5.0 → 4.0 → 3.0<br />
+                Val: 5.2 → 4.2 → 3.2
+              </p>
+              <p>
+                Both losses decreasing together. Model is learning general
+                patterns that work on new data!
+              </p>
+            </div>
+            <div class="grid-item">
+              <h4 style="color: #ff9500">⚠ Underfitting</h4>
+              <p
+                style="
+                  font-family: &quot;SF Mono&quot;, monospace;
+                  font-size: 0.9em;
+                  color: #666;
+                "
+              >
+                Train: 5.0 → 4.8 → 4.7<br />
+                Val: 5.2 → 5.0 → 4.9
+              </p>
+              <p>
+                Both losses barely improving. Model is too simple or needs more
+                training epochs.
+              </p>
+            </div>
+            <div class="grid-item">
+              <h4 style="color: #ff2d55">⚠ Overfitting</h4>
+              <p
+                style="
+                  font-family: &quot;SF Mono&quot;, monospace;
+                  font-size: 0.9em;
+                  color: #666;
+                "
+              >
+                Train: 5.0 → 3.0 → 1.5<br />
+                Val: 5.2 → 3.5 → 4.0
+              </p>
+              <p>
+                Training loss decreasing but validation increasing. Model is
+                memorizing training data!
+              </p>
+            </div>
+          </div>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="comment"># Training with validation</span>
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="comment"># Training with validation</span>
 <span class="keyword">for</span> epoch <span class="keyword">in</span> range(num_epochs):
     <span class="comment"># Training phase</span>
     model.train()
@@ -640,47 +1082,83 @@ accumulation_steps = <span class="string">16</span>
     <span class="comment"># Check for overfitting</span>
     <span class="keyword">if</span> val_loss > train_loss * <span class="string">1.3</span>:
         print(<span class="string">"Warning: Possible overfitting!"</span>)</code></pre>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Implementation in this project:</strong> Our training script automatically splits FineWeb into 90% training and 10% validation using a deterministic hash-based split. After each epoch, you'll see both training and validation metrics, along with interpretation hints to help you understand if your model is learning well!</p>
-                </div>
-
-                <h3>Expected Improvements</h3>
-                <p>With gradient accumulation and validation:</p>
-                <ul>
-                    <li><strong>20-30% lower final loss</strong> due to stable training</li>
-                    <li><strong>Smoother training curves</strong> that are easier to debug</li>
-                    <li><strong>Confidence in generalization</strong> by monitoring validation</li>
-                    <li><strong>Early stopping</strong> when validation stops improving</li>
-                    <li><strong>Works on hobby hardware</strong> without expensive GPUs</li>
-                </ul>
-
-                <div class="highlight">
-                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/training_utils.py" target="_blank">src/transformer/training_utils.py</a> and <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/fineweb_dataset.py" target="_blank">src/transformer/fineweb_dataset.py</a></p>
-                </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Implementation in this project:</strong> Our training
+              script automatically splits FineWeb into 90% training and 10%
+              validation using a deterministic hash-based split. After each
+              epoch, you'll see both training and validation metrics, along with
+              interpretation hints to help you understand if your model is
+              learning well!
+            </p>
+          </div>
+
+          <h3>Expected Improvements</h3>
+          <p>With gradient accumulation and validation:</p>
+          <ul>
+            <li>
+              <strong>20-30% lower final loss</strong> due to stable training
+            </li>
+            <li>
+              <strong>Smoother training curves</strong> that are easier to debug
+            </li>
+            <li>
+              <strong>Confidence in generalization</strong> by monitoring
+              validation
+            </li>
+            <li>
+              <strong>Early stopping</strong> when validation stops improving
+            </li>
+            <li>
+              <strong>Works on hobby hardware</strong> without expensive GPUs
+            </li>
+          </ul>
+
+          <div class="highlight">
+            <p>
+              <strong>📄 Implementation:</strong>
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/training_utils.py"
+                target="_blank"
+                >src/transformer/training_utils.py</a
+              >
+              and
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/fineweb_dataset.py"
+                target="_blank"
+                >src/transformer/fineweb_dataset.py</a
+              >
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Step 8: KV-Cache -->
     <section id="kv-cache">
-        <div class="container">
-            <h2>Step 8: Fast Generation with KV-Cache</h2>
-            <div class="card">
-                <p><strong>The Problem: Slow Autoregressive Generation</strong></p>
-                <p>When generating text, transformers produce one token at a time. After generating each token, we feed the entire sequence back through the model to predict the next token. This means we repeatedly recompute the same values!</p>
+      <div class="container">
+        <h2>Step 8: Fast Generation with KV-Cache</h2>
+        <div class="card">
+          <p><strong>The Problem: Slow Autoregressive Generation</strong></p>
+          <p>
+            When generating text, transformers produce one token at a time.
+            After generating each token, we feed the entire sequence back
+            through the model to predict the next token. This means we
+            repeatedly recompute the same values!
+          </p>
 
-                <p><strong>Example without cache:</strong></p>
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="comment"># Generate "The cat sat"</span>
+          <p><strong>Example without cache:</strong></p>
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="comment"># Generate "The cat sat"</span>
 <span class="comment"># Step 1: Generate token 3</span>
 Input: [The, cat]
 Compute: K[The], V[The], K[cat], V[cat]
@@ -695,33 +1173,49 @@ Output: "on"
 Input: [The, cat, sat, on]
 Compute: K[The], V[The], K[cat], V[cat], K[sat], V[sat], K[on], V[on]  <span class="comment">← Redundant!</span>
 Output: "the"</code></pre>
-                    </div>
-                </div>
+            </div>
+          </div>
 
-                <p>For generating n tokens, we process 1 + 2 + 3 + ... + n = O(n²) tokens total. Very slow!</p>
+          <p>
+            For generating n tokens, we process 1 + 2 + 3 + ... + n = O(n²)
+            tokens total. Very slow!
+          </p>
 
-                <h3>The Solution: KV-Cache</h3>
-                <p><strong>Key Insight:</strong> In attention, K (Key) and V (Value) for past tokens never change! Only the new token's query matters. We can cache K and V from previous steps and reuse them.</p>
+          <h3>The Solution: KV-Cache</h3>
+          <p>
+            <strong>Key Insight:</strong> In attention, K (Key) and V (Value)
+            for past tokens never change! Only the new token's query matters. We
+            can cache K and V from previous steps and reuse them.
+          </p>
 
-                <div class="diagram">
-                    <img src="assets/kv-cache-speedup.svg" alt="KV-cache speedup comparison diagram">
-                </div>
+          <div class="diagram">
+            <img
+              src="assets/kv-cache-speedup.svg"
+              alt="KV-cache speedup comparison diagram"
+            />
+          </div>
 
-                <h3>How It Works</h3>
-                <p><strong>Two Modes:</strong></p>
-                <ul>
-                    <li><strong>PREFILL:</strong> Process initial prompt, compute and cache K, V for all tokens</li>
-                    <li><strong>DECODE:</strong> For each new token, compute only its K, V, concatenate with cached values</li>
-                </ul>
+          <h3>How It Works</h3>
+          <p><strong>Two Modes:</strong></p>
+          <ul>
+            <li>
+              <strong>PREFILL:</strong> Process initial prompt, compute and
+              cache K, V for all tokens
+            </li>
+            <li>
+              <strong>DECODE:</strong> For each new token, compute only its K,
+              V, concatenate with cached values
+            </li>
+          </ul>
 
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="comment"># PREFILL: Process prompt "The cat"</span>
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="comment"># PREFILL: Process prompt "The cat"</span>
 prompt = [The, cat]
 K_all = [K_The, K_cat]  <span class="comment"># Cache these!</span>
 V_all = [V_The, V_cat]  <span class="comment"># Cache these!</span>
@@ -736,32 +1230,45 @@ V_all = concat(V_cached, V_new)  <span class="comment"># = [V_The, V_cat, V_sat]
 Output: "on"
 
 <span class="comment"># Continue...</span></code></pre>
-                    </div>
-                </div>
+            </div>
+          </div>
 
-                <h3>Memory vs Speed Tradeoff</h3>
-                <p><strong>Memory Cost:</strong> For each layer, we cache K and V tensors with shape (batch, num_heads, seq_len, d_k). For a 6-layer model with d_model=256, 4 heads, and 200-token sequence, this is only ~3 MB per example. Very affordable!</p>
+          <h3>Memory vs Speed Tradeoff</h3>
+          <p>
+            <strong>Memory Cost:</strong> For each layer, we cache K and V
+            tensors with shape (batch, num_heads, seq_len, d_k). For a 6-layer
+            model with d_model=256, 4 heads, and 200-token sequence, this is
+            only ~3 MB per example. Very affordable!
+          </p>
 
-                <p><strong>Speed Benefit:</strong> Reduces time complexity from O(n²) to O(n) for generating n tokens. Typical speedups:</p>
-                <ul>
-                    <li>Short sequences (10-20 tokens): 2-5x faster</li>
-                    <li>Medium sequences (50-100 tokens): 10-20x faster</li>
-                    <li>Long sequences (200+ tokens): 20-50x faster</li>
-                </ul>
+          <p>
+            <strong>Speed Benefit:</strong> Reduces time complexity from O(n²)
+            to O(n) for generating n tokens. Typical speedups:
+          </p>
+          <ul>
+            <li>Short sequences (10-20 tokens): 2-5x faster</li>
+            <li>Medium sequences (50-100 tokens): 10-20x faster</li>
+            <li>Long sequences (200+ tokens): 20-50x faster</li>
+          </ul>
 
-                <div class="highlight">
-                    <p><strong>Why ALL production LLMs use KV-cache:</strong> The memory cost is tiny compared to the model weights, but the speed improvement is massive. Every production system (GPT, Claude, etc.) uses KV-cache for generation!</p>
-                </div>
+          <div class="highlight">
+            <p>
+              <strong>Why ALL production LLMs use KV-cache:</strong> The memory
+              cost is tiny compared to the model weights, but the speed
+              improvement is massive. Every production system (GPT, Claude,
+              etc.) uses KV-cache for generation!
+            </p>
+          </div>
 
-                <h3>Using KV-Cache</h3>
-                <div class="code-window">
-                    <div class="code-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="code-content">
-                        <pre><code><span class="comment"># KV-cache is enabled by default!</span>
+          <h3>Using KV-Cache</h3>
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="comment"># KV-cache is enabled by default!</span>
 generated = model.generate(
     start_tokens,
     max_length=<span class="string">100</span>,
@@ -778,295 +1285,454 @@ generated = model.generate(
 
 <span class="comment"># Benchmark the speedup yourself</span>
 <span class="keyword">uv run python</span> commands/benchmark_generation.py</code></pre>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Implementation Detail:</strong> The cache must correctly handle positional encodings! When processing token at position N, it must receive position embedding for N, not 0. Our implementation tracks the cache length and adjusts positions automatically.</p>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py" target="_blank">src/transformer/attention.py</a> and <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/model.py" target="_blank">src/transformer/model.py</a></p>
-                </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Implementation Detail:</strong> The cache must correctly
+              handle positional encodings! When processing token at position N,
+              it must receive position embedding for N, not 0. Our
+              implementation tracks the cache length and adjusts positions
+              automatically.
+            </p>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>📄 Implementation:</strong>
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py"
+                target="_blank"
+                >src/transformer/attention.py</a
+              >
+              and
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/src/transformer/model.py"
+                target="_blank"
+                >src/transformer/model.py</a
+              >
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Step 9: Model Interpretability -->
     <section id="interpretability">
-        <div class="container">
-            <div class="card">
-                <h2>Step 9: Model Interpretability</h2>
-                <p>Now that we've built and trained a transformer, how do we understand <strong>what it has learned</strong>? Mechanistic interpretability provides tools to peek inside the "black box" and discover the circuits and patterns the model uses.</p>
-                <p>This section covers four powerful techniques: Logit Lens, Attention Analysis, Induction Heads, and Activation Patching.</p>
+      <div class="container">
+        <div class="card">
+          <h2>Step 9: Model Interpretability</h2>
+          <p>
+            Now that we've built and trained a transformer, how do we understand
+            <strong>what it has learned</strong>? Mechanistic interpretability
+            provides tools to peek inside the "black box" and discover the
+            circuits and patterns the model uses.
+          </p>
+          <p>
+            This section covers four powerful techniques: Logit Lens, Attention
+            Analysis, Induction Heads, and Activation Patching.
+          </p>
 
-                <h3>What is Mechanistic Interpretability?</h3>
-                <p>Instead of just asking "does the model work?", we ask:</p>
-                <ul>
-                    <li><strong>When</strong> does the model "know" the answer? (which layer?)</li>
-                    <li><strong>How</strong> does information flow through the network?</li>
-                    <li><strong>Which</strong> components are responsible for specific behaviors?</li>
-                    <li><strong>What</strong> patterns or circuits has the model learned?</li>
-                </ul>
+          <h3>What is Mechanistic Interpretability?</h3>
+          <p>Instead of just asking "does the model work?", we ask:</p>
+          <ul>
+            <li>
+              <strong>When</strong> does the model "know" the answer? (which
+              layer?)
+            </li>
+            <li>
+              <strong>How</strong> does information flow through the network?
+            </li>
+            <li>
+              <strong>Which</strong> components are responsible for specific
+              behaviors?
+            </li>
+            <li>
+              <strong>What</strong> patterns or circuits has the model learned?
+            </li>
+          </ul>
 
-                <p>This connects to cutting-edge research from Anthropic, OpenAI, and academic labs exploring how LLMs actually work under the hood.</p>
+          <p>
+            This connects to cutting-edge research from Anthropic, OpenAI, and
+            academic labs exploring how LLMs actually work under the hood.
+          </p>
 
-                <h3>Logit Lens: Seeing Predictions Evolve</h3>
-                <p>The <strong>logit lens</strong> technique lets us visualize what the model would predict if we stopped at each layer.</p>
+          <h3>Logit Lens: Seeing Predictions Evolve</h3>
+          <p>
+            The <strong>logit lens</strong> technique lets us visualize what the
+            model would predict if we stopped at each layer.
+          </p>
 
-                <div class="two-column">
-                    <div>
-                        <h4>How It Works</h4>
-                        <p>Normally, we only see the final output:</p>
-                        <div class="code-window">
-                            <div class="code-header">
-                                <div class="code-dot red"></div>
-                                <div class="code-dot yellow"></div>
-                                <div class="code-dot green"></div>
-                            </div>
-                            <div class="code-content">
-                                <pre><code>Input → Layer 1 → Layer 2 → ... → Layer N
+          <div class="two-column">
+            <div>
+              <h4>How It Works</h4>
+              <p>Normally, we only see the final output:</p>
+              <div class="code-window">
+                <div class="code-header">
+                  <div class="code-dot red"></div>
+                  <div class="code-dot yellow"></div>
+                  <div class="code-dot green"></div>
+                </div>
+                <div class="code-content">
+                  <pre><code>Input → Layer 1 → Layer 2 → ... → Layer N
                  → Unembed → Logits</code></pre>
-                            </div>
-                        </div>
+                </div>
+              </div>
 
-                        <p>With logit lens, we apply unembedding <em>at each layer</em>:</p>
-                        <div class="code-window">
-                            <div class="code-header">
-                                <div class="code-dot red"></div>
-                                <div class="code-dot yellow"></div>
-                                <div class="code-dot green"></div>
-                            </div>
-                            <div class="code-content">
-                                <pre><code>Input → Layer 1 → [Unembed] → "What now?"
+              <p>
+                With logit lens, we apply unembedding <em>at each layer</em>:
+              </p>
+              <div class="code-window">
+                <div class="code-header">
+                  <div class="code-dot red"></div>
+                  <div class="code-dot yellow"></div>
+                  <div class="code-dot green"></div>
+                </div>
+                <div class="code-content">
+                  <pre><code>Input → Layer 1 → [Unembed] → "What now?"
        → Layer 2 → [Unembed] → "What now?"
        → Layer 3 → [Unembed] → "What now?"</code></pre>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h4>Example Insight</h4>
-                        <p>Input: <code>"The capital of France is"</code></p>
-                        <div class="highlight">
-                            <p><strong>Layer 0:</strong> "the" (15%), "a" (12%)<br>
-                            <em>→ Generic, common words</em></p>
-
-                            <p><strong>Layer 2:</strong> "located" (18%), "Paris" (15%)<br>
-                            <em>→ Starting to understand context</em></p>
-
-                            <p><strong>Layer 4:</strong> "Paris" (65%), "French" (10%)<br>
-                            <em>→ Confident, correct answer!</em></p>
-
-                            <p><strong>Layer 6:</strong> "Paris" (72%), "France" (8%)<br>
-                            <em>→ Final refinement</em></p>
-                        </div>
-
-                        <p><strong>Key Insight:</strong> The model "knows" Paris by Layer 4. Later layers just refine the distribution.</p>
-                    </div>
                 </div>
+              </div>
+            </div>
 
-                <h3>Try It Yourself</h3>
-                <p>Our implementation provides three ways to explore:</p>
+            <div>
+              <h4>Example Insight</h4>
+              <p>Input: <code>"The capital of France is"</code></p>
+              <div class="highlight">
+                <p>
+                  <strong>Layer 0:</strong> "the" (15%), "a" (12%)<br />
+                  <em>→ Generic, common words</em>
+                </p>
 
-                <div class="terminal">
-                    <div class="terminal-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="terminal-content">
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Demo mode - educational examples</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python main.py interpret logit-lens checkpoints/model.pt --demo</span>
-                        </div>
-                        <div class="terminal-line"></div>
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Analyze specific text</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python main.py interpret logit-lens checkpoints/model.pt \</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-command">     --text "The Eiffel Tower is in"</span>
-                        </div>
-                        <div class="terminal-line"></div>
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Interactive mode</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python main.py interpret logit-lens checkpoints/model.pt --interactive</span>
-                        </div>
-                    </div>
+                <p>
+                  <strong>Layer 2:</strong> "located" (18%), "Paris" (15%)<br />
+                  <em>→ Starting to understand context</em>
+                </p>
+
+                <p>
+                  <strong>Layer 4:</strong> "Paris" (65%), "French" (10%)<br />
+                  <em>→ Confident, correct answer!</em>
+                </p>
+
+                <p>
+                  <strong>Layer 6:</strong> "Paris" (72%), "France" (8%)<br />
+                  <em>→ Final refinement</em>
+                </p>
+              </div>
+
+              <p>
+                <strong>Key Insight:</strong> The model "knows" Paris by Layer
+                4. Later layers just refine the distribution.
+              </p>
+            </div>
+          </div>
+
+          <h3>Try It Yourself</h3>
+          <p>Our implementation provides three ways to explore:</p>
+
+          <div class="terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="terminal-content">
+              <div class="terminal-line">
+                <span class="terminal-comment"
+                  ># Demo mode - educational examples</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python main.py interpret logit-lens
+                  checkpoints/model.pt --demo</span
+                >
+              </div>
+              <div class="terminal-line"></div>
+              <div class="terminal-line">
+                <span class="terminal-comment"># Analyze specific text</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python main.py interpret logit-lens
+                  checkpoints/model.pt \</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-command">
+                  --text "The Eiffel Tower is in"</span
+                >
+              </div>
+              <div class="terminal-line"></div>
+              <div class="terminal-line">
+                <span class="terminal-comment"># Interactive mode</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python main.py interpret logit-lens
+                  checkpoints/model.pt --interactive</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Beautiful Terminal Output:</strong> Uses the Rich library
+              to display color-coded predictions in tables. High-probability
+              predictions are highlighted in green, making it easy to see when
+              the model converges on the right answer.
+            </p>
+          </div>
+
+          <h3>Attention Analysis: What Do Heads Focus On?</h3>
+          <p>
+            The <strong>attention analysis</strong> tool reveals what each
+            attention head is looking at when processing text.
+          </p>
+
+          <div class="two-column">
+            <div>
+              <h4>How It Works</h4>
+              <p>
+                Attention weights show which tokens each position "attends to".
+                By analyzing these patterns across heads, we discover
+                specialized behaviors:
+              </p>
+              <ul>
+                <li>
+                  <strong>Previous token heads:</strong> Always look at position
+                  i-1
+                </li>
+                <li>
+                  <strong>Uniform heads:</strong> Spread attention evenly
+                  (averaging information)
+                </li>
+                <li>
+                  <strong>Start token heads:</strong> Focus on the beginning of
+                  the sequence
+                </li>
+                <li>
+                  <strong>Sparse heads:</strong> Concentrate on very few key
+                  tokens
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h4>Example Discovery</h4>
+              <p>Input: <code>"The cat sat on the mat"</code></p>
+              <div class="highlight">
+                <p>
+                  <strong>Head 2.3 (Previous Token):</strong><br />
+                  "cat" attends to "The" (100%)<br />
+                  "sat" attends to "cat" (100%)<br />
+                  <em>→ Implements a previous-token circuit!</em>
+                </p>
+
+                <p>
+                  <strong>Head 4.1 (Uniform):</strong><br />
+                  Each token: 16.7% to all positions<br />
+                  <em>→ Averages information uniformly</em>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="terminal-content">
+              <div class="terminal-line">
+                <span class="terminal-comment"># Analyze a specific head</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python main.py interpret attention checkpoints/model.pt
+                  \</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-command">
+                  --text "Hello world" --layer 2 --head 3</span
+                >
+              </div>
+              <div class="terminal-line"></div>
+              <div class="terminal-line">
+                <span class="terminal-comment"
+                  ># Find all previous-token heads</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python main.py interpret attention checkpoints/model.pt
+                  \</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-command">
+                  --text "Hello world" # Shows pattern summary</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <h3>Induction Heads: Pattern Matching Circuits</h3>
+          <p>
+            The <strong>induction head detector</strong> finds circuits that
+            implement in-context learning - the ability to copy from earlier
+            patterns.
+          </p>
+
+          <div class="two-column">
+            <div>
+              <h4>What Are Induction Heads?</h4>
+              <p>Given a repeated pattern like:</p>
+              <div class="code-window">
+                <div class="code-header">
+                  <div class="code-dot red"></div>
+                  <div class="code-dot yellow"></div>
+                  <div class="code-dot green"></div>
                 </div>
-
-                <div class="highlight">
-                    <p><strong>Beautiful Terminal Output:</strong> Uses the Rich library to display color-coded predictions in tables. High-probability predictions are highlighted in green, making it easy to see when the model converges on the right answer.</p>
-                </div>
-
-                <h3>Attention Analysis: What Do Heads Focus On?</h3>
-                <p>The <strong>attention analysis</strong> tool reveals what each attention head is looking at when processing text.</p>
-
-                <div class="two-column">
-                    <div>
-                        <h4>How It Works</h4>
-                        <p>Attention weights show which tokens each position "attends to". By analyzing these patterns across heads, we discover specialized behaviors:</p>
-                        <ul>
-                            <li><strong>Previous token heads:</strong> Always look at position i-1</li>
-                            <li><strong>Uniform heads:</strong> Spread attention evenly (averaging information)</li>
-                            <li><strong>Start token heads:</strong> Focus on the beginning of the sequence</li>
-                            <li><strong>Sparse heads:</strong> Concentrate on very few key tokens</li>
-                        </ul>
-                    </div>
-
-                    <div>
-                        <h4>Example Discovery</h4>
-                        <p>Input: <code>"The cat sat on the mat"</code></p>
-                        <div class="highlight">
-                            <p><strong>Head 2.3 (Previous Token):</strong><br>
-                            "cat" attends to "The" (100%)<br>
-                            "sat" attends to "cat" (100%)<br>
-                            <em>→ Implements a previous-token circuit!</em></p>
-
-                            <p><strong>Head 4.1 (Uniform):</strong><br>
-                            Each token: 16.7% to all positions<br>
-                            <em>→ Averages information uniformly</em></p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="terminal">
-                    <div class="terminal-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="terminal-content">
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Analyze a specific head</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python main.py interpret attention checkpoints/model.pt \</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-command">     --text "Hello world" --layer 2 --head 3</span>
-                        </div>
-                        <div class="terminal-line"></div>
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Find all previous-token heads</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python main.py interpret attention checkpoints/model.pt \</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-command">     --text "Hello world"  # Shows pattern summary</span>
-                        </div>
-                    </div>
-                </div>
-
-                <h3>Induction Heads: Pattern Matching Circuits</h3>
-                <p>The <strong>induction head detector</strong> finds circuits that implement in-context learning - the ability to copy from earlier patterns.</p>
-
-                <div class="two-column">
-                    <div>
-                        <h4>What Are Induction Heads?</h4>
-                        <p>Given a repeated pattern like:</p>
-                        <div class="code-window">
-                            <div class="code-header">
-                                <div class="code-dot red"></div>
-                                <div class="code-dot yellow"></div>
-                                <div class="code-dot green"></div>
-                            </div>
-                            <div class="code-content">
-                                <pre><code>Input: "A B C ... A B [?]"
+                <div class="code-content">
+                  <pre><code>Input: "A B C ... A B [?]"
 Prediction: "C"</code></pre>
-                            </div>
-                        </div>
-                        <p>Induction heads learn to <strong>predict C</strong> by recognizing the repeated "A B" pattern and copying what came after the first occurrence.</p>
-                    </div>
-
-                    <div>
-                        <h4>The Circuit</h4>
-                        <p>Induction typically involves <strong>two heads working together</strong>:</p>
-                        <div class="highlight">
-                            <p><strong>1. Previous Token Head (Layer L):</strong><br>
-                            At position i, attends to i-1<br>
-                            Creates representation of "what came before"</p>
-
-                            <p><strong>2. Induction Head (Layer L+1):</strong><br>
-                            Queries for matches to previous token<br>
-                            Attends to what came AFTER those matches<br>
-                            Predicts the next token</p>
-                        </div>
-                    </div>
                 </div>
+              </div>
+              <p>
+                Induction heads learn to <strong>predict C</strong> by
+                recognizing the repeated "A B" pattern and copying what came
+                after the first occurrence.
+              </p>
+            </div>
 
-                <div class="terminal">
-                    <div class="terminal-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="terminal-content">
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Detect induction heads across all layers</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python main.py interpret induction-heads checkpoints/model.pt</span>
-                        </div>
-                        <div class="terminal-line"></div>
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Custom parameters: fewer tests, longer sequences</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python main.py interpret induction-heads checkpoints/model.pt \</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-command">     --num-sequences 50 --seq-length 40 --top-k 10</span>
-                        </div>
-                    </div>
+            <div>
+              <h4>The Circuit</h4>
+              <p>
+                Induction typically involves
+                <strong>two heads working together</strong>:
+              </p>
+              <div class="highlight">
+                <p>
+                  <strong>1. Previous Token Head (Layer L):</strong><br />
+                  At position i, attends to i-1<br />
+                  Creates representation of "what came before"
+                </p>
+
+                <p>
+                  <strong>2. Induction Head (Layer L+1):</strong><br />
+                  Queries for matches to previous token<br />
+                  Attends to what came AFTER those matches<br />
+                  Predicts the next token
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="terminal-content">
+              <div class="terminal-line">
+                <span class="terminal-comment"
+                  ># Detect induction heads across all layers</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python main.py interpret induction-heads
+                  checkpoints/model.pt</span
+                >
+              </div>
+              <div class="terminal-line"></div>
+              <div class="terminal-line">
+                <span class="terminal-comment"
+                  ># Custom parameters: fewer tests, longer sequences</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python main.py interpret induction-heads
+                  checkpoints/model.pt \</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-command">
+                  --num-sequences 50 --seq-length 40 --top-k 10</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Why It Matters:</strong> Induction heads are the first
+              clearly-identified circuit in transformers. They're crucial for
+              few-shot learning and emerge suddenly during training
+              ("grokking"). Almost all transformer language models develop
+              induction heads!
+            </p>
+          </div>
+
+          <h3>Activation Patching: Causal Interventions</h3>
+          <p>
+            The <strong>activation patching</strong> tool performs causal
+            experiments to identify which components are truly responsible for
+            specific behaviors.
+          </p>
+
+          <div class="two-column">
+            <div>
+              <h4>The Question</h4>
+              <p>
+                We can <em>observe</em> what the model does, but which parts are
+                actually <strong>causing</strong> the behavior?
+              </p>
+              <p>
+                <strong
+                  >Activation patching answers this through intervention
+                  experiments:</strong
+                >
+              </p>
+              <ol>
+                <li>Run model on "clean" input (correct behavior)</li>
+                <li>Run model on "corrupted" input (incorrect behavior)</li>
+                <li>
+                  For each component, swap clean activations into corrupted run
+                </li>
+                <li>Measure how much this restores correct behavior</li>
+              </ol>
+              <p>
+                High recovery = that component is
+                <strong>causally important</strong>!
+              </p>
+            </div>
+
+            <div>
+              <h4>Example Experiment</h4>
+              <div class="code-window">
+                <div class="code-header">
+                  <div class="code-dot red"></div>
+                  <div class="code-dot yellow"></div>
+                  <div class="code-dot green"></div>
                 </div>
-
-                <div class="highlight">
-                    <p><strong>Why It Matters:</strong> Induction heads are the first clearly-identified circuit in transformers. They're crucial for few-shot learning and emerge suddenly during training ("grokking"). Almost all transformer language models develop induction heads!</p>
-                </div>
-
-                <h3>Activation Patching: Causal Interventions</h3>
-                <p>The <strong>activation patching</strong> tool performs causal experiments to identify which components are truly responsible for specific behaviors.</p>
-
-                <div class="two-column">
-                    <div>
-                        <h4>The Question</h4>
-                        <p>We can <em>observe</em> what the model does, but which parts are actually <strong>causing</strong> the behavior?</p>
-                        <p><strong>Activation patching answers this through intervention experiments:</strong></p>
-                        <ol>
-                            <li>Run model on "clean" input (correct behavior)</li>
-                            <li>Run model on "corrupted" input (incorrect behavior)</li>
-                            <li>For each component, swap clean activations into corrupted run</li>
-                            <li>Measure how much this restores correct behavior</li>
-                        </ol>
-                        <p>High recovery = that component is <strong>causally important</strong>!</p>
-                    </div>
-
-                    <div>
-                        <h4>Example Experiment</h4>
-                        <div class="code-window">
-                            <div class="code-header">
-                                <div class="code-dot red"></div>
-                                <div class="code-dot yellow"></div>
-                                <div class="code-dot green"></div>
-                            </div>
-                            <div class="code-content">
-                                <pre><code>Clean:     "The Eiffel Tower is in"
+                <div class="code-content">
+                  <pre><code>Clean:     "The Eiffel Tower is in"
            → Predicts: "Paris" (85%)
 
 Corrupted: "The Empire State is in"
@@ -1078,190 +1744,320 @@ Test: Patch Layer 4 activations
 
 Result: Layer 4 recovery = 90%
         Layer 4 is CRITICAL!</code></pre>
-                            </div>
-                        </div>
-                    </div>
                 </div>
-
-                <div class="terminal">
-                    <div class="terminal-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="terminal-content">
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Test which layers are causally important</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python main.py interpret patch checkpoints/model.pt \</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-command">     --clean "The Eiffel Tower is in" \</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-command">     --corrupted "The Empire State Building is in" \</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-command">     --target "Paris"</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Why It's Powerful:</strong> This is <strong>causal</strong> evidence, not just correlation. If patching a layer recovers the behavior, that layer is provably necessary for that specific computation. This technique has been used to locate where factual knowledge is stored in large language models!</p>
-                </div>
-
-                <h3>Learn More</h3>
-                <p>Explore the implementation files - each includes comprehensive documentation explaining the theory and methods:</p>
-                <ul>
-                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/logit_lens.py" target="_blank">src/transformer/interpretability/logit_lens.py</a></strong> - Logit lens implementation</li>
-                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/attention_analysis.py" target="_blank">src/transformer/interpretability/attention_analysis.py</a></strong> - Attention pattern detection and classification</li>
-                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/induction_heads.py" target="_blank">src/transformer/interpretability/induction_heads.py</a></strong> - Induction head detection and circuit analysis</li>
-                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/activation_patching.py" target="_blank">src/transformer/interpretability/activation_patching.py</a></strong> - Causal intervention experiments</li>
-                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/visualizations.py" target="_blank">src/transformer/interpretability/visualizations.py</a></strong> - Rich-based terminal visualizations for all tools</li>
-                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/commands/interpret.py" target="_blank">commands/interpret.py</a></strong> - Unified CLI interface with demo, interactive, and analysis modes</li>
-                </ul>
-
-                <div class="reference-box">
-                    <h4>📚 Research References</h4>
-                    <ul>
-                        <li><a href="https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/" target="_blank">Logit Lens - nostalgebraist (LessWrong)</a></li>
-                        <li><a href="https://transformer-circuits.pub/2021/framework/" target="_blank">A Mathematical Framework for Transformer Circuits - Anthropic</a></li>
-                        <li><a href="https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/" target="_blank">In-context Learning and Induction Heads - Anthropic</a></li>
-                        <li><a href="https://www.lesswrong.com/posts/FhryNAFknqKAdDcYy/how-to-use-and-interpret-activation-patching" target="_blank">How to use and interpret activation patching - Neel Nanda & Stefan Heimersheim</a></li>
-                    </ul>
-                </div>
+              </div>
             </div>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="terminal-content">
+              <div class="terminal-line">
+                <span class="terminal-comment"
+                  ># Test which layers are causally important</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python main.py interpret patch checkpoints/model.pt
+                  \</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-command">
+                  --clean "The Eiffel Tower is in" \</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-command">
+                  --corrupted "The Empire State Building is in" \</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-command"> --target "Paris"</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Why It's Powerful:</strong> This is
+              <strong>causal</strong> evidence, not just correlation. If
+              patching a layer recovers the behavior, that layer is provably
+              necessary for that specific computation. This technique has been
+              used to locate where factual knowledge is stored in large language
+              models!
+            </p>
+          </div>
+
+          <h3>Learn More</h3>
+          <p>
+            Explore the implementation files - each includes comprehensive
+            documentation explaining the theory and methods:
+          </p>
+          <ul>
+            <li>
+              <strong
+                ><a
+                  href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/logit_lens.py"
+                  target="_blank"
+                  >src/transformer/interpretability/logit_lens.py</a
+                ></strong
+              >
+              - Logit lens implementation
+            </li>
+            <li>
+              <strong
+                ><a
+                  href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/attention_analysis.py"
+                  target="_blank"
+                  >src/transformer/interpretability/attention_analysis.py</a
+                ></strong
+              >
+              - Attention pattern detection and classification
+            </li>
+            <li>
+              <strong
+                ><a
+                  href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/induction_heads.py"
+                  target="_blank"
+                  >src/transformer/interpretability/induction_heads.py</a
+                ></strong
+              >
+              - Induction head detection and circuit analysis
+            </li>
+            <li>
+              <strong
+                ><a
+                  href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/activation_patching.py"
+                  target="_blank"
+                  >src/transformer/interpretability/activation_patching.py</a
+                ></strong
+              >
+              - Causal intervention experiments
+            </li>
+            <li>
+              <strong
+                ><a
+                  href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/visualizations.py"
+                  target="_blank"
+                  >src/transformer/interpretability/visualizations.py</a
+                ></strong
+              >
+              - Rich-based terminal visualizations for all tools
+            </li>
+            <li>
+              <strong
+                ><a
+                  href="https://github.com/zhubert/transformer/blob/main/commands/interpret.py"
+                  target="_blank"
+                  >commands/interpret.py</a
+                ></strong
+              >
+              - Unified CLI interface with demo, interactive, and analysis modes
+            </li>
+          </ul>
+
+          <div class="reference-box">
+            <h4>📚 Research References</h4>
+            <ul>
+              <li>
+                <a
+                  href="https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/"
+                  target="_blank"
+                  >Logit Lens - nostalgebraist (LessWrong)</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://transformer-circuits.pub/2021/framework/"
+                  target="_blank"
+                  >A Mathematical Framework for Transformer Circuits -
+                  Anthropic</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/"
+                  target="_blank"
+                  >In-context Learning and Induction Heads - Anthropic</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://www.lesswrong.com/posts/FhryNAFknqKAdDcYy/how-to-use-and-interpret-activation-patching"
+                  target="_blank"
+                  >How to use and interpret activation patching - Neel Nanda &
+                  Stefan Heimersheim</a
+                >
+              </li>
+            </ul>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Try It Yourself -->
     <section>
-        <div class="container">
-            <h2>Try It Yourself</h2>
-            <div class="card">
-                <p>Ready to train and experiment with your own transformer? The complete implementation is available on GitHub with everything you need to get started.</p>
+      <div class="container">
+        <h2>Try It Yourself</h2>
+        <div class="card">
+          <p>
+            Ready to train and experiment with your own transformer? The
+            complete implementation is available on GitHub with everything you
+            need to get started.
+          </p>
 
-                <h3>Quick Start</h3>
+          <h3>Quick Start</h3>
 
-                <div class="terminal">
-                    <div class="terminal-header">
-                        <div class="code-dot red"></div>
-                        <div class="code-dot yellow"></div>
-                        <div class="code-dot green"></div>
-                    </div>
-                    <div class="terminal-content">
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> git clone https://github.com/zhubert/transformer.git</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> cd transformer</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Install dependencies with uv</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv sync</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Train the model (uses FineWeb dataset)</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python commands/train.py</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-comment"># Generate text</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">$</span>
-                            <span class="terminal-command"> uv run python commands/generate.py --prompt "Once upon a time"</span>
-                        </div>
-                    </div>
-                </div>
-
-                <h3>What You'll Find</h3>
-                <div class="grid">
-                    <div class="grid-item">
-                        <h4>Clean Implementation</h4>
-                        <p>Well-documented PyTorch code for every component, incrementally built with AI without using pre-built transformer modules</p>
-                    </div>
-                    <div class="grid-item">
-                        <h4>Real Training</h4>
-                        <p>Train on FineWeb, a 10 billion token dataset from HuggingFace with streaming support and smart caching</p>
-                    </div>
-                    <div class="grid-item">
-                        <h4>Multiple Sampling</h4>
-                        <p>Experiment with greedy, top-k, top-p, and combined sampling strategies for text generation</p>
-                    </div>
-                    <div class="grid-item">
-                        <h4>Comprehensive Tests</h4>
-                        <p>Unit tests for all components to verify your understanding and catch bugs</p>
-                    </div>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Learning tip:</strong> Start by reading the code in order: embeddings → attention → feedforward → block → model. Each builds on the previous component!</p>
-                </div>
-
-                <div class="highlight">
-                    <p><strong>Want something more production-ready?</strong> Check out <a href="https://github.com/karpathy/nanochat" target="_blank">Andrej Karpathy's nanochat</a> - a polished, optimized GPT implementation that's ready to use for real applications.</p>
-                </div>
+          <div class="terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
             </div>
+            <div class="terminal-content">
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  git clone https://github.com/zhubert/transformer.git</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command"> cd transformer</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-comment"
+                  ># Install dependencies with uv</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command"> uv sync</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-comment"
+                  ># Train the model (uses FineWeb dataset)</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python commands/train.py</span
+                >
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-comment"># Generate text</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command">
+                  uv run python commands/generate.py --prompt "Once upon a
+                  time"</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Want something more production-ready?</strong> Check out
+              <a href="https://github.com/karpathy/nanochat" target="_blank"
+                >Andrej Karpathy's nanochat</a
+              >
+              - a polished, optimized GPT implementation that's ready to use for
+              real applications.
+            </p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Footer -->
     <footer>
+      <div class="container">
+        <div class="footer-content">
+          <div class="footer-section">
+            <h4>Transformer</h4>
+            <p>
+              An educational implementation of a decoder-only transformer in
+              PyTorch. Built with AI to understand the architecture that powers
+              modern AI. This page was generated with assistance from Claude AI
+              and may contain errors.
+            </p>
+          </div>
+
+          <div class="footer-section">
+            <h4>Learn More</h4>
+            <ul class="footer-links">
+              <li>
+                <a href="https://github.com/zhubert/transformer"
+                  >View Source Code</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/zhubert/transformer/blob/main/README.md"
+                  >Documentation</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/zhubert/transformer/blob/main/CLAUDE.md"
+                  >Implementation Guide</a
+                >
+              </li>
+              <li>
+                <a href="https://github.com/zhubert/transformer/tree/main/tests"
+                  >Tests & Examples</a
+                >
+              </li>
+            </ul>
+          </div>
+
+          <div class="footer-section">
+            <h4>Components</h4>
+            <ul class="footer-links">
+              <li><a href="#embeddings">Token Embeddings</a></li>
+              <li><a href="#attention">Attention Mechanism</a></li>
+              <li><a href="#multi-head">Multi-Head Attention</a></li>
+              <li><a href="#feedforward">Feed-Forward Network</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-section">
+            <h4>Resources</h4>
+            <ul class="footer-links">
+              <li>
+                <a href="https://arxiv.org/abs/1706.03762" target="_blank"
+                  >Original Paper</a
+                >
+              </li>
+              <li><a href="http://zhubert.com">More Projects</a></li>
+              <li>
+                <a href="https://github.com/zhubert/transformer/issues"
+                  >Report Issues</a
+                >
+              </li>
+              <li>
+                <a href="https://pytorch.org" target="_blank">PyTorch Docs</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
         <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4>Transformer - Incrementally Built with AI</h4>
-                    <p>An educational implementation of a decoder-only transformer in PyTorch. Incrementally built with AI to understand the architecture that powers modern AI. This page was generated with assistance from Claude AI and may contain errors.</p>
-                </div>
-
-                <div class="footer-section">
-                    <h4>Learn More</h4>
-                    <ul class="footer-links">
-                        <li><a href="https://github.com/zhubert/transformer">View Source Code</a></li>
-                        <li><a href="https://github.com/zhubert/transformer/blob/main/README.md">Documentation</a></li>
-                        <li><a href="https://github.com/zhubert/transformer/blob/main/CLAUDE.md">Implementation Guide</a></li>
-                        <li><a href="https://github.com/zhubert/transformer/tree/main/tests">Tests & Examples</a></li>
-                    </ul>
-                </div>
-
-                <div class="footer-section">
-                    <h4>Components</h4>
-                    <ul class="footer-links">
-                        <li><a href="#embeddings">Token Embeddings</a></li>
-                        <li><a href="#attention">Attention Mechanism</a></li>
-                        <li><a href="#multi-head">Multi-Head Attention</a></li>
-                        <li><a href="#feedforward">Feed-Forward Network</a></li>
-                    </ul>
-                </div>
-
-                <div class="footer-section">
-                    <h4>Resources</h4>
-                    <ul class="footer-links">
-                        <li><a href="https://arxiv.org/abs/1706.03762" target="_blank">Original Paper</a></li>
-                        <li><a href="http://zhubert.com">More Projects</a></li>
-                        <li><a href="https://github.com/zhubert/transformer/issues">Report Issues</a></li>
-                        <li><a href="https://pytorch.org" target="_blank">PyTorch Docs</a></li>
-                    </ul>
-                </div>
-            </div>
+          <p>Open source project under MIT License for educational purposes.</p>
         </div>
-
-        <div class="footer-bottom">
-            <div class="container">
-                <p>Built with curiosity and PyTorch. Open source project for educational purposes.</p>
-            </div>
-        </div>
+      </div>
     </footer>
-</body>
+  </body>
 </html>
