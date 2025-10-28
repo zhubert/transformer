@@ -100,15 +100,30 @@ tests/                  # Test suite for core components
 
 Want to understand transformers deeply? Read the code in this order:
 
-1. **[`src/transformer/attention.py`](src/transformer/attention.py)** - Start here! The core self-attention mechanism
-2. **[`src/transformer/embeddings.py`](src/transformer/embeddings.py)** - How tokens and positions are represented
-3. **[`src/transformer/feedforward.py`](src/transformer/feedforward.py)** - Position-wise neural networks
-4. **[`src/transformer/block.py`](src/transformer/block.py)** - How components combine (with gradient flow explanation!)
-5. **[`src/transformer/model.py`](src/transformer/model.py)** - The complete architecture
-6. **[`src/transformer/sampling.py`](src/transformer/sampling.py)** - How to generate high-quality text
-7. **[`src/transformer/perplexity.py`](src/transformer/perplexity.py)** - How to evaluate language models
-8. **[`commands/train.py`](commands/train.py)** - How to train the model
-9. **[`src/transformer/interpretability/logit_lens.py`](src/transformer/interpretability/logit_lens.py)** - Understanding what the model learned
+### Core Architecture (Start Here!)
+1. **[`src/transformer/attention.py`](src/transformer/attention.py)** - Start here! The core self-attention mechanism with KV-cache optimization
+2. **[`src/transformer/embeddings.py`](src/transformer/embeddings.py)** - How tokens and positions are represented (learned vs sinusoidal)
+3. **[`src/transformer/feedforward.py`](src/transformer/feedforward.py)** - Position-wise neural networks with GELU activation
+4. **[`src/transformer/block.py`](src/transformer/block.py)** - How components combine (Pre-LN architecture + gradient flow explanation)
+5. **[`src/transformer/model.py`](src/transformer/model.py)** - The complete decoder-only transformer architecture
+
+### Training & Evaluation
+6. **[`src/transformer/scheduler.py`](src/transformer/scheduler.py)** - Learning rate scheduling (warmup + cosine decay)
+7. **[`src/transformer/training_utils.py`](src/transformer/training_utils.py)** - Gradient accumulation for stable training
+8. **[`src/transformer/fineweb_dataset.py`](src/transformer/fineweb_dataset.py)** - Streaming dataset with smart caching
+9. **[`commands/train.py`](commands/train.py)** - Complete training pipeline with device auto-detection
+10. **[`src/transformer/perplexity.py`](src/transformer/perplexity.py)** - How to evaluate and compare language models
+
+### Generation & Sampling
+11. **[`src/transformer/sampling.py`](src/transformer/sampling.py)** - Advanced sampling strategies (greedy, top-k, top-p)
+12. **[`commands/generate.py`](commands/generate.py)** - Interactive text generation with presets
+13. **[`commands/benchmark_generation.py`](commands/benchmark_generation.py)** - KV-cache speedup demonstration (2-50x faster!)
+
+### Interpretability (Advanced)
+14. **[`src/transformer/interpretability/logit_lens.py`](src/transformer/interpretability/logit_lens.py)** - Visualize how predictions evolve through layers
+15. **[`src/transformer/interpretability/attention_analysis.py`](src/transformer/interpretability/attention_analysis.py)** - Discover attention patterns and head behaviors
+16. **[`src/transformer/interpretability/induction_heads.py`](src/transformer/interpretability/induction_heads.py)** - Detect pattern-matching circuits
+17. **[`src/transformer/interpretability/activation_patching.py`](src/transformer/interpretability/activation_patching.py)** - Causal interventions to test component importance
 
 Each file has extensive documentation explaining concepts, design decisions, and mathematical details.
 
@@ -214,9 +229,9 @@ See [`src/transformer/attention.py`](src/transformer/attention.py) for KV-Cache 
 
 ## Model Interpretability
 
-**Complete!** Understand what your transformer has learned using mechanistic interpretability tools. All 4 phases implemented!
+Understand what your transformer has learned using mechanistic interpretability tools.
 
-### Logit Lens (Phase 1 ✓)
+### Logit Lens
 
 Visualize how predictions evolve through layers:
 
@@ -239,7 +254,7 @@ uv run python main.py interpret logit-lens checkpoints/model.pt --interactive
 - Layer 3: Starting to converge ("Paris", "located")
 - Layer 6: Confident final answer ("Paris")
 
-### Attention Analysis (Phase 2 ✓)
+### Attention Analysis
 
 Understand what tokens each attention head focuses on:
 
@@ -270,7 +285,7 @@ uv run python main.py interpret attention checkpoints/model.pt \
 - Head 4.1 averages information uniformly
 - Head 1.0 focuses on the start token
 
-### Induction Head Detection (Phase 3 ✓)
+### Induction Head Detection
 
 Find and analyze induction heads - circuits that implement pattern matching and in-context learning:
 
@@ -295,7 +310,7 @@ Induction heads are a key circuit discovered in transformer models that enable i
 
 This circuit is crucial for few-shot learning and emerges suddenly during training ("grokking").
 
-### Activation Patching (Phase 4 ✓)
+### Activation Patching
 
 Test which components are **causally responsible** for specific behaviors through intervention experiments:
 
