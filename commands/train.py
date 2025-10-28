@@ -60,6 +60,16 @@ Key Concepts:
     - Too low (e.g., 0.000001): Training too slow
     - Just right (e.g., 0.0003): Steady improvement!
 
+**Gradient Clipping**: Prevents exploding gradients in transformers
+    - Problem: Gradients can grow exponentially through deep layers
+    - Solution: Scale down gradients if they get too large
+    - max_norm=1.0: Standard for GPT-2, GPT-3, BERT
+    - Clipping rate: % of updates where gradients were clipped
+        * Early training: 30-70% (high clipping is normal)
+        * Mid training: 10-30% (stabilizing)
+        * Late training: 5-15% (stable)
+    - Without clipping: Training can collapse with NaN loss!
+
 **Batch**: Group of training examples processed together
     - Batch size 8 = process 8 sequences at once
     - Larger batches = more stable gradients but use more memory
@@ -704,6 +714,7 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
         epoch_loss = 0.0
         epoch_start = time.time()
         training_rows = []  # Store training metrics for Rich table display
+        grad_norms = []  # Track gradient norms for monitoring clipping
 
         # Reset gradient accumulator for new epoch
         accumulator.reset()
@@ -757,8 +768,24 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
 
                 # Check if we should update weights (every accumulation_steps batches)
                 if accumulator.step():
-                    # Clip gradients to prevent explosion
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    # Gradient Clipping
+                    # ------------------
+                    # Clip gradients to prevent exploding gradients - a common issue in
+                    # transformers where gradients can grow exponentially through layers.
+                    #
+                    # Why transformers need clipping:
+                    # - Deep networks multiply gradients across many layers
+                    # - Attention softmax can produce sharp distributions
+                    # - Long sequences create longer backprop paths
+                    #
+                    # Without clipping: Gradients can explode → NaN loss → training collapse
+                    # With clipping (max_norm=1.0): Scale down gradients proportionally
+                    #
+                    # Standard practice: max_norm=1.0 (used in GPT-2, GPT-3, BERT)
+                    #
+                    # Returns: Original gradient norm (before clipping) for monitoring
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    grad_norms.append(grad_norm.item())  # Store for statistics
 
                     # Update weights
                     optimizer.step()
@@ -869,6 +896,26 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
         summary_table.add_row("Loss", f"{avg_train_loss:.4f}", f"{avg_val_loss:.4f}")
         summary_table.add_row("Perplexity", f"{avg_train_perplexity:.2f}", f"{avg_val_perplexity:.2f}")
         summary_table.add_row("Time", f"{train_time:.1f}s", f"{val_time:.1f}s")
+
+        # Gradient norm statistics (educational insight into training stability)
+        if grad_norms:
+            import numpy as np
+            max_grad_norm = max(grad_norms)
+            avg_grad_norm = np.mean(grad_norms)
+            clipped_count = sum(1 for g in grad_norms if g > 1.0)
+            clip_rate = (clipped_count / len(grad_norms)) * 100
+
+            # Format gradient norm display with color coding
+            grad_norm_display = f"{avg_grad_norm:.3f} (max: {max_grad_norm:.3f})"
+            if clip_rate > 50:
+                clip_display = f"[yellow]{clip_rate:.1f}%[/yellow]"
+            elif clip_rate > 10:
+                clip_display = f"[yellow]{clip_rate:.1f}%[/yellow]"
+            else:
+                clip_display = f"{clip_rate:.1f}%"
+
+            summary_table.add_row("Gradient norm", grad_norm_display, "")
+            summary_table.add_row("Clipping rate", clip_display, "")
 
         # Determine status message with color
         if avg_val_loss < avg_train_loss * 1.05:
