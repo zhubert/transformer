@@ -202,7 +202,7 @@ class DecoderOnlyTransformer(nn.Module):
         # Use smaller std for the final layer to prevent numerical instability
         torch.nn.init.normal_(self.output_proj.weight, mean=0.0, std=0.01)
 
-    def forward(self, x, mask=None, caches=None, debug=False):
+    def forward(self, x, mask=None, caches=None, debug=False, return_hidden_states=False, return_attention_weights=False):
         """
         Forward pass through the transformer with optional KV-cache support.
 
@@ -248,6 +248,12 @@ class DecoderOnlyTransformer(nn.Module):
                     - List[Dict]: Decode mode
                     Length must equal num_layers
             debug: If True, print diagnostic information for NaN detection
+            return_hidden_states: If True, return hidden states after each layer
+                                 Useful for interpretability (logit lens, etc.)
+                                 Default: False (for backward compatibility)
+            return_attention_weights: If True, return attention weights from all layers
+                                     Useful for interpretability (attention analysis, etc.)
+                                     Default: False (for backward compatibility)
 
         Returns:
             logits: Output logits of shape (batch, seq_len, vocab_size)
@@ -255,6 +261,12 @@ class DecoderOnlyTransformer(nn.Module):
             new_caches: List of updated caches (one per layer)
                        Each cache: {'keys': tensor, 'values': tensor}
                        None if caches input was None (for backward compatibility)
+            hidden_states: (Optional) List of hidden states after each layer
+                          Only returned if return_hidden_states=True
+                          Each element: (batch, seq_len, d_model)
+            attention_weights: (Optional) List of attention weights from each layer
+                             Only returned if return_attention_weights=True
+                             Each element: (batch, num_heads, seq_len, seq_len)
 
         Shape flow (PREFILL):
             Input:  (batch, prompt_len) - token IDs
@@ -344,13 +356,27 @@ class DecoderOnlyTransformer(nn.Module):
 
         # 3. Pass through all transformer blocks, collecting updated caches
         new_caches = []
+        hidden_states = [] if return_hidden_states else None
+        attention_weights = [] if return_attention_weights else None
+
         for i, block in enumerate(self.blocks):
             # Get cache for this layer (None if not using cache)
             layer_cache = caches[i] if use_cache else None
 
-            # Forward through block, get output and updated cache
-            x, updated_cache = block(x, mask=mask, cache=layer_cache, debug=debug)
+            # Forward through block, get output, updated cache, and optionally attention weights
+            if return_attention_weights:
+                x, updated_cache, attn_weights = block(
+                    x, mask=mask, cache=layer_cache, debug=debug, return_attention_weights=True
+                )
+                attention_weights.append(attn_weights)
+            else:
+                x, updated_cache = block(x, mask=mask, cache=layer_cache, debug=debug)
+
             new_caches.append(updated_cache)
+
+            # Collect hidden states for interpretability if requested
+            if return_hidden_states:
+                hidden_states.append(x)
 
             if debug and torch.isnan(x).any():
                 print(f"NaN after block {i}! Stats: min={x.min()}, max={x.max()}")
@@ -368,7 +394,15 @@ class DecoderOnlyTransformer(nn.Module):
 
         # Return logits and caches
         # Always return caches (they're always computed now)
-        return logits, new_caches
+        # Optionally return hidden states and/or attention weights for interpretability
+        if return_hidden_states and return_attention_weights:
+            return logits, new_caches, hidden_states, attention_weights
+        elif return_hidden_states:
+            return logits, new_caches, hidden_states
+        elif return_attention_weights:
+            return logits, new_caches, attention_weights
+        else:
+            return logits, new_caches
 
     def create_causal_mask(self, seq_len):
         """

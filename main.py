@@ -35,6 +35,7 @@ from commands.sampling_comparison import (
     demonstrate_sampling_strategies,
     demonstrate_with_model,
 )
+from commands import interpret
 
 
 def create_parser():
@@ -213,6 +214,16 @@ Examples:
         help="Also demonstrate with an actual trained model (if available)",
     )
 
+    # ============================================================================
+    # INTERPRET subcommand
+    # ============================================================================
+    interpret_parser = subparsers.add_parser(
+        "interpret",
+        help="Interpretability tools for understanding model internals",
+        description="Analyze what your transformer has learned using mechanistic interpretability",
+    )
+    interpret.setup_parser(interpret_parser)
+
     return parser
 
 
@@ -333,6 +344,13 @@ def main():
         if args.with_model:
             print("\n" * 2)
             demonstrate_with_model()
+
+    elif args.command == "interpret":
+        print("=" * 80)
+        print("INTERPRETABILITY MODE")
+        print("=" * 80)
+        print()
+        interpret.main(args)
 
 
 if __name__ == "__main__":
