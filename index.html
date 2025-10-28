@@ -1084,10 +1084,10 @@ Result: Layer 4 recovery = 90%
                 <h3>Learn More</h3>
                 <p>Explore the implementation files - each includes comprehensive documentation explaining the theory and methods:</p>
                 <ul>
-                    <li><strong><code>src/transformer/interpretability/logit_lens.py</code></strong> - Logit lens implementation (Phase 1)</li>
-                    <li><strong><code>src/transformer/interpretability/attention_analysis.py</code></strong> - Attention pattern detection and classification (Phase 2)</li>
-                    <li><strong><code>src/transformer/interpretability/induction_heads.py</code></strong> - Induction head detection and circuit analysis (Phase 3)</li>
-                    <li><strong><code>src/transformer/interpretability/activation_patching.py</code></strong> - Causal intervention experiments (Phase 4)</li>
+                    <li><strong><code>src/transformer/interpretability/logit_lens.py</code></strong> - Logit lens implementation</li>
+                    <li><strong><code>src/transformer/interpretability/attention_analysis.py</code></strong> - Attention pattern detection and classification</li>
+                    <li><strong><code>src/transformer/interpretability/induction_heads.py</code></strong> - Induction head detection and circuit analysis</li>
+                    <li><strong><code>src/transformer/interpretability/activation_patching.py</code></strong> - Causal intervention experiments</li>
                     <li><strong><code>src/transformer/interpretability/visualizations.py</code></strong> - Rich-based terminal visualizations for all tools</li>
                     <li><strong><code>commands/interpret.py</code></strong> - Unified CLI interface with demo, interactive, and analysis modes</li>
                 </ul>
@@ -1098,7 +1098,7 @@ Result: Layer 4 recovery = 90%
                         <li><a href="https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/" target="_blank">Logit Lens - nostalgebraist (LessWrong)</a></li>
                         <li><a href="https://transformer-circuits.pub/2021/framework/" target="_blank">A Mathematical Framework for Transformer Circuits - Anthropic</a></li>
                         <li><a href="https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/" target="_blank">In-context Learning and Induction Heads - Anthropic</a></li>
-                        <li><a href="https://www.neelnanda.io/mechanistic-interpretability/activation-patching" target="_blank">Activation Patching - Neel Nanda</a></li>
+                        <li><a href="https://www.lesswrong.com/posts/FhryNAFknqKAdDcYy/how-to-use-and-interpret-activation-patching" target="_blank">How to use and interpret activation patching - Neel Nanda & Stefan Heimersheim</a></li>
                     </ul>
                 </div>
             </div>
@@ -1175,6 +1175,10 @@ Result: Layer 4 recovery = 90%
 
                 <div class="highlight">
                     <p><strong>Learning tip:</strong> Start by reading the code in order: embeddings → attention → feedforward → block → model. Each builds on the previous component!</p>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>Want something more production-ready?</strong> Check out <a href="https://github.com/karpathy/nanochat" target="_blank">Andrej Karpathy's nanochat</a> - a polished, optimized GPT implementation that's ready to use for real applications.</p>
                 </div>
             </div>
         </div>
