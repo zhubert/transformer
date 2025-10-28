@@ -272,3 +272,124 @@ class TestDecoderOnlyTransformer:
         # Check that LayerNorm weights are initialized to 1 and biases to 0
         assert torch.allclose(model.ln_f.weight, torch.ones_like(model.ln_f.weight))
         assert torch.allclose(model.ln_f.bias, torch.zeros_like(model.ln_f.bias))
+
+    def test_weight_tying_enabled(self):
+        """Test that weight tying works when enabled (default)."""
+        vocab_size = 500
+        d_model = 128
+        model = DecoderOnlyTransformer(vocab_size, d_model=d_model, num_heads=4, num_layers=2, d_ff=512, tie_weights=True)
+
+        # Check that both layers reference the SAME tensor (not just equal values)
+        assert model.output_proj.weight is model.token_embedding.embedding.weight
+
+        # Check shape is correct
+        assert model.output_proj.weight.shape == (vocab_size, d_model)
+        assert model.token_embedding.embedding.weight.shape == (vocab_size, d_model)
+
+        # Verify that modifying one affects the other (since they share memory)
+        with torch.no_grad():
+            original_value = model.token_embedding.embedding.weight[0, 0].item()
+            model.token_embedding.embedding.weight[0, 0] = 999.0
+            assert model.output_proj.weight[0, 0].item() == 999.0
+            # Restore original value
+            model.token_embedding.embedding.weight[0, 0] = original_value
+
+    def test_weight_tying_disabled(self):
+        """Test that weight tying can be disabled."""
+        vocab_size = 500
+        d_model = 128
+        model = DecoderOnlyTransformer(vocab_size, d_model=d_model, num_heads=4, num_layers=2, d_ff=512, tie_weights=False)
+
+        # Check that layers have DIFFERENT tensors (not the same object)
+        assert model.output_proj.weight is not model.token_embedding.embedding.weight
+
+        # Check shapes are still correct
+        assert model.output_proj.weight.shape == (vocab_size, d_model)
+        assert model.token_embedding.embedding.weight.shape == (vocab_size, d_model)
+
+        # Verify that modifying one does NOT affect the other
+        with torch.no_grad():
+            model.token_embedding.embedding.weight[0, 0] = 999.0
+            assert model.output_proj.weight[0, 0].item() != 999.0
+
+    def test_weight_tying_parameter_count(self):
+        """Test that weight tying reduces parameter count by ~50% for embedding/output."""
+        vocab_size = 1000
+        d_model = 256
+
+        # Model with weight tying (default)
+        model_tied = DecoderOnlyTransformer(
+            vocab_size, d_model=d_model, num_heads=4, num_layers=2, d_ff=512, tie_weights=True
+        )
+
+        # Model without weight tying
+        model_untied = DecoderOnlyTransformer(
+            vocab_size, d_model=d_model, num_heads=4, num_layers=2, d_ff=512, tie_weights=False
+        )
+
+        # Count parameters
+        tied_params = sum(p.numel() for p in model_tied.parameters())
+        untied_params = sum(p.numel() for p in model_untied.parameters())
+
+        # The difference should be vocab_size × d_model (one full embedding matrix)
+        embedding_params = vocab_size * d_model
+        assert untied_params - tied_params == embedding_params
+
+        # Verify the exact reduction
+        assert tied_params == untied_params - embedding_params
+
+    def test_weight_tying_gradients_accumulate(self):
+        """Test that gradients from both embedding and output accumulate in shared weights."""
+        vocab_size = 100
+        d_model = 64
+        model = DecoderOnlyTransformer(
+            vocab_size, d_model=d_model, num_heads=4, num_layers=1, d_ff=256, tie_weights=True
+        )
+
+        batch_size = 2
+        seq_len = 5
+        x = torch.randint(0, vocab_size, (batch_size, seq_len))
+
+        logits, _ = model(x)
+
+        # Compute dummy loss and backpropagate
+        loss = logits.sum()
+        loss.backward()
+
+        # With weight tying, gradients from both embedding and output should accumulate
+        # in the shared tensor
+        grad = model.token_embedding.embedding.weight.grad
+
+        # Check that gradients exist
+        assert grad is not None
+
+        # Check that output_proj.weight has the SAME gradient tensor (shared)
+        assert model.output_proj.weight.grad is model.token_embedding.embedding.weight.grad
+
+        # Verify gradients are non-zero (both uses contributed)
+        assert not torch.allclose(grad, torch.zeros_like(grad))
+
+    def test_weight_tying_forward_pass_correct(self):
+        """Test that forward pass works correctly with weight tying."""
+        vocab_size = 200
+        d_model = 128
+        model = DecoderOnlyTransformer(
+            vocab_size, d_model=d_model, num_heads=4, num_layers=2, d_ff=512, tie_weights=True
+        )
+
+        batch_size = 2
+        seq_len = 10
+        x = torch.randint(0, vocab_size, (batch_size, seq_len))
+
+        logits, _ = model(x)
+
+        # Check output shape
+        assert logits.shape == (batch_size, seq_len, vocab_size)
+
+        # Check no NaNs or Infs
+        assert not torch.isnan(logits).any()
+        assert not torch.isinf(logits).any()
+
+        # Check that probabilities sum to 1 after softmax
+        probs = torch.softmax(logits, dim=-1)
+        assert torch.allclose(probs.sum(dim=-1), torch.ones(batch_size, seq_len), atol=1e-6)

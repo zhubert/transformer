@@ -119,6 +119,38 @@ def function(x):
 
 ## Important Implementation Details
 
+### Weight Tying
+The model uses **weight tying** between token embeddings and output projection - a standard practice in GPT-2, GPT-3, and BERT:
+
+```python
+# Both layers share the same weight matrix
+self.output_proj.weight = self.token_embedding.embedding.weight
+```
+
+**Why this works**:
+- **Embedding**: Maps token ID → vector (lookup row from matrix E)
+- **Output**: Maps vector → token scores (multiply by E^T)
+- These are inverse operations, so sharing the matrix makes conceptual sense
+
+**Benefits**:
+- **50% parameter reduction** for embedding/output layers
+  - Without: vocab_size × d_model × 2 = 51.2M params (default config)
+  - With: vocab_size × d_model = 25.6M params (50% savings!)
+- **Better generalization**: Regularization effect from shared weights
+- **Consistent representations**: Forces token → vector → token consistency
+- **Improved perplexity**: Empirically shown to improve by 5-15%
+
+**Configurable**:
+```python
+# Enable (default, recommended)
+model = DecoderOnlyTransformer(..., tie_weights=True)
+
+# Disable (for ablation studies)
+model = DecoderOnlyTransformer(..., tie_weights=False)
+```
+
+**Compatibility with embedding scaling**: Weight tying and sqrt(d_model) scaling work together perfectly. The scaling happens during the forward pass (embedding lookup), not in the parameters, so there's no conflict.
+
 ### KV-Cache Gotcha
 When using KV-cache, positional encodings must account for the current position:
 ```python

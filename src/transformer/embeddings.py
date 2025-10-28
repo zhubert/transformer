@@ -31,6 +31,24 @@ This scaling is used in:
     - GPT-2 and GPT-3 (OpenAI)
     - BERT (Google)
     - Most modern transformer implementations
+
+Weight Tying Note:
+------------------
+The TokenEmbedding layer's weight matrix (self.embedding.weight) can be shared with
+the output projection layer via weight tying. This is done in model.py:
+
+    self.output_proj.weight = self.token_embedding.embedding.weight
+
+This reduces parameters by 50% (one matrix instead of two) and is standard practice
+in GPT-2, GPT-3, and BERT.
+
+Important: The sqrt(d_model) scaling happens during the forward pass (embedding lookup)
+but NOT during output projection. This is correct because:
+    - Embedding forward: lookup → scale by sqrt(d_model) → return
+    - Output projection: matrix multiply (uses raw unscaled weights)
+
+The scaling is an operation, not part of the parameters, so weight tying and embedding
+scaling work together perfectly without any conflicts.
 """
 
 import torch

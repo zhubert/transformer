@@ -133,6 +133,37 @@ class DecoderOnlyTransformer(nn.Module):
 
     This is the complete, working transformer that can be trained and used
     for text generation.
+
+    Weight Tying:
+    -------------
+    By default, this model uses weight tying between the token embedding matrix
+    and the output projection matrix. This is a standard practice in modern
+    transformers (GPT-2, GPT-3, BERT, etc.) that:
+
+    1. Reduces parameters by ~50% for embedding/output layers
+       - Without tying: vocab_size × d_model × 2 parameters
+       - With tying: vocab_size × d_model parameters (50% savings!)
+       - For default config (vocab=100K, d_model=256): saves 25.6M parameters
+
+    2. Improves generalization through regularization
+       - Forces consistency: token → vector → token
+       - Gradients from both embedding and output accumulate in shared weights
+       - Empirically shown to improve perplexity by 5-15%
+
+    3. Makes conceptual sense
+       - Embedding: token_id → vector (lookup row from matrix)
+       - Output: vector → token_scores (multiply by matrix transpose)
+       - These are inverse operations, so sharing the matrix provides useful inductive bias
+
+    The technique works because:
+        Embedding: E[token_id] → gets row token_id from E (vocab_size × d_model)
+        Output: hidden @ E^T → multiplies by transpose of same matrix E
+
+    References:
+    - "Using the Output Embedding to Improve Language Models" (Press & Wolf, 2017)
+    - Used in GPT-2 (Radford et al., 2019)
+    - Used in BERT (Devlin et al., 2018)
+    - Standard practice in modern transformers
     """
 
     def __init__(
@@ -144,6 +175,7 @@ class DecoderOnlyTransformer(nn.Module):
         d_ff=2048,
         max_seq_len=5000,
         dropout=0.1,
+        tie_weights=True,
     ):
         """
         Initialize decoder-only transformer.
@@ -156,11 +188,15 @@ class DecoderOnlyTransformer(nn.Module):
             d_ff: Hidden dimension of feed-forward network (typically 4 * d_model)
             max_seq_len: Maximum sequence length supported
             dropout: Dropout probability for regularization
+            tie_weights: Whether to tie embedding and output projection weights
+                        (default: True, following GPT-2/GPT-3/BERT)
+                        Set to False for ablation studies or educational comparison
         """
         super().__init__()
 
         self.d_model = d_model
         self.num_layers = num_layers
+        self.tie_weights = tie_weights
 
         # 1. Token embedding: converts token IDs to dense vectors
         self.token_embedding = TokenEmbedding(vocab_size, d_model)
@@ -179,13 +215,31 @@ class DecoderOnlyTransformer(nn.Module):
         self.ln_f = nn.LayerNorm(d_model)
 
         # 5. Output projection: maps from d_model to vocabulary logits
-        self.output_proj = nn.Linear(d_model, vocab_size)
+        # Note: No bias when using weight tying (common practice)
+        self.output_proj = nn.Linear(d_model, vocab_size, bias=False)
 
         # Initialize weights for better training stability
         self._init_weights()
 
+        # 6. Tie weights if requested (AFTER initialization)
+        # This makes output_proj.weight and token_embedding.embedding.weight
+        # point to the SAME tensor in memory, reducing parameters by 50%
+        if tie_weights:
+            self.output_proj.weight = self.token_embedding.embedding.weight
+            # Now both layers share the same weight tensor!
+            # - Embedding uses it for lookup: E[token_id]
+            # - Output uses it for projection: hidden @ E^T
+            # - Gradients from both accumulate in the shared tensor
+            # - Changes to one automatically affect the other
+
     def _init_weights(self):
-        """Initialize weights for better training stability."""
+        """
+        Initialize weights for better training stability.
+
+        Note: We use std=0.02 for all weights (embeddings, linear layers).
+        When weight tying is enabled, the embedding initialization will be used
+        for both the embedding and output projection (since they share the same tensor).
+        """
         # Initialize linear layers and embeddings
         for module in self.modules():
             if isinstance(module, nn.Linear):
@@ -197,10 +251,6 @@ class DecoderOnlyTransformer(nn.Module):
             elif isinstance(module, nn.LayerNorm):
                 torch.nn.init.ones_(module.weight)
                 torch.nn.init.zeros_(module.bias)
-
-        # Special initialization for output projection (large vocab stability)
-        # Use smaller std for the final layer to prevent numerical instability
-        torch.nn.init.normal_(self.output_proj.weight, mean=0.0, std=0.01)
 
     def forward(self, x, mask=None, caches=None, debug=False, return_hidden_states=False, return_attention_weights=False):
         """
