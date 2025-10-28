@@ -173,6 +173,23 @@ x = norm(x + attention(x))
 x = norm(x + ffn(x))
 ```
 
+### Gradient Clipping
+Transformers need gradient clipping to prevent exploding gradients in deep networks:
+```python
+# Clip gradients to prevent explosions
+torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+```
+
+**Why transformers need this**:
+- Deep networks (6+ layers) with residual connections can accumulate large gradients
+- Attention mechanisms can produce extreme values early in training
+- Without clipping, loss can suddenly spike to NaN
+
+**Implementation** (GPT-2/GPT-3 standard):
+- max_norm=1.0 - clips gradient norm if it exceeds this threshold
+- Tracks gradient norms for monitoring training stability
+- Applied after backward pass, before optimizer step
+
 ### Gradient Accumulation
 Don't forget to scale loss by accumulation steps:
 ```python

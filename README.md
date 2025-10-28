@@ -182,6 +182,13 @@ uv run python main.py train --accumulation-steps 32
 uv run python main.py train --mps    # Apple Silicon GPU
 ```
 
+### Training Features
+
+- **Gradient accumulation**: Simulate large batch sizes (16x default) for stable training
+- **Gradient clipping**: Prevents exploding gradients (max_norm=1.0, GPT-2/GPT-3 standard)
+- **Learning rate scheduling**: Warmup (5%) + cosine decay for optimal convergence
+- **Train/val split**: 90/10 split for monitoring overfitting
+
 ### Dataset: FineWeb
 
 We use HuggingFace's [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) dataset (sample-10BT):
