@@ -293,17 +293,24 @@ p code, li code, .card code:not(.code-content code) {
     margin: 48px 0;
 }
 
+.grid a {
+    text-decoration: none;
+    color: inherit;
+}
+
 .grid-item {
+    display: block;
     background: white;
     border-radius: 16px;
     padding: 32px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .grid-item:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transform: translateY(-8px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
 }
 
 .grid-item h4 {
@@ -553,7 +560,7 @@ footer {
     }
 
     .grid-item:hover {
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.9);
     }
 
     .grid-item h4 {

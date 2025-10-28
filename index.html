@@ -33,32 +33,44 @@
                 <p><strong>What makes transformers special?</strong> Previous approaches to language modeling used recurrent neural networks (RNNs), which process text one word at a time in sequence—like reading a sentence from left to right. Transformers instead use a mechanism called <strong>attention</strong> that allows them to process all words simultaneously <em>while still understanding their relationships</em>. This parallel processing makes them much faster to train and more effective at capturing long-range dependencies in text.</p>
             </div>
 
-            <h3>Key Components</h3>
-            <div class="grid">
-                <div class="grid-item">
-                    <h4>Self-Attention</h4>
-                    <p>Allows the model to weigh the importance of different words when processing each word in context</p>
-                </div>
-                <div class="grid-item">
-                    <h4>Multi-Head Attention</h4>
-                    <p>Runs multiple attention mechanisms in parallel, each learning different relationships</p>
-                </div>
-                <div class="grid-item">
-                    <h4>Positional Encoding</h4>
-                    <p>Adds positional information since transformers process all tokens simultaneously</p>
-                </div>
-                <div class="grid-item">
-                    <h4>Feed-Forward Networks</h4>
-                    <p>Applied to each position independently to process the attended information</p>
-                </div>
-                <div class="grid-item">
-                    <h4>Layer Normalization</h4>
-                    <p>Stabilizes training by normalizing activations within each layer</p>
-                </div>
-                <div class="grid-item">
-                    <h4>Residual Connections</h4>
-                    <p>Enable gradient flow through deep networks via "skip connections"</p>
-                </div>
+            <h3>Learning Path</h3>
+            <div class="grid-3">
+                <a href="#embeddings" class="grid-item">
+                    <h4>Step 1: Token Embeddings</h4>
+                    <p>Convert text to vectors and add position information</p>
+                </a>
+                <a href="#attention" class="grid-item">
+                    <h4>Step 2: Attention</h4>
+                    <p>Learn how tokens attend to each other using Query, Key, Value</p>
+                </a>
+                <a href="#multi-head" class="grid-item">
+                    <h4>Step 3: Multi-Head Attention</h4>
+                    <p>Run parallel attention heads to capture different relationships</p>
+                </a>
+                <a href="#feedforward" class="grid-item">
+                    <h4>Step 4: Feed-Forward Networks</h4>
+                    <p>Process attended information through position-wise MLPs</p>
+                </a>
+                <a href="#transformer-block" class="grid-item">
+                    <h4>Step 5: Transformer Block</h4>
+                    <p>Combine attention, FFN, layer norm, and residual connections</p>
+                </a>
+                <a href="#complete-model" class="grid-item">
+                    <h4>Step 6: Complete Model</h4>
+                    <p>Stack blocks and add embedding/output layers</p>
+                </a>
+                <a href="#training" class="grid-item">
+                    <h4>Step 7: Training at Scale</h4>
+                    <p>Use gradient accumulation and validation splits for stable training</p>
+                </a>
+                <a href="#kv-cache" class="grid-item">
+                    <h4>Step 8: KV-Cache</h4>
+                    <p>Optimize inference speed by caching key-value pairs</p>
+                </a>
+                <a href="#interpretability" class="grid-item">
+                    <h4>Step 9: Interpretability</h4>
+                    <p>Analyze attention patterns and understand what the model learns</p>
+                </a>
             </div>
         </div>
     </section>
@@ -325,7 +337,7 @@
     </section>
 
     <!-- Step 5: Transformer Block -->
-    <section>
+    <section id="transformer-block">
         <div class="container">
             <h2>Step 5: Transformer Block</h2>
             <div class="card">
@@ -380,7 +392,7 @@
     </section>
 
     <!-- Step 6: Complete Model -->
-    <section>
+    <section id="complete-model">
         <div class="container">
             <h2>Step 6: The Complete Transformer</h2>
             <div class="card">
