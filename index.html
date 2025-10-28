@@ -146,6 +146,10 @@
         <span class="keyword">return</span> x + pos_emb  <span class="comment"># Broadcasting handles batch</span></code></pre>
                     </div>
                 </div>
+
+                <div class="highlight">
+                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/embeddings.py" target="_blank">src/transformer/embeddings.py</a></p>
+                </div>
             </div>
         </div>
     </section>
@@ -207,6 +211,10 @@
 
                 <div class="highlight">
                     <p><strong>Causal masking for language models:</strong> In decoder-only transformers (like GPT), we add a mask to prevent tokens from attending to future positions. This is essential for autoregressive generation—when predicting the next word, the model shouldn't "cheat" by looking ahead! The mask sets future attention scores to -∞ before softmax, making those positions receive zero attention weight.</p>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py" target="_blank">src/transformer/attention.py</a></p>
                 </div>
             </div>
         </div>
@@ -272,6 +280,10 @@
                 <div class="highlight">
                     <p><strong>Why don't heads learn the same thing?</strong> Different random initializations, different learned projections, and the optimization process all encourage diversity. Redundancy doesn't help reduce loss, so heads naturally specialize.</p>
                 </div>
+
+                <div class="highlight">
+                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py" target="_blank">src/transformer/attention.py</a></p>
+                </div>
             </div>
         </div>
     </section>
@@ -332,6 +344,10 @@
                 <div class="highlight">
                     <p><strong>Division of labor:</strong> Attention answers "What should I pay attention to?" while the FFN answers "Now that I have this information, what should I do with it?"</p>
                 </div>
+
+                <div class="highlight">
+                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/feedforward.py" target="_blank">src/transformer/feedforward.py</a></p>
+                </div>
             </div>
         </div>
     </section>
@@ -386,6 +402,10 @@
 
                 <div class="highlight">
                     <p><strong>Why residual connections?</strong> They create gradient "highways" that allow gradients to flow directly from the output back to early layers. Without them, deep networks struggle to learn: ∂(x + f(x))/∂x = 1 + ∂f(x)/∂x—the "1" ensures gradients always flow!</p>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/block.py" target="_blank">src/transformer/block.py</a></p>
                 </div>
             </div>
         </div>
@@ -474,6 +494,10 @@
 
                 <div class="highlight">
                     <p><strong>Model scale:</strong> Our implementation uses 6 layers with d_model=512, similar to the original transformer paper. For comparison, GPT-3 has 96 layers with d_model=12,288. The architecture scales beautifully—the same fundamental components work at wildly different scales!</p>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/model.py" target="_blank">src/transformer/model.py</a></p>
                 </div>
             </div>
         </div>
@@ -632,6 +656,10 @@ accumulation_steps = <span class="string">16</span>
                     <li><strong>Early stopping</strong> when validation stops improving</li>
                     <li><strong>Works on hobby hardware</strong> without expensive GPUs</li>
                 </ul>
+
+                <div class="highlight">
+                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/training_utils.py" target="_blank">src/transformer/training_utils.py</a> and <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/fineweb_dataset.py" target="_blank">src/transformer/fineweb_dataset.py</a></p>
+                </div>
             </div>
         </div>
     </section>
@@ -755,6 +783,10 @@ generated = model.generate(
 
                 <div class="highlight">
                     <p><strong>Implementation Detail:</strong> The cache must correctly handle positional encodings! When processing token at position N, it must receive position embedding for N, not 0. Our implementation tracks the cache length and adjusts positions automatically.</p>
+                </div>
+
+                <div class="highlight">
+                    <p><strong>📄 Implementation:</strong> <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py" target="_blank">src/transformer/attention.py</a> and <a href="https://github.com/zhubert/transformer/blob/main/src/transformer/model.py" target="_blank">src/transformer/model.py</a></p>
                 </div>
             </div>
         </div>
@@ -1084,12 +1116,12 @@ Result: Layer 4 recovery = 90%
                 <h3>Learn More</h3>
                 <p>Explore the implementation files - each includes comprehensive documentation explaining the theory and methods:</p>
                 <ul>
-                    <li><strong><code>src/transformer/interpretability/logit_lens.py</code></strong> - Logit lens implementation</li>
-                    <li><strong><code>src/transformer/interpretability/attention_analysis.py</code></strong> - Attention pattern detection and classification</li>
-                    <li><strong><code>src/transformer/interpretability/induction_heads.py</code></strong> - Induction head detection and circuit analysis</li>
-                    <li><strong><code>src/transformer/interpretability/activation_patching.py</code></strong> - Causal intervention experiments</li>
-                    <li><strong><code>src/transformer/interpretability/visualizations.py</code></strong> - Rich-based terminal visualizations for all tools</li>
-                    <li><strong><code>commands/interpret.py</code></strong> - Unified CLI interface with demo, interactive, and analysis modes</li>
+                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/logit_lens.py" target="_blank">src/transformer/interpretability/logit_lens.py</a></strong> - Logit lens implementation</li>
+                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/attention_analysis.py" target="_blank">src/transformer/interpretability/attention_analysis.py</a></strong> - Attention pattern detection and classification</li>
+                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/induction_heads.py" target="_blank">src/transformer/interpretability/induction_heads.py</a></strong> - Induction head detection and circuit analysis</li>
+                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/activation_patching.py" target="_blank">src/transformer/interpretability/activation_patching.py</a></strong> - Causal intervention experiments</li>
+                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/visualizations.py" target="_blank">src/transformer/interpretability/visualizations.py</a></strong> - Rich-based terminal visualizations for all tools</li>
+                    <li><strong><a href="https://github.com/zhubert/transformer/blob/main/commands/interpret.py" target="_blank">commands/interpret.py</a></strong> - Unified CLI interface with demo, interactive, and analysis modes</li>
                 </ul>
 
                 <div class="reference-box">
