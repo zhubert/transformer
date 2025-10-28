@@ -160,7 +160,7 @@
                 <p><strong>A concrete example:</strong> Consider the sentence "The animal didn't cross the street because it was too tired." What does "it" refer to? A human knows "it" refers to "the animal" (not "the street"). Attention allows the model to learn this—when processing "it", the model can attend strongly to "animal" and incorporate that information.</p>
 
                 <p><strong>How does attention work?</strong> The mechanism uses three components for each token, derived from the input embeddings through learned linear transformations:</p>
-                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                <ul>
                     <li><strong>Query (Q):</strong> "What am I looking for?" - represents what the current token wants to know</li>
                     <li><strong>Key (K):</strong> "What do I contain?" - represents what information each token offers</li>
                     <li><strong>Value (V):</strong> "What information do I have?" - the actual content that gets passed along</li>
@@ -221,7 +221,7 @@
 
                 <p><strong>What do different heads learn?</strong> Through training, different heads naturally specialize in different types of relationships. Research shows that real models develop heads that focus on:</p>
 
-                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                <ul>
                     <li><strong>Syntactic relationships:</strong> One head might track subject-verb agreement</li>
                     <li><strong>Semantic relationships:</strong> Another head might connect related concepts</li>
                     <li><strong>Long-range dependencies:</strong> A head might link pronouns to their antecedents</li>
@@ -286,7 +286,7 @@
                 <p><strong>Why do we need it?</strong> Think of the attention layer as "communication" between tokens—gathering relevant context. The FFN is the "computation" step—processing that gathered information to extract useful features and patterns. Without the FFN, the model would only shuffle information around without transforming it.</p>
 
                 <p><strong>The architecture:</strong></p>
-                <ol style="margin-left: 24px; margin-bottom: 24px;">
+                <ol>
                     <li><strong>Expand:</strong> Project from d_model (e.g., 512) to d_ff (typically 4× larger, e.g., 2048). This expansion gives the model more "capacity" to learn complex patterns.</li>
                     <li><strong>Activate:</strong> Apply GELU activation—a smooth nonlinear function that allows the model to learn non-linear relationships. Without this nonlinearity, stacking layers would be pointless (multiple linear transformations collapse to one).</li>
                     <li><strong>Project back:</strong> Compress back down from d_ff to d_model so the output shape matches the input, allowing us to stack more layers.</li>
@@ -345,7 +345,7 @@
 
                 <p><strong>What's in a block?</strong> Each block contains four key components:</p>
 
-                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                <ul>
                     <li><strong>Multi-head attention:</strong> Communication layer—tokens gather information from other tokens</li>
                     <li><strong>Feed-forward network:</strong> Computation layer—each token processes its gathered information</li>
                     <li><strong>Layer normalization:</strong> Stabilizes training by normalizing activations (prevents them from growing too large or small)</li>
@@ -401,7 +401,7 @@
                 <p><strong>What is "decoder-only"?</strong> The original transformer paper had both an encoder (for reading input) and decoder (for generating output), used for translation. Modern language models like GPT use only the decoder part, which is simpler and works great for text generation. The key difference is that decoder-only models use causal masking—they can only look at previous tokens, not future ones.</p>
 
                 <p><strong>How data flows through the model:</strong></p>
-                <ol style="margin-left: 24px; margin-bottom: 24px;">
+                <ol>
                     <li><strong>Token Embedding:</strong> Convert input token IDs (integers) to dense vectors</li>
                     <li><strong>Positional Encoding:</strong> Add position information to tell the model where each token is</li>
                     <li><strong>Transformer Blocks (×N):</strong> Stack multiple identical blocks (we use 6; GPT-3 uses 96). Each block refines the representations through attention and feed-forward processing</li>
@@ -499,7 +499,7 @@
                 <p><strong>The key insight:</strong> We don't need to process all examples simultaneously! Gradient accumulation lets us simulate large batch sizes by accumulating gradients over multiple small batches before updating weights.</p>
 
                 <p><strong>How it works:</strong></p>
-                <ol style="margin-left: 24px; margin-bottom: 24px;">
+                <ol>
                     <li><strong>Process batch 1:</strong> Forward pass → Loss → Backward pass → Store gradients (don't update yet!)</li>
                     <li><strong>Process batch 2:</strong> Forward pass → Loss → Backward pass → <em>Add</em> gradients to stored ones</li>
                     <li><strong>Repeat</strong> for N batches (e.g., 16 times)</li>
@@ -548,7 +548,7 @@ accumulation_steps = <span class="string">16</span>
                 <h3>Validation: Detecting Overfitting</h3>
                 <p><strong>The problem: Memorization vs. Learning</strong></p>
                 <p>Imagine a student preparing for an exam. They could:</p>
-                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                <ul>
                     <li><strong>Memorize answers</strong> to practice problems → Fails on new problems (overfitting)</li>
                     <li><strong>Learn concepts</strong> from practice problems → Succeeds on new problems (good generalization)</li>
                 </ul>
@@ -625,7 +625,7 @@ accumulation_steps = <span class="string">16</span>
 
                 <h3>Expected Improvements</h3>
                 <p>With gradient accumulation and validation:</p>
-                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                <ul>
                     <li><strong>20-30% lower final loss</strong> due to stable training</li>
                     <li><strong>Smoother training curves</strong> that are easier to debug</li>
                     <li><strong>Confidence in generalization</strong> by monitoring validation</li>
@@ -681,7 +681,7 @@ Output: "the"</code></pre>
 
                 <h3>How It Works</h3>
                 <p><strong>Two Modes:</strong></p>
-                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                <ul>
                     <li><strong>PREFILL:</strong> Process initial prompt, compute and cache K, V for all tokens</li>
                     <li><strong>DECODE:</strong> For each new token, compute only its K, V, concatenate with cached values</li>
                 </ul>
@@ -715,7 +715,7 @@ Output: "on"
                 <p><strong>Memory Cost:</strong> For each layer, we cache K and V tensors with shape (batch, num_heads, seq_len, d_k). For a 6-layer model with d_model=256, 4 heads, and 200-token sequence, this is only ~3 MB per example. Very affordable!</p>
 
                 <p><strong>Speed Benefit:</strong> Reduces time complexity from O(n²) to O(n) for generating n tokens. Typical speedups:</p>
-                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                <ul>
                     <li>Short sequences (10-20 tokens): 2-5x faster</li>
                     <li>Medium sequences (50-100 tokens): 10-20x faster</li>
                     <li>Long sequences (200+ tokens): 20-50x faster</li>
@@ -770,7 +770,7 @@ generated = model.generate(
 
                 <h3>What is Mechanistic Interpretability?</h3>
                 <p>Instead of just asking "does the model work?", we ask:</p>
-                <ul style="margin-left: 24px; margin-bottom: 24px;">
+                <ul>
                     <li><strong>When</strong> does the model "know" the answer? (which layer?)</li>
                     <li><strong>How</strong> does information flow through the network?</li>
                     <li><strong>Which</strong> components are responsible for specific behaviors?</li>

@@ -141,6 +141,13 @@ ul, ol {
     margin-bottom: 32px;
 }
 
+/* Lists inside cards - standard indentation */
+.card ul,
+.card ol {
+    margin-left: 24px;
+    margin-bottom: 24px;
+}
+
 li {
     margin-bottom: 12px;
 }
