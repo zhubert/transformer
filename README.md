@@ -51,6 +51,7 @@ This project implements a complete decoder-only transformer (GPT architecture) w
 - **Core Components** - Attention, embeddings, feed-forward networks, transformer blocks
 - **Training Pipeline** - FineWeb dataset streaming, gradient accumulation, train/val split, learning rate scheduling
 - **Text Generation** - KV-Cache optimization (2-50x faster!), advanced sampling strategies (greedy, top-k, top-p)
+- **Interpretability** - Logit lens, attention analysis, induction heads, activation patching
 - **Evaluation** - Perplexity calculation and model comparison tools
 - **Testing** - Test suite covering core components and functionality
 
@@ -70,11 +71,18 @@ src/transformer/
 ├── scheduler.py        # Learning rate scheduling (warmup + cosine decay)
 ├── training_utils.py   # Gradient accumulation for stable training
 ├── dataset.py          # Dataset utilities
-└── fineweb_dataset.py  # FineWeb streaming with caching & train/val split
+├── fineweb_dataset.py  # FineWeb streaming with caching & train/val split
+└── interpretability/   # Mechanistic interpretability tools
+    ├── logit_lens.py          # Visualize predictions at each layer
+    ├── attention_analysis.py  # Analyze attention patterns (Phase 2)
+    ├── induction_heads.py     # Detect induction circuits (Phase 3)
+    ├── activation_patching.py # Causal interventions (Phase 4)
+    └── visualizations.py      # Rich-based terminal visualizations
 
 commands/
 ├── train.py                 # Training command - see file for complete guide
 ├── generate.py              # Text generation with preset strategies
+├── interpret.py             # Interpretability tools (logit lens, attention, etc.)
 ├── sampling_comparison.py   # Demo of different sampling strategies
 ├── evaluate_perplexity.py   # Model evaluation and comparison
 ├── benchmark_generation.py  # KV-cache speedup benchmarking
@@ -96,6 +104,7 @@ Want to understand transformers deeply? Read the code in this order:
 6. **[`src/transformer/sampling.py`](src/transformer/sampling.py)** - How to generate high-quality text
 7. **[`src/transformer/perplexity.py`](src/transformer/perplexity.py)** - How to evaluate language models
 8. **[`commands/train.py`](commands/train.py)** - How to train the model
+9. **[`src/transformer/interpretability/logit_lens.py`](src/transformer/interpretability/logit_lens.py)** - Understanding what the model learned
 
 Each file has extensive documentation explaining concepts, design decisions, and mathematical details.
 
@@ -194,6 +203,118 @@ uv run python main.py generate \
 ```
 
 See [`src/transformer/attention.py`](src/transformer/attention.py) for KV-Cache implementation details and [`commands/benchmark_generation.py`](commands/benchmark_generation.py) to benchmark the speedup.
+
+## Model Interpretability
+
+**Complete!** Understand what your transformer has learned using mechanistic interpretability tools. All 4 phases implemented!
+
+### Logit Lens (Phase 1 ✓)
+
+Visualize how predictions evolve through layers:
+
+```bash
+# Demo mode with educational examples
+uv run python main.py interpret logit-lens checkpoints/model.pt --demo
+
+# Analyze specific text
+uv run python main.py interpret logit-lens checkpoints/model.pt \
+    --text "The capital of France is"
+
+# Interactive mode
+uv run python main.py interpret logit-lens checkpoints/model.pt --interactive
+```
+
+**What it shows:** How the model's predictions change at each layer, revealing when the "correct answer" emerges.
+
+**Example:** For "The capital of France is", you might see:
+- Layer 0: Predicts generic tokens ("the", "a")
+- Layer 3: Starting to converge ("Paris", "located")
+- Layer 6: Confident final answer ("Paris")
+
+### Attention Analysis (Phase 2 ✓)
+
+Understand what tokens each attention head focuses on:
+
+```bash
+# Demo mode - find common patterns
+uv run python main.py interpret attention checkpoints/model.pt --demo
+
+# Analyze specific layer and head
+uv run python main.py interpret attention checkpoints/model.pt \
+    --text "The cat sat on the mat" --layer 2 --head 3
+
+# Interactive mode
+uv run python main.py interpret attention checkpoints/model.pt --interactive
+
+# Find all heads matching a pattern
+uv run python main.py interpret attention checkpoints/model.pt \
+    --text "Hello world"  # Shows pattern summary
+```
+
+**What it shows:** Which tokens each head attends to, revealing learned patterns like:
+- **Previous token heads**: Always look at position i-1
+- **Uniform heads**: Spread attention evenly (averaging)
+- **Start token heads**: Focus on beginning of sequence
+- **Sparse heads**: Concentrate on few key tokens
+
+**Example patterns you might discover:**
+- Head 2.3 implements a "previous token" circuit
+- Head 4.1 averages information uniformly
+- Head 1.0 focuses on the start token
+
+### Induction Head Detection (Phase 3 ✓)
+
+Find and analyze induction heads - circuits that implement pattern matching and in-context learning:
+
+```bash
+# Detect induction heads across all layers
+uv run python main.py interpret induction-heads checkpoints/model.pt
+
+# Custom detection parameters
+uv run python main.py interpret induction-heads checkpoints/model.pt \
+    --num-sequences 50 --seq-length 30 --top-k 5
+```
+
+**What it shows:** Ranks attention heads by their ability to perform pattern matching (induction):
+- **Prefix matching score**: How well the head attends to positions where the previous token matches
+- **Circuit analysis**: Identifies pairs of heads working together (previous token head + induction head)
+- **Pattern strength**: Quantitative measure of induction behavior
+
+**What are induction heads?**
+Induction heads are a key circuit discovered in transformer models that enable in-context learning. Given a repeated pattern like `A B C ... A B [?]`, the induction head learns to predict `C` by copying from the earlier occurrence. This involves two heads working together:
+1. **Previous token head** (earlier layer): Attends to position i-1
+2. **Induction head** (later layer): Finds matching prefixes and copies what came after
+
+This circuit is crucial for few-shot learning and emerges suddenly during training ("grokking").
+
+### Activation Patching (Phase 4 ✓)
+
+Test which components are **causally responsible** for specific behaviors through intervention experiments:
+
+```bash
+# Test which layers are critical for a prediction
+uv run python main.py interpret patch checkpoints/model.pt \
+    --clean "The Eiffel Tower is in" \
+    --corrupted "The Empire State Building is in" \
+    --target "Paris"
+```
+
+**What it shows:** Recovery rates showing how much each layer contributes to the behavior:
+- **Recovery Rate**: % of correct behavior restored when patching that layer
+- **Ranked Results**: Layers sorted by causal importance
+- **Color-coded Assessment**: Critical (>70%) / Important (>40%) / Moderate (>20%) / Minimal (<20%)
+
+**How it works:**
+1. Run model on "clean" input (correct behavior) and "corrupted" input (incorrect behavior)
+2. For each layer, estimate what would happen if we swapped clean activations into corrupted run
+3. Measure how much this restores the correct prediction
+4. High recovery = that layer is causally important for this behavior
+
+**Example interpretation:** If patching Layer 4 gives 85% recovery, that layer is critical for predicting "Paris" after "The Eiffel Tower". This is **causal** evidence, not just correlation!
+
+---
+
+See [`src/transformer/interpretability/`](src/transformer/interpretability/) for implementation details and [`commands/interpret.py`](commands/interpret.py) for all available tools.
 
 ## Development
 

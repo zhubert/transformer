@@ -134,7 +134,7 @@ class TransformerBlock(nn.Module):
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
-    def forward(self, x, mask=None, cache=None, debug=False):
+    def forward(self, x, mask=None, cache=None, debug=False, return_attention_weights=False):
         """
         Apply transformer block with Pre-LN architecture and optional KV-cache.
 
@@ -201,12 +201,16 @@ class TransformerBlock(nn.Module):
                    - Dict: Decode mode (use and update cache)
                    Structure: {'keys': tensor, 'values': tensor}
             debug: If True, enable diagnostic prints for NaN detection
+            return_attention_weights: If True, return attention weights for interpretability
+                                     Default: False (for backward compatibility)
 
         Returns:
             output: Block output of shape (batch, seq_len, d_model)
                    (same shape as input - enables stacking blocks)
             new_cache: Updated cache dict with keys and values for this layer
                       Will be passed to next iteration during generation
+            attention_weights: (Optional) Attention weights of shape (batch, num_heads, seq_len, seq_len)
+                             Only returned if return_attention_weights=True
 
         Example:
         --------
@@ -223,8 +227,14 @@ class TransformerBlock(nn.Module):
         x = self.norm1(x)  # Pre-LN: normalize before attention
 
         # Attention with KV-cache support
-        # Returns both output and updated cache
-        x, new_cache = self.attention(x, mask=mask, cache=cache, debug=debug)
+        # Returns output, updated cache, and optionally attention weights
+        if return_attention_weights:
+            x, new_cache, attn_weights = self.attention(
+                x, mask=mask, cache=cache, debug=debug, return_attention_weights=True
+            )
+        else:
+            x, new_cache = self.attention(x, mask=mask, cache=cache, debug=debug)
+            attn_weights = None
 
         x = self.dropout1(x)  # Dropout for regularization
         x = x + residual  # Residual connection (gradient highway!)
@@ -237,4 +247,8 @@ class TransformerBlock(nn.Module):
         x = self.dropout2(x)  # Dropout for regularization
         x = x + residual  # Residual connection (gradient highway!)
 
-        return x, new_cache
+        # Optionally return attention weights for interpretability
+        if return_attention_weights:
+            return x, new_cache, attn_weights
+        else:
+            return x, new_cache

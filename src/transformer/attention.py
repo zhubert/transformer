@@ -158,7 +158,7 @@ class MultiHeadAttention(nn.Module):
         # Final output projection
         self.W_o = nn.Linear(d_model, d_model)
 
-    def forward(self, x, mask=None, cache=None, debug=False):
+    def forward(self, x, mask=None, cache=None, debug=False, return_attention_weights=False):
         """
         Apply multi-head attention with optional KV-cache for efficient generation.
 
@@ -217,6 +217,8 @@ class MultiHeadAttention(nn.Module):
                    Structure: {'keys': (batch, num_heads, cached_seq_len, d_k),
                               'values': (batch, num_heads, cached_seq_len, d_k)}
             debug: If True, enable diagnostic prints for NaN detection
+            return_attention_weights: If True, return attention weights for interpretability
+                                     Default: False (for backward compatibility)
 
         Returns:
             output: Multi-head attention output of shape (batch, seq_len, d_model)
@@ -224,6 +226,9 @@ class MultiHeadAttention(nn.Module):
                       {'keys': (batch, num_heads, total_seq_len, d_k),
                        'values': (batch, num_heads, total_seq_len, d_k)}
                       where total_seq_len = cached_seq_len + seq_len
+            attention_weights: (Optional) Attention weights of shape (batch, num_heads, seq_len, total_seq_len)
+                             Only returned if return_attention_weights=True
+                             Shows which positions each query attends to
 
         Example Usage:
         --------------
@@ -324,4 +329,8 @@ class MultiHeadAttention(nn.Module):
             'values': V     # (batch, num_heads, total_seq_len, d_k)
         }
 
-        return output, new_cache
+        # Optionally return attention weights for interpretability
+        if return_attention_weights:
+            return output, new_cache, attn_weights
+        else:
+            return output, new_cache
