@@ -198,6 +198,45 @@ loss.backward()                    # Accumulate gradients
 # Only update weights every N steps
 ```
 
+### Optimizer: AdamW with Selective Weight Decay
+We use **AdamW** (not Adam) with selective weight decay, following modern transformer best practices:
+
+```python
+# Separate parameters into groups
+decay_params = []      # Weights (get regularized)
+no_decay_params = []   # Biases and LayerNorms (no regularization)
+
+for name, param in model.named_parameters():
+    # Exclude biases and all LayerNorm parameters (weight and bias)
+    if 'bias' in name.lower() or 'norm' in name.lower():
+        no_decay_params.append(param)
+    else:
+        decay_params.append(param)
+
+# Create optimizer with parameter groups
+optimizer = torch.optim.AdamW([
+    {'params': decay_params, 'weight_decay': 0.01},
+    {'params': no_decay_params, 'weight_decay': 0.0}
+], lr=3e-4, betas=(0.9, 0.999), eps=1e-8)
+```
+
+**Why AdamW over Adam?**
+- Decouples weight decay from gradient-based updates
+- Better generalization for transformers (3-5% improvement)
+- Used in GPT-2, GPT-3, BERT, LLaMA, and all modern LLMs
+
+**Why selective weight decay?**
+- Biases are just offsets → don't benefit from regularization
+- LayerNorm parameters are already constrained → regularization can hurt
+- Linear weights and embeddings → benefit from L2 regularization
+- Matches GPT-2/GPT-3 implementation (2-5% improvement)
+
+**Configuration** (GPT-2/GPT-3 standard):
+- lr=3e-4 for small models, 6e-5 to 1e-4 for large models
+- weight_decay=0.01 for weights only
+- betas=(0.9, 0.999) - standard momentum parameters
+- eps=1e-8 for numerical stability
+
 ## When Making Changes
 
 ### Always Preserve
