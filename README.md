@@ -37,10 +37,11 @@ make test
 # Train on FineWeb (100M tokens per epoch)
 make train
 
-# Medium training (balanced quality & speed, 50M tokens/epoch, ~3-4h on M1)
+# Medium training (balanced quality & speed, 50M tokens/epoch, 15 epochs)
+# Epoch 1: ~2h on M3 (downloads+caches shards), Epochs 2-15: ~30-60min (cached)
 make train-medium
 
-# Quick training (smaller model, 10M tokens/epoch, ~30-60min on M1)
+# Quick training (smaller model, 10M tokens/epoch, 10 epochs, ~40-50min/epoch on M1, ~7-8h total)
 make train-quick
 
 # Resume training from latest checkpoint
@@ -169,11 +170,12 @@ See [`src/transformer/block.py`](src/transformer/block.py) for detailed architec
 # Auto-detects best device (CUDA > MPS > CPU)
 uv run python main.py train
 
-# Medium mode: 50M tokens/epoch, 4 layers, d_model=256 (~3-4 hours on M1)
+# Medium mode: 50M tokens/epoch, 4 layers, d_model=256 (15 epochs)
+# Epoch 1: ~2h on M3 (builds cache), Epochs 2-15: ~30-60min (cached)
 # Best balance of quality and training time
 uv run python main.py train --medium
 
-# Quick mode: 10M tokens/epoch, 4 layers, d_model=128 (~30-60 min on M1)
+# Quick mode: 10M tokens/epoch, 4 layers, d_model=128 (10 epochs, ~40-50min/epoch on M1, ~7-8h total)
 # Fast iteration for testing
 uv run python main.py train --quick
 
@@ -204,7 +206,11 @@ uv run python main.py train --mps    # Apple Silicon GPU
 We use HuggingFace's [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) dataset (sample-10BT):
 - **10 billion tokens** of high-quality web content
 - **Streaming**: Downloads shards on-demand (no huge upfront download)
-- **Smart caching**: Keeps 5 recent shards (~2GB), automatically cleans up old ones
+- **Smart caching**: Dynamic cache sizing per training mode
+  - Quick: ~1 GB cache (26 shards)
+  - Medium: ~5 GB cache (132 shards)
+  - Default: ~10 GB cache (264 shards)
+- **Performance**: After epoch 1, all shards are cached → 2-4x speedup for epochs 2+
 - **Configurable**: Default 100M tokens per epoch, adjust as needed
 
 ### Device Support

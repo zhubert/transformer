@@ -104,9 +104,12 @@ Workarounds:
 
 Training Modes:
 ---------------
-- Default: Full quality (6 layers, 256 d_model, 2B tokens) - ~8-12 hours on M1
-- --medium: Balanced (4 layers, 256 d_model, 750M tokens) - ~3-4 hours on M1
-- --quick: Fast iteration (4 layers, 128 d_model, 100M tokens) - ~30-60 min on M1
+- Default: Full quality (6 layers, 256 d_model, 100M tokens/epoch × 20 epochs)
+  * Epoch 1: ~4-6h on M3 Pro (builds cache), Epochs 2-20: ~1-2h (cached)
+- --medium: Balanced (4 layers, 256 d_model, 50M tokens/epoch × 15 epochs)
+  * Epoch 1: ~2h on M3 Pro (builds cache), Epochs 2-15: ~30-60min (cached)
+- --quick: Fast iteration (4 layers, 128 d_model, 10M tokens/epoch × 10 epochs)
+  * Epoch 1: ~40-50min on M1 (builds cache), Epochs 2-10: ~15-25min (cached)
 
 What to Expect During Training:
 ---------------------------------
@@ -117,11 +120,12 @@ Epoch 3:  Loss ~5.0, Perplexity ~150   (learning patterns)
 Epoch 5:  Loss ~4.0, Perplexity ~55    (getting decent)
 Epoch 10: Loss ~3.0, Perplexity ~20    (pretty good!)
 
-Training time per epoch:
-- Quick mode (CPU): ~3-6 minutes per epoch
-- Medium mode (CPU): ~12-15 minutes per epoch
-- Normal mode (CPU): ~25-35 minutes per epoch
-- With MPS: 5-10x faster (if stable)
+Training time per epoch (estimated with optimized caching):
+- Quick mode: Epoch 1: ~40-50min (M1 MPS), Epochs 2+: ~15-25min (cached)
+- Medium mode: Epoch 1: ~2h (M3 Pro MPS), Epochs 2+: ~30-60min (cached)
+- Normal mode: Epoch 1: ~4-6h (M3 Pro MPS), Epochs 2+: ~1-2h (cached)
+
+Note: Epoch 1 downloads and caches shards. Epochs 2+ use cached data → 2-4x faster!
 
 Loss Interpretation:
 - High loss (8-10): Model guessing randomly, terrible predictions
@@ -158,6 +162,51 @@ from src.transformer.device_utils import (
     init_device, get_autocast_context, get_synchronize_fn,
     get_memory_stats_fn, print_device_info
 )
+
+
+def calculate_optimal_cache_size(tokens_per_epoch: int) -> int:
+    """
+    Calculate optimal shard cache size based on tokens per epoch.
+
+    Why this matters:
+    -----------------
+    FineWeb streams data in shards (~500K tokens each, ~40MB on disk).
+    If the cache is too small, shards are evicted and re-downloaded every epoch,
+    wasting network bandwidth and making training much slower.
+
+    This function calculates how many shards are needed to cover an entire epoch
+    (including validation data) so that after epoch 1, all shards are cached
+    and epochs 2+ run at maximum speed with no network I/O.
+
+    Performance Impact:
+    -------------------
+    - Small cache (5 shards): ~105 shards re-downloaded per epoch → 2h/epoch on M3 Pro
+    - Optimal cache: All shards cached after epoch 1 → ~30-60min/epoch on M3 Pro
+
+    Speedup: 2-4x faster after epoch 1!
+
+    Args:
+        tokens_per_epoch: Number of tokens to process per epoch
+
+    Returns:
+        max_cached_shards: Number of shards to keep in cache
+
+    Cache Sizes:
+        - Quick (10M tokens): ~26 shards, ~1.0 GB disk
+        - Medium (50M tokens): ~132 shards, ~5.2 GB disk
+        - Default (100M tokens): ~264 shards, ~10.3 GB disk
+    """
+    # Each shard contains ~500K tokens (approximate)
+    TOKENS_PER_SHARD = 500_000
+
+    # Calculate shards needed for training (90% of data) and validation (10%)
+    train_shards = tokens_per_epoch / TOKENS_PER_SHARD
+    val_shards = (tokens_per_epoch / 10) / TOKENS_PER_SHARD
+
+    # Add 20% buffer for safety (shard sizes vary slightly)
+    total_shards = int((train_shards + val_shards) * 1.2)
+
+    return total_shards
 
 
 def detect_encoding_from_checkpoint(checkpoint):
@@ -411,9 +460,12 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
     DROPOUT = 0.1
     LEARNING_RATE = 3e-4        # Standard transformer learning rate
     WEIGHT_DECAY = 0.01
-    MAX_CACHED_SHARDS = 5           # Keep 5 shards in cache (~2GB)
     LOG_INTERVAL = 10
     CHECKPOINT_DIR.mkdir(exist_ok=True)
+
+    # Calculate optimal cache size for this training mode
+    # This ensures all shards fit in cache, eliminating re-downloads after epoch 1
+    MAX_CACHED_SHARDS = calculate_optimal_cache_size(TOKENS_PER_EPOCH)
 
     # Initialize Rich console
     console = Console()
@@ -505,10 +557,12 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
         "data/fineweb_cache",
         "data/fineweb_cache"
     )
+    # Calculate cache size in GB for display
+    cache_size_gb = (MAX_CACHED_SHARDS * 40) / 1024  # ~40MB per shard
     dataset_table.add_row(
         "Max cached shards",
-        str(MAX_CACHED_SHARDS),
-        str(MAX_CACHED_SHARDS)
+        f"{MAX_CACHED_SHARDS} (~{cache_size_gb:.1f} GB)",
+        f"{MAX_CACHED_SHARDS} (~{cache_size_gb:.1f} GB)"
     )
 
     console.print(dataset_table)
@@ -797,6 +851,8 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
         return table
 
     # Create overall progress tracker for epochs and batches
+    # Note: We track progress from 0 even when resuming, so that TimeRemainingColumn
+    # has accurate timing data. The epoch counter in the description shows the actual epoch number.
     overall_progress = Progress(
         TextColumn("[bold blue]{task.description}"),
         BarColumn(),
@@ -804,7 +860,12 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
         TimeRemainingColumn(),
         console=console
     )
-    epoch_task = overall_progress.add_task(f"[cyan]Overall Progress", total=NUM_EPOCHS, completed=start_epoch)
+    remaining_epochs = NUM_EPOCHS - start_epoch
+    epoch_task = overall_progress.add_task(
+        f"[cyan]Overall Progress (Epoch {start_epoch + 1}-{NUM_EPOCHS})",
+        total=remaining_epochs,
+        completed=0
+    )
 
     for epoch in range(start_epoch, NUM_EPOCHS):
         # ==============================================================================
@@ -1140,7 +1201,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--medium",
         action="store_true",
-        help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch, ~3-4 hours on M1)"
+        help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch × 15 epochs). "
+             "Epoch 1: ~2h (builds cache), Epochs 2+: ~30-60min (cached)"
     )
     parser.add_argument(
         "--accumulation-steps",

@@ -73,7 +73,8 @@ def create_parser():
     train_parser.add_argument(
         "--medium",
         action="store_true",
-        help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch, ~3-4 hours on M1)",
+        help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch × 15 epochs). "
+             "Epoch 1: ~2h (builds cache), Epochs 2+: ~30-60min (cached)",
     )
 
     # ============================================================================
