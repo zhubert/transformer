@@ -321,16 +321,18 @@ def get_cosine_schedule_with_warmup(
     ----------------------
     We use PyTorch's LambdaLR scheduler with a custom lambda function that
     returns a learning rate multiplier for each step. The optimizer's base LR
-    is set to 1.0, and our lambda returns the actual desired LR.
+    is set to max_lr, and our lambda returns a multiplier (0.0 to 1.0).
 
     The lambda function implements:
         - If step < warmup_steps: Linear warmup
-            LR = max_lr × (step / warmup_steps)
+            multiplier = step / warmup_steps  (0.0 → 1.0)
+            Actual LR = max_lr × multiplier
 
         - If step >= warmup_steps: Cosine decay
             progress = (step - warmup_steps) / (total_steps - warmup_steps)
-            decay = 0.5 × (1 + cos(π × progress))
-            LR = min_lr + (max_lr - min_lr) × decay
+            decay = 0.5 × (1 + cos(π × progress))  (1.0 → 0.0)
+            multiplier = (min_lr/max_lr) + (1 - min_lr/max_lr) × decay
+            Actual LR = max_lr × multiplier
 
     Why LambdaLR?
     ------------
@@ -340,12 +342,12 @@ def get_cosine_schedule_with_warmup(
 
     Example Usage:
     -------------
-    >>> optimizer = torch.optim.Adam(model.parameters(), lr=1.0)
+    >>> optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)  # Set base LR to max_lr
     >>> scheduler = get_cosine_schedule_with_warmup(
     ...     optimizer=optimizer,
     ...     warmup_steps=1000,
     ...     total_steps=10000,
-    ...     max_lr=3e-4,
+    ...     max_lr=3e-4,  # Should match optimizer's lr
     ...     min_lr=3e-5
     ... )
     >>>
@@ -379,18 +381,18 @@ def get_cosine_schedule_with_warmup(
         Returns:
             Learning rate multiplier (will be multiplied by optimizer's base LR)
 
-        The optimizer's base LR is set to 1.0, so this function returns the
-        actual desired learning rate directly.
+        The optimizer's base LR should be set to max_lr. This function returns
+        a multiplier between 0.0 and 1.0 that scales the base LR.
         """
 
         # Phase 1: Linear Warmup (steps 0 to warmup_steps)
         if current_step < warmup_steps:
-            # Linear increase from 0 to max_lr
-            # At step 0: lr_lambda = 0 → LR = 0
-            # At step warmup_steps/2: lr_lambda = 0.5 → LR = max_lr/2
-            # At step warmup_steps-1: lr_lambda ≈ 1.0 → LR ≈ max_lr
+            # Linear increase from 0 to 1.0
+            # At step 0: multiplier = 0.0 → LR = max_lr × 0.0 = 0
+            # At step warmup_steps/2: multiplier = 0.5 → LR = max_lr × 0.5
+            # At step warmup_steps: multiplier = 1.0 → LR = max_lr × 1.0 = max_lr
             warmup_factor = float(current_step) / float(max(1, warmup_steps))
-            return max_lr * warmup_factor
+            return warmup_factor
 
         # Phase 2: Cosine Decay (steps warmup_steps to total_steps)
         else:
@@ -403,15 +405,16 @@ def get_cosine_schedule_with_warmup(
             # Uses cosine curve for smooth transition
             cosine_decay = 0.5 * (1.0 + math.cos(math.pi * progress))
 
-            # Interpolate between min_lr and max_lr using cosine decay
-            # At progress=0.0: cosine_decay=1.0 → LR = max_lr
-            # At progress=0.5: cosine_decay=0.5 → LR = (max_lr + min_lr) / 2
-            # At progress=1.0: cosine_decay=0.0 → LR = min_lr
-            lr = min_lr + (max_lr - min_lr) * cosine_decay
-            return lr
+            # Calculate multiplier that interpolates between min_lr/max_lr and 1.0
+            # At progress=0.0: cosine_decay=1.0 → multiplier = 1.0 → LR = max_lr
+            # At progress=0.5: cosine_decay=0.5 → multiplier = 0.55 → LR ≈ (max_lr + min_lr) / 2
+            # At progress=1.0: cosine_decay=0.0 → multiplier = min_lr/max_lr → LR = min_lr
+            min_lr_ratio = min_lr / max_lr
+            multiplier = min_lr_ratio + (1.0 - min_lr_ratio) * cosine_decay
+            return multiplier
 
     # Create the scheduler
-    # Note: We set optimizer's base LR to 1.0 (it will be overridden by lr_lambda)
+    # Note: Optimizer's base LR should be set to max_lr before calling this function
     scheduler = LambdaLR(optimizer, lr_lambda)
 
     return scheduler

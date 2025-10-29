@@ -603,10 +603,11 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
 
-    # Optimizer with placeholder LR (scheduler will control actual LR)
+    # Optimizer with max learning rate as base
+    # The scheduler will multiply this by a factor (0.0 to 1.0) to get actual LR
     optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=1.0,  # Placeholder - scheduler overrides this
+        lr=LEARNING_RATE,  # Base LR = max_lr, scheduler will scale this
         weight_decay=WEIGHT_DECAY
     )
 

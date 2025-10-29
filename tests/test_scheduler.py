@@ -5,19 +5,26 @@ This script creates a dummy optimizer and scheduler, then steps through the
 training schedule to verify the learning rates follow the expected pattern.
 """
 
+import sys
+from pathlib import Path
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+
 import torch
 import torch.nn as nn
-from src.transformer.scheduler import get_cosine_schedule_with_warmup
-
-# Create a simple dummy model
-model = nn.Linear(10, 10)
-optimizer = torch.optim.Adam(model.parameters(), lr=1.0)
+from transformer.scheduler import get_cosine_schedule_with_warmup
 
 # Scheduler parameters (matching train.py defaults)
 total_steps = 1000
 warmup_steps = 50  # 5% of total
 max_lr = 3e-4
 min_lr = 3e-5
+
+# Create a simple dummy model with optimizer using max_lr as base
+# (Standard PyTorch pattern - scheduler will multiply by 0.0 to 1.0)
+model = nn.Linear(10, 10)
+optimizer = torch.optim.Adam(model.parameters(), lr=max_lr)
 
 scheduler = get_cosine_schedule_with_warmup(
     optimizer=optimizer,
@@ -52,28 +59,38 @@ test_steps = [
     total_steps - 1,      # End of training
 ]
 
-for step in test_steps:
-    # Get current LR
-    current_lr = scheduler.get_last_lr()[0]
+current_step = 0
+for target_step in test_steps:
+    # Step the scheduler to the target step
+    while current_step < target_step:
+        optimizer.step()
+        scheduler.step()
+        current_step += 1
+
+    # Get LR at this step (before stepping to it)
+    # For step 0, we get the initial LR
+    # For other steps, we get LR after stepping
+    if target_step == 0:
+        current_lr = scheduler.get_last_lr()[0]
+    else:
+        # Step one more time to get to target_step
+        optimizer.step()
+        scheduler.step()
+        current_step += 1
+        current_lr = scheduler.get_last_lr()[0]
 
     # Determine phase
-    if step < warmup_steps:
+    if target_step < warmup_steps:
         phase = "WARMUP"
-        progress = 100 * step / warmup_steps
+        progress = 100 * target_step / warmup_steps if warmup_steps > 0 else 0
         phase_info = f"{progress:.1f}% through warmup"
     else:
         phase = "DECAY"
-        decay_progress = (step - warmup_steps) / (total_steps - warmup_steps)
+        decay_progress = (target_step - warmup_steps) / (total_steps - warmup_steps)
         progress = 100 * decay_progress
         phase_info = f"{progress:.1f}% through decay"
 
-    print(f"Step {step:4d} ({phase:6s}): LR = {current_lr:.8f}  ({phase_info})")
-
-    # Step the scheduler (except for last step to avoid going past total_steps)
-    if step < total_steps - 1:
-        # Dummy optimizer step
-        optimizer.step()
-        scheduler.step()
+    print(f"Step {target_step:4d} ({phase:6s}): LR = {current_lr:.8f}  ({phase_info})")
 
 print()
 print("=" * 80)
