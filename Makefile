@@ -1,4 +1,4 @@
-.PHONY: help install test test-cov clean train train-medium train-quick resume resume-medium resume-quick generate evaluate compare demo-sampling
+.PHONY: help install test test-cov clean download download-quick download-medium train train-medium train-quick resume resume-medium resume-quick generate evaluate compare demo-sampling
 
 # Default target
 help:
@@ -11,6 +11,11 @@ help:
 	@echo "  make test          - Run all tests"
 	@echo "  make test-cov      - Run tests with coverage report"
 	@echo "  make clean         - Remove cache files, checkpoints, and build artifacts"
+	@echo ""
+	@echo "Data Download:"
+	@echo "  make download         - Pre-download training data (default mode, ~10 GB)"
+	@echo "  make download-medium  - Pre-download training data (medium mode, ~5 GB)"
+	@echo "  make download-quick   - Pre-download training data (quick mode, ~1 GB)"
 	@echo ""
 	@echo "Transformer Operations:"
 	@echo "  make train         - Train a transformer model (100M tokens/epoch × 20, 6 layers)"
@@ -52,6 +57,16 @@ clean:
 	rm -rf checkpoints
 	rm -rf checkpoints_medium
 	rm -rf checkpoints_quick
+
+# Data download operations
+download:
+	uv run python main.py download
+
+download-medium:
+	uv run python main.py download --medium
+
+download-quick:
+	uv run python main.py download --quick
 
 # Transformer operations via main.py CLI
 train:

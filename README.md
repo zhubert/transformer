@@ -34,6 +34,11 @@ make install
 # Run all tests
 make test
 
+# Pre-download training data (optional, but recommended for offline training)
+make download-medium    # Download ~5 GB for medium mode
+make download-quick     # Download ~1 GB for quick mode
+make download           # Download ~10 GB for default mode
+
 # Train on FineWeb (100M tokens per epoch)
 make train
 
@@ -212,6 +217,25 @@ We use HuggingFace's [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW
   - Default: ~10 GB cache (264 shards)
 - **Performance**: After epoch 1, all shards are cached → 2-4x speedup for epochs 2+
 - **Configurable**: Default 100M tokens per epoch, adjust as needed
+
+### Pre-downloading Data (Optional)
+
+You can pre-download all training data before starting training. This is useful for:
+- **Offline training**: Download once, train anytime without internet
+- **Bandwidth control**: Download when network is fast/cheap
+- **Uninterrupted training**: No network issues during training runs
+
+```bash
+# Pre-download for your training mode
+make download-medium    # ~5 GB for medium mode
+make download-quick     # ~1 GB for quick mode
+make download           # ~10 GB for default mode
+
+# Or use the CLI directly
+uv run python main.py download --medium
+```
+
+After downloading, training will run at full speed from epoch 1 (instead of building the cache during the first epoch).
 
 ### Device Support
 

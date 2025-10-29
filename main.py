@@ -26,6 +26,7 @@ sys.path.append(str(Path(__file__).parent))
 
 # Import from commands
 from commands.train import train
+from commands.download_shards import download_shards
 from commands.generate import main as generate_main
 from commands.evaluate_perplexity import (
     evaluate_checkpoint,
@@ -75,6 +76,33 @@ def create_parser():
         action="store_true",
         help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch × 15 epochs). "
              "Epoch 1: ~2h (builds cache), Epochs 2+: ~30-60min (cached)",
+    )
+
+    # ============================================================================
+    # DOWNLOAD subcommand
+    # ============================================================================
+    download_parser = subparsers.add_parser(
+        "download",
+        help="Pre-download training data shards for offline training",
+        description="Download and cache all FineWeb shards needed for training. "
+                    "This allows you to train later without internet access.",
+    )
+    download_parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Download shards for quick mode (10M tokens, ~1 GB)",
+    )
+    download_parser.add_argument(
+        "--medium",
+        action="store_true",
+        help="Download shards for medium mode (50M tokens, ~5 GB)",
+    )
+    download_parser.add_argument(
+        "--encoding",
+        type=str,
+        default="cl100k_base",
+        choices=["p50k_base", "cl100k_base"],
+        help="Tokenizer encoding to use (default: cl100k_base)",
     )
 
     # ============================================================================
@@ -259,6 +287,9 @@ def main():
         print("=" * 80)
         print()
         train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium)
+
+    elif args.command == "download":
+        download_shards(quick=args.quick, medium=args.medium, encoding=args.encoding)
 
     elif args.command == "generate":
         print("=" * 80)

@@ -103,6 +103,7 @@ def function(x):
 ### Training Infrastructure
 - **FineWeb dataset**: 10B tokens, streaming with dynamic cache sizing
   - Cache automatically sized per mode (1-10 GB) to hold all shards
+  - Pre-download option: `make download-medium` for offline training
   - Epoch 1: Downloads shards on-demand, builds cache
   - Epochs 2+: Pure local I/O → 2-4x speedup
 - **Gradient accumulation**: Simulate large batches (16x default) for stability
