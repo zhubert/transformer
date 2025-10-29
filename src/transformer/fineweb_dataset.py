@@ -425,8 +425,16 @@ class FineWebDataset(IterableDataset):
 
         # We don't know exact shard count, so we'll stream until we hit our token limit
         # Approximate max shards needed (assuming ~500K tokens per shard)
-        # We need to check MORE shards since some will be filtered out for validation
-        max_shards_to_check = int((self.tokens_per_epoch // 500_000) * 1.5) + 10
+        # We need to check MORE shards since some will be filtered out by split
+        # - Train split: 90% of shards pass filter → check 1.1x shards
+        # - Validation split: 10% of shards pass filter → check 10x shards
+        base_shards_needed = (self.tokens_per_epoch // 500_000) + 10
+        if self.split == "validation":
+            # Need to check 10x more shards since only ~10% will pass validation filter
+            max_shards_to_check = int(base_shards_needed / self.validation_fraction)
+        else:
+            # For train split, most shards pass filter, so minimal overhead
+            max_shards_to_check = int(base_shards_needed / (1 - self.validation_fraction))
 
         # Randomly select which shards to check (for variety across epochs)
         # Then filter to only include shards in our split

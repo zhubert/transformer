@@ -290,6 +290,8 @@ def main():
 
     elif args.command == "download":
         download_shards(quick=args.quick, medium=args.medium, encoding=args.encoding)
+        # Explicitly exit to ensure background threads from datasets library are cleaned up
+        sys.exit(0)
 
     elif args.command == "generate":
         print("=" * 80)
