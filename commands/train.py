@@ -102,6 +102,12 @@ Workarounds:
 - ⚠️ Try MPS with --mps flag - 5-10x faster but may crash
 - 🐛 Debug mode: --mps --debug - forces synchronization (more stable, slower)
 
+Training Modes:
+---------------
+- Default: Full quality (6 layers, 256 d_model, 2B tokens) - ~8-12 hours on M1
+- --medium: Balanced (4 layers, 256 d_model, 750M tokens) - ~3-4 hours on M1
+- --quick: Fast iteration (4 layers, 128 d_model, 100M tokens) - ~30-60 min on M1
+
 What to Expect During Training:
 ---------------------------------
 Training progress (quick mode on M1 MacBook Pro):
@@ -112,8 +118,10 @@ Epoch 5:  Loss ~4.0, Perplexity ~55    (getting decent)
 Epoch 10: Loss ~3.0, Perplexity ~20    (pretty good!)
 
 Training time per epoch:
-- CPU: ~10-15 minutes (quick mode)
-- MPS: ~2-3 minutes (if stable)
+- Quick mode (CPU): ~3-6 minutes per epoch
+- Medium mode (CPU): ~12-15 minutes per epoch
+- Normal mode (CPU): ~25-35 minutes per epoch
+- With MPS: 5-10x faster (if stable)
 
 Loss Interpretation:
 - High loss (8-10): Model guessing randomly, terrible predictions
@@ -322,7 +330,7 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accumulation_steps=16, resume=False):
+def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, medium=False, accumulation_steps=16, resume=False):
     """
     Main training function with gradient accumulation and validation.
 
@@ -331,6 +339,7 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
         use_mps: If True, try MPS (experimental - has known NaN issues)
         encoding: Tokenizer encoding to use ("p50k_base" or "cl100k_base")
         quick: If True, use smaller model and fewer tokens for faster training
+        medium: If True, use medium-sized model with good balance of quality and speed
         accumulation_steps: Number of batches to accumulate before updating weights.
                            Effective batch size = BATCH_SIZE × accumulation_steps
                            Higher values = more stable training but slower updates
@@ -363,8 +372,13 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
     SEQ_LENGTH = 128
     BATCH_SIZE = 8              # Reduced from 32 to fit in M1 memory
 
-    # Quick mode: smaller model, fewer tokens for faster iteration
+    # Validate that only one mode is selected
+    if quick and medium:
+        raise ValueError("Cannot use both --quick and --medium flags. Please choose one.")
+
+    # Training mode configuration
     if quick:
+        # Quick mode: smaller model, fewer tokens for faster iteration
         D_MODEL = 128
         NUM_HEADS = 4
         NUM_LAYERS = 4
@@ -372,7 +386,20 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
         NUM_EPOCHS = 10
         TOKENS_PER_EPOCH = 10_000_000  # 10M tokens per epoch
         CHECKPOINT_DIR = Path("checkpoints_quick")
+    elif medium:
+        # Medium mode: balanced quality and speed
+        # Full d_model (crucial for representation quality)
+        # Fewer layers (saves training time)
+        # More training data than quick (7.5x improvement)
+        D_MODEL = 256
+        NUM_HEADS = 4
+        NUM_LAYERS = 4
+        D_FF = 1024
+        NUM_EPOCHS = 15
+        TOKENS_PER_EPOCH = 50_000_000  # 50M tokens per epoch
+        CHECKPOINT_DIR = Path("checkpoints_medium")
     else:
+        # Normal mode: full model, maximum quality
         D_MODEL = 256
         NUM_HEADS = 4
         NUM_LAYERS = 6
@@ -395,6 +422,8 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, accum
     header_text = "TRANSFORMER TRAINING"
     if quick:
         header_text += " [yellow](Quick Mode)[/yellow]"
+    elif medium:
+        header_text += " [cyan](Medium Mode)[/cyan]"
     console.print(Panel(header_text, style="bold blue", expand=False))
     console.print()
 
@@ -1037,6 +1066,11 @@ if __name__ == "__main__":
         help="Quick training mode: smaller model (4 layers, d_model=128) and fewer tokens (10M/epoch)"
     )
     parser.add_argument(
+        "--medium",
+        action="store_true",
+        help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch, ~3-4 hours on M1)"
+    )
+    parser.add_argument(
         "--accumulation-steps",
         type=int,
         default=16,
@@ -1055,6 +1089,7 @@ if __name__ == "__main__":
         use_mps=args.mps,
         encoding=args.encoding,
         quick=args.quick,
+        medium=args.medium,
         accumulation_steps=args.accumulation_steps,
         resume=args.resume
     )

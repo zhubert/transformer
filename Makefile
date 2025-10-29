@@ -1,4 +1,4 @@
-.PHONY: help install test test-cov clean train train-quick resume resume-quick generate evaluate compare demo-sampling
+.PHONY: help install test test-cov clean train train-medium train-quick resume resume-medium resume-quick generate evaluate compare demo-sampling
 
 # Default target
 help:
@@ -13,9 +13,11 @@ help:
 	@echo "  make clean         - Remove cache files, checkpoints, and build artifacts"
 	@echo ""
 	@echo "Transformer Operations:"
-	@echo "  make train         - Train a transformer model (100M tokens/epoch)"
-	@echo "  make train-quick   - Quick training (10M tokens/epoch, smaller model)"
+	@echo "  make train         - Train a transformer model (100M tokens/epoch, 6 layers)"
+	@echo "  make train-medium  - Medium training (50M tokens/epoch, 4 layers, ~3-4h on M1)"
+	@echo "  make train-quick   - Quick training (10M tokens/epoch, 4 layers, ~30-60min on M1)"
 	@echo "  make resume        - Resume training from latest checkpoint"
+	@echo "  make resume-medium - Resume medium training from latest checkpoint"
 	@echo "  make resume-quick  - Resume quick training from latest checkpoint"
 	@echo "  make generate      - Generate text (interactive mode)"
 	@echo "  make evaluate      - Evaluate latest checkpoint"
@@ -48,17 +50,24 @@ clean:
 	rm -rf build dist *.egg-info
 	rm -rf data/fineweb_cache
 	rm -rf checkpoints
+	rm -rf checkpoints_medium
 	rm -rf checkpoints_quick
 
 # Transformer operations via main.py CLI
 train:
 	uv run python main.py train
 
+train-medium:
+	uv run python main.py train --medium
+
 train-quick:
 	uv run python commands/train.py --quick
 
 resume:
 	uv run python main.py train --resume
+
+resume-medium:
+	uv run python main.py train --medium --resume
 
 resume-quick:
 	uv run python commands/train.py --quick --resume

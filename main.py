@@ -65,6 +65,16 @@ def create_parser():
         action="store_true",
         help="Use MPS (Apple Silicon GPU) - EXPERIMENTAL, has known NaN issues",
     )
+    train_parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick training mode: smaller model (4 layers, d_model=128) and fewer tokens (10M/epoch)",
+    )
+    train_parser.add_argument(
+        "--medium",
+        action="store_true",
+        help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch, ~3-4 hours on M1)",
+    )
 
     # ============================================================================
     # GENERATE subcommand
@@ -247,7 +257,7 @@ def main():
         print("TRAINING MODE")
         print("=" * 80)
         print()
-        train(debug=args.debug, use_mps=args.mps)
+        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium)
 
     elif args.command == "generate":
         print("=" * 80)

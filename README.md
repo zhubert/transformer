@@ -37,11 +37,15 @@ make test
 # Train on FineWeb (100M tokens per epoch)
 make train
 
-# Quick training (smaller model, 10M tokens/epoch)
+# Medium training (balanced quality & speed, 50M tokens/epoch, ~3-4h on M1)
+make train-medium
+
+# Quick training (smaller model, 10M tokens/epoch, ~30-60min on M1)
 make train-quick
 
 # Resume training from latest checkpoint
 make resume          # Resume standard training
+make resume-medium   # Resume medium training
 make resume-quick    # Resume quick training
 
 # Generate text (interactive mode)
@@ -165,12 +169,18 @@ See [`src/transformer/block.py`](src/transformer/block.py) for detailed architec
 # Auto-detects best device (CUDA > MPS > CPU)
 uv run python main.py train
 
-# Quick mode: 10M tokens/epoch, 4 layers, d_model=128
+# Medium mode: 50M tokens/epoch, 4 layers, d_model=256 (~3-4 hours on M1)
+# Best balance of quality and training time
+uv run python main.py train --medium
+
+# Quick mode: 10M tokens/epoch, 4 layers, d_model=128 (~30-60 min on M1)
+# Fast iteration for testing
 uv run python main.py train --quick
 
 # Resume training from latest checkpoint
 uv run python main.py train --resume
-uv run python main.py train --quick --resume  # Resume quick training
+uv run python main.py train --quick --resume    # Resume quick training
+uv run python main.py train --medium --resume   # Resume medium training
 
 # Use smaller vocabulary (50K tokens vs 100K default)
 uv run python main.py train --encoding p50k_base
