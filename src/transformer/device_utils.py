@@ -16,7 +16,11 @@ def autodetect_device() -> Tuple[torch.device, str]:
     """
     Automatically detect the best available device.
 
-    Preference order: CUDA > MPS > CPU
+    Preference order: CUDA/ROCm > MPS > CPU
+
+    Note: AMD GPUs with ROCm use torch.cuda API (HIP compatibility layer),
+    so they appear as CUDA devices. We detect the actual GPU vendor for
+    more informative messages.
 
     Returns:
         device: torch.device object
@@ -26,9 +30,15 @@ def autodetect_device() -> Tuple[torch.device, str]:
         >>> device, name = autodetect_device()
         >>> print(f"Using {name}")
         Using CUDA (NVIDIA GPU)
+        # or on AMD: Using CUDA (AMD GPU via ROCm)
     """
     if torch.cuda.is_available():
-        return torch.device("cuda"), "CUDA (NVIDIA GPU)"
+        # Detect if it's AMD (ROCm) or NVIDIA (CUDA)
+        gpu_name = torch.cuda.get_device_name(0).lower()
+        if 'amd' in gpu_name or 'radeon' in gpu_name:
+            return torch.device("cuda"), "CUDA (AMD GPU via ROCm)"
+        else:
+            return torch.device("cuda"), "CUDA (NVIDIA GPU)"
     elif torch.backends.mps.is_available():
         return torch.device("mps"), "MPS (Apple Silicon GPU)"
     else:
@@ -61,7 +71,12 @@ def get_device(device_type: str = None) -> Tuple[torch.device, str]:
     if device_type == "cuda":
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA requested but not available. Install CUDA-enabled PyTorch.")
-        return torch.device("cuda"), "CUDA (NVIDIA GPU)"
+        # Detect GPU vendor for informative message
+        gpu_name = torch.cuda.get_device_name(0).lower()
+        if 'amd' in gpu_name or 'radeon' in gpu_name:
+            return torch.device("cuda"), "CUDA (AMD GPU via ROCm)"
+        else:
+            return torch.device("cuda"), "CUDA (NVIDIA GPU)"
     elif device_type == "mps":
         if not torch.backends.mps.is_available():
             raise RuntimeError("MPS requested but not available. Requires macOS 12.3+ and Apple Silicon.")
@@ -217,8 +232,17 @@ def print_device_info(device: torch.device):
     print(f"Device: {device}")
 
     if device.type == "cuda":
-        print(f"  CUDA Device: {torch.cuda.get_device_name(0)}")
-        print(f"  CUDA Version: {torch.version.cuda}")
+        device_name = torch.cuda.get_device_name(0)
+        print(f"  GPU Device: {device_name}")
+
+        # Detect vendor
+        if 'amd' in device_name.lower() or 'radeon' in device_name.lower():
+            print(f"  Backend: ROCm (AMD)")
+            print(f"  ROCm Version: {torch.version.hip if hasattr(torch.version, 'hip') else 'Unknown'}")
+        else:
+            print(f"  Backend: CUDA (NVIDIA)")
+            print(f"  CUDA Version: {torch.version.cuda}")
+
         total_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         print(f"  Total Memory: {total_memory:.1f} GB")
     elif device.type == "mps":

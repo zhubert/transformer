@@ -11,7 +11,7 @@ An educational GPT-style transformer built with AI in PyTorch. Every component i
 ### Requirements & Installation
 
 **Prerequisites:**
-- **Python 3.13+** - Specified in `.python-version`
+- **Python 3.12+** - Specified in `.python-version`
 - **UV** - Fast Python package manager ([docs](https://docs.astral.sh/uv/))
 
 **Install UV:**
@@ -29,7 +29,8 @@ pip install uv
 **Install Project Dependencies:**
 ```bash
 # Install dependencies (PyTorch, tiktoken, NumPy, datasets, rich)
-make install
+make install              # Default: NVIDIA CUDA or CPU
+make install-rocm         # For AMD GPUs with ROCm (Linux only)
 
 # Run all tests
 make test
@@ -244,15 +245,22 @@ The training script automatically detects and uses the best available device:
 1. **CUDA** (NVIDIA GPUs) - Preferred for maximum performance
    - Automatic mixed precision (bfloat16) for ~2x speedup
    - Memory tracking and synchronization utilities
+   - Install with: `make install`
 
-2. **MPS** (Apple Silicon) - Excellent for Mac users
+2. **ROCm** (AMD GPUs, Linux only) - Full GPU acceleration
+   - Uses HIP compatibility layer (torch.cuda API)
+   - Same performance optimizations as CUDA
+   - Install with: `make install-rocm`
+
+3. **MPS** (Apple Silicon) - Excellent for Mac users
    - Native GPU acceleration on M1/M2/M3 chips
    - Significantly faster than CPU (5-10x)
+   - Install with: `make install`
 
-3. **CPU** - Universal fallback
+4. **CPU** - Universal fallback
    - Works everywhere, good for learning and debugging
 
-The device is selected automatically, but you can force a specific device with `--mps` if needed.
+The device is selected automatically. The code automatically detects whether you're using NVIDIA or AMD GPUs and displays the appropriate backend information.
 
 See [`commands/train.py`](commands/train.py) for complete training documentation.
 

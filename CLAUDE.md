@@ -108,7 +108,9 @@ def function(x):
   - Epochs 2+: Pure local I/O → 2-4x speedup
 - **Gradient accumulation**: Simulate large batches (16x default) for stability
 - **Train/val split**: 90/10 deterministic split for overfitting detection
-- **Device support**: Auto-detect CUDA > MPS > CPU
+- **Device support**: Auto-detect CUDA (NVIDIA/AMD via ROCm) > MPS > CPU
+  - AMD GPUs use HIP compatibility layer (torch.cuda API)
+  - Automatic backend detection displays correct vendor (NVIDIA vs AMD)
 - **Checkpointing**: Full state save/resume
 
 ### Generation Optimizations
@@ -266,7 +268,8 @@ optimizer = torch.optim.AdamW([
 
 ```bash
 # Install dependencies
-make install
+make install              # NVIDIA CUDA or CPU (default)
+make install-rocm         # AMD ROCm (Linux only)
 
 # Run tests
 make test

@@ -1,11 +1,12 @@
-.PHONY: help install test test-cov clean download download-quick download-medium train train-medium train-quick resume resume-medium resume-quick generate evaluate compare demo-sampling
+.PHONY: help install install-rocm test test-cov clean download download-quick download-medium train train-medium train-quick resume resume-medium resume-quick generate evaluate compare demo-sampling
 
 # Default target
 help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "Setup:"
-	@echo "  make install       - Install project dependencies with uv"
+	@echo "  make install       - Install project dependencies (NVIDIA CUDA or CPU)"
+	@echo "  make install-rocm  - Install with AMD ROCm support (Linux only)"
 	@echo ""
 	@echo "Development:"
 	@echo "  make test          - Run all tests"
@@ -31,9 +32,14 @@ help:
 	@echo ""
 	@echo "For more options, use: uv run python main.py <command> --help"
 
-# Install dependencies
+# Install dependencies (default: NVIDIA CUDA or CPU)
 install:
 	uv sync
+
+# Install with AMD ROCm support (Linux only)
+install-rocm:
+	@echo "Installing with AMD ROCm support..."
+	uv sync --extra rocm
 
 # Run tests
 test:
