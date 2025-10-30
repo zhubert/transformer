@@ -325,7 +325,26 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, con
     checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
     # Load model weights
-    model.load_state_dict(checkpoint['model_state_dict'])
+    try:
+        model.load_state_dict(checkpoint['model_state_dict'])
+    except RuntimeError as e:
+        # Check if this is the torch.compile() prefix mismatch issue
+        error_str = str(e)
+        if '_orig_mod.' in error_str:
+            console.print("[bold red]Error:[/bold red] Checkpoint incompatible with torch.compile()")
+            console.print()
+            console.print("This checkpoint was saved from a model with a different compilation state.")
+            console.print()
+            console.print("[yellow]Solution:[/yellow]")
+            console.print("  • Run with --no-compile flag to resume without compilation:")
+            console.print(f"    [cyan]python main.py train --medium --resume --no-compile[/cyan]")
+            console.print()
+            console.print("  • After resuming, future checkpoints will work with both modes.")
+            console.print()
+            raise SystemExit(1)
+        else:
+            # Re-raise other errors
+            raise
 
     # Load optimizer state
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
