@@ -77,6 +77,11 @@ def create_parser():
         help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch × 15 epochs). "
              "Epoch 1: ~2h (builds cache), Epochs 2+: ~30-60min (cached)",
     )
+    train_parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from the latest checkpoint",
+    )
 
     # ============================================================================
     # DOWNLOAD subcommand
@@ -286,7 +291,7 @@ def main():
         print("TRAINING MODE")
         print("=" * 80)
         print()
-        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium)
+        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume)
 
     elif args.command == "download":
         download_shards(quick=args.quick, medium=args.medium, encoding=args.encoding)

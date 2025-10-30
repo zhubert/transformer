@@ -322,7 +322,7 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, con
     """
     console.print(f"[bold cyan]Loading checkpoint:[/bold cyan] {checkpoint_path}")
 
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
     # Load model weights
     model.load_state_dict(checkpoint['model_state_dict'])

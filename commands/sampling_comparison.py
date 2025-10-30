@@ -236,7 +236,7 @@ def demonstrate_with_model():
     print(f"Loading model from '{model_path}'...")
 
     # Load model
-    checkpoint = torch.load(model_path)
+    checkpoint = torch.load(model_path, weights_only=False)
     vocab_size = checkpoint['vocab_size']
 
     model = DecoderOnlyTransformer(

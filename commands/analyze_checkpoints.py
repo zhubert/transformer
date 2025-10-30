@@ -18,7 +18,7 @@ print("-" * 80)
 
 prev_loss = None
 for checkpoint_path in checkpoints:
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     epoch = checkpoint['epoch']
     loss = checkpoint['loss']
     perplexity = checkpoint.get('perplexity', 'N/A')
