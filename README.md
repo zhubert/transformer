@@ -262,6 +262,26 @@ The training script automatically detects and uses the best available device:
 
 The device is selected automatically. The code automatically detects whether you're using NVIDIA or AMD GPUs and displays the appropriate backend information.
 
+### Known Issue: hipBLASLt Warning (AMD GPUs)
+
+If you're using AMD GPUs with ROCm, you may see this warning during training:
+
+```
+UserWarning: Attempting to use hipBLASLt on an unsupported architecture!
+Overriding blas backend to hipblas
+```
+
+**This is harmless and expected behavior.** Here's why:
+
+- **Root cause**: Pre-built PyTorch binaries don't include hipBLASLt support (a newer high-performance BLAS library)
+- **What happens**: PyTorch tries to use hipBLASLt, fails, and automatically falls back to `hipblas` (the standard BLAS library)
+- **Performance impact**: None - `hipblas` works perfectly fine for training and generation
+- **Hardware support**: Modern AMD GPUs (RDNA 2/3, e.g., RX 6000/7000 series) support hipBLASLt at the hardware level, but PyTorch binaries aren't compiled with it
+
+**This warning can be safely ignored.** It appears once per run and doesn't affect training quality, speed, or stability. The fallback to `hipblas` is automatic and transparent.
+
+To eliminate the warning entirely, you'd need to build PyTorch from source with hipBLASLt support (4-6 hours, complex setup), but this provides no practical benefit for this educational project.
+
 See [`commands/train.py`](commands/train.py) for complete training documentation.
 
 ## Text Generation
