@@ -56,7 +56,10 @@ src/transformer/
 ├── scheduler.py        # Learning rate scheduling (warmup + cosine)
 ├── training_utils.py   # Gradient accumulation utilities
 ├── dataset.py          # Dataset base classes
-└── fineweb_dataset.py  # FineWeb streaming with train/val split
+├── fineweb_dataset.py  # FineWeb streaming with train/val split
+├── checkpoint_utils.py # Checkpoint loading/saving utilities (DRY)
+├── dataset_utils.py    # Dataset configuration utilities (DRY)
+└── device_utils.py     # Device initialization and management
 
 commands/               # CLI scripts for training, generation, evaluation
 tests/                  # Test suite for core components
@@ -97,6 +100,31 @@ def function(x):
 - Include **complexity analysis** for algorithms
 - Note **design decisions** and alternatives considered
 - Reference **papers or standards** when applicable
+
+### Shared Utilities (DRY Principle)
+To avoid code duplication and maintain consistency, common functionality is extracted into shared utility modules:
+
+**checkpoint_utils.py** - Checkpoint loading/saving
+- `load_checkpoint()` - Universal checkpoint loader for all commands
+- `detect_encoding()` - Encoding detection with backward compatibility
+- `get_encoding_short_name()` - Convert encoding to short form for filenames
+- `strip_compile_prefix()` - Remove torch.compile() `_orig_mod.` prefix
+- `infer_max_seq_len()` - Infer max_seq_len from positional embedding shape
+
+**dataset_utils.py** - Dataset configuration
+- `calculate_optimal_cache_size()` - FineWeb shard cache calculation
+
+**device_utils.py** - Device management
+- `init_device()` - Initialize device (CUDA/MPS/CPU) with proper setup
+- `get_autocast_context()` - Mixed precision context manager
+- `get_synchronize_fn()` - Device synchronization function
+- `get_memory_stats_fn()` - Memory statistics function
+
+These utilities eliminate ~230 lines of duplicated code across 8 command files while maintaining:
+- ✅ Single source of truth for common operations
+- ✅ Easier maintenance (fix once, works everywhere)
+- ✅ Consistent behavior across all commands
+- ✅ Better discoverability for developers
 
 ## Key Features
 

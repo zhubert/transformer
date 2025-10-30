@@ -39,23 +39,7 @@ import argparse
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.fineweb_dataset import FineWebDataset
-
-
-def calculate_optimal_cache_size(tokens_per_epoch: int) -> int:
-    """
-    Calculate optimal shard cache size based on tokens per epoch.
-
-    Args:
-        tokens_per_epoch: Number of tokens to process per epoch
-
-    Returns:
-        max_cached_shards: Number of shards to keep in cache
-    """
-    TOKENS_PER_SHARD = 500_000
-    train_shards = tokens_per_epoch / TOKENS_PER_SHARD
-    val_shards = (tokens_per_epoch / 10) / TOKENS_PER_SHARD
-    total_shards = int((train_shards + val_shards) * 1.2)
-    return total_shards
+from src.transformer.dataset_utils import calculate_optimal_cache_size
 
 
 def download_shards(quick=False, medium=False):

@@ -22,6 +22,12 @@ Run this script with a trained model to see the differences!
 """
 
 import torch
+import sys
+from pathlib import Path
+
+# Add src to path
+sys.path.append(str(Path(__file__).parent.parent))
+
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.sampling import (
     sample_greedy,
@@ -29,6 +35,7 @@ from src.transformer.sampling import (
     sample_top_p,
     sample_top_k_top_p,
 )
+from src.transformer.checkpoint_utils import load_checkpoint
 
 
 def demonstrate_sampling_strategies():
@@ -235,29 +242,11 @@ def demonstrate_with_model():
 
     print(f"Loading model from '{model_path}'...")
 
-    # Load model
-    checkpoint = torch.load(model_path, weights_only=False)
-    vocab_size = checkpoint['vocab_size']
-
-    # Strip torch.compile() prefix if present (_orig_mod.)
-    # Checkpoints saved from compiled models have this prefix on all keys
-    state_dict = checkpoint['model_state_dict']
-    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
-        print("Detected torch.compile() checkpoint, stripping prefix...")
-        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
-
-    model = DecoderOnlyTransformer(
-        vocab_size=vocab_size,
-        d_model=512,
-        num_heads=8,
-        num_layers=6,
-        d_ff=2048,
-        max_seq_len=512,
-        dropout=0.1,
-    )
-
-    model.load_state_dict(state_dict)
-    model.eval()
+    # Load model using checkpoint utilities
+    result = load_checkpoint(model_path, device=torch.device('cpu'), verbose=False)
+    model = result['model']
+    config = result['config']
+    vocab_size = config['vocab_size']
 
     print("Model loaded successfully!")
     print()

@@ -288,7 +288,12 @@ def evaluate_perplexity(model, dataloader, device='cpu', max_batches=None, autoc
             targets = targets.to(device)
 
             # Forward pass
-            logits = model(inputs)
+            # Note: model.forward() returns (logits, caches) tuple
+            result = model(inputs)
+            if isinstance(result, tuple):
+                logits = result[0]  # Extract logits from tuple
+            else:
+                logits = result  # Backward compatibility
 
             # Calculate loss
             batch_size, seq_len, vocab_size = logits.shape

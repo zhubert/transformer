@@ -56,11 +56,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.device_utils import init_device, get_autocast_context
+from src.transformer.checkpoint_utils import load_checkpoint
 import tiktoken
-
-# Import encoding detection from train.py
-sys.path.append(str(Path(__file__).parent))
-from train import detect_encoding_from_checkpoint
 
 
 # Generation presets for different use cases
@@ -106,56 +103,15 @@ def load_model(checkpoint_path, device):
         config: Model configuration dict
         detected_encoding: Detected encoding from checkpoint
     """
-    print(f"Loading model from {checkpoint_path}...")
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    # Use checkpoint utilities for loading
+    result = load_checkpoint(checkpoint_path, device=device, verbose=True)
 
-    config = checkpoint['config']
-
-    # Detect encoding
-    detected_encoding = detect_encoding_from_checkpoint(checkpoint)
-
+    # Display model config
+    config = result['config']
     print(f"  Model config: {config['num_layers']} layers, "
           f"{config['d_model']} d_model, {config['num_heads']} heads")
-    print(f"  Encoding: {detected_encoding}")
 
-    # Strip torch.compile() prefix if present (_orig_mod.)
-    # Checkpoints saved from compiled models have this prefix on all keys
-    state_dict = checkpoint['model_state_dict']
-    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
-        print("  Detected torch.compile() checkpoint, stripping prefix...")
-        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
-
-    # Infer max_seq_len from positional encoding shape if not in config
-    max_seq_len = config.get('max_seq_len')
-    if max_seq_len is None:
-        pos_embedding_shape = state_dict['pos_encoding.pos_embedding.weight'].shape
-        max_seq_len = pos_embedding_shape[0]
-        print(f"  Inferred max_seq_len from checkpoint: {max_seq_len}")
-
-    # Create model with saved configuration
-    model = DecoderOnlyTransformer(
-        vocab_size=config['vocab_size'],
-        d_model=config['d_model'],
-        num_heads=config['num_heads'],
-        num_layers=config['num_layers'],
-        d_ff=config['d_ff'],
-        dropout=config['dropout'],
-        max_seq_len=max_seq_len
-    )
-
-    # Load trained weights
-    model.load_state_dict(state_dict)
-    model = model.to(device)
-    model.eval()  # Set to evaluation mode
-
-    # Display checkpoint info (loss may not always be saved)
-    epoch_info = f"  Checkpoint from epoch {checkpoint['epoch']}"
-    if 'loss' in checkpoint:
-        epoch_info += f", loss: {checkpoint['loss']:.4f}"
-    print(epoch_info)
-    print()
-
-    return model, config, detected_encoding
+    return result['model'], result['config'], result['encoding']
 
 
 def generate_text(model, tokenizer, prompt, max_length, sampling_method, sampling_params, device, autocast_ctx):

@@ -162,86 +162,16 @@ from src.transformer.device_utils import (
     init_device, get_autocast_context, get_synchronize_fn,
     get_memory_stats_fn, print_device_info
 )
+from src.transformer.dataset_utils import calculate_optimal_cache_size
+from src.transformer.checkpoint_utils import (
+    detect_encoding,
+    get_encoding_short_name,
+    strip_compile_prefix,
+)
 
 
-def calculate_optimal_cache_size(tokens_per_epoch: int) -> int:
-    """
-    Calculate optimal shard cache size based on tokens per epoch.
-
-    Why this matters:
-    -----------------
-    FineWeb streams data in shards (~500K tokens each, ~40MB on disk).
-    If the cache is too small, shards are evicted and re-downloaded every epoch,
-    wasting network bandwidth and making training much slower.
-
-    This function calculates how many shards are needed to cover an entire epoch
-    (including validation data) so that after epoch 1, all shards are cached
-    and epochs 2+ run at maximum speed with no network I/O.
-
-    Performance Impact:
-    -------------------
-    - Small cache (5 shards): ~105 shards re-downloaded per epoch → 2h/epoch on M3 Pro
-    - Optimal cache: All shards cached after epoch 1 → ~30-60min/epoch on M3 Pro
-
-    Speedup: 2-4x faster after epoch 1!
-
-    Args:
-        tokens_per_epoch: Number of tokens to process per epoch
-
-    Returns:
-        max_cached_shards: Number of shards to keep in cache
-
-    Cache Sizes:
-        - Quick (10M tokens): ~26 shards, ~1.0 GB disk
-        - Medium (50M tokens): ~132 shards, ~5.2 GB disk
-        - Default (100M tokens): ~264 shards, ~10.3 GB disk
-    """
-    # Each shard contains ~500K tokens (approximate)
-    TOKENS_PER_SHARD = 500_000
-
-    # Calculate shards needed for training (90% of data) and validation (10%)
-    train_shards = tokens_per_epoch / TOKENS_PER_SHARD
-    val_shards = (tokens_per_epoch / 10) / TOKENS_PER_SHARD
-
-    # Add 20% buffer for safety (shard sizes vary slightly)
-    total_shards = int((train_shards + val_shards) * 1.2)
-
-    return total_shards
-
-
-def detect_encoding_from_checkpoint(checkpoint):
-    """
-    Detect encoding from checkpoint, with backward compatibility.
-
-    Args:
-        checkpoint: Loaded checkpoint dict
-
-    Returns:
-        encoding_name: String 'cl100k_base'
-    """
-    # Preferred: use stored encoding (new checkpoints)
-    if 'encoding' in checkpoint.get('config', {}):
-        return checkpoint['config']['encoding']
-
-    # Fallback: Always use cl100k_base (backward compatibility with old checkpoints)
-    return 'cl100k_base'
-
-
-def get_encoding_short_name(encoding):
-    """
-    Convert full encoding name to short version for filenames.
-
-    Args:
-        encoding: Full encoding name like 'cl100k_base'
-
-    Returns:
-        Short name like 'cl100k'
-    """
-    if encoding == 'cl100k_base':
-        return 'cl100k'
-    else:
-        # Fallback: just remove '_base' suffix if present
-        return encoding.replace('_base', '')
+# Utility functions are now imported from checkpoint_utils and dataset_utils
+# Previously they were defined here, causing code duplication across commands
 
 
 def get_device_type_from_args(use_mps=False):
@@ -316,12 +246,11 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, con
 
     checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-    # Strip torch.compile() prefix if present (_orig_mod.)
-    # Checkpoints saved from compiled models have this prefix on all keys
+    # Strip torch.compile() prefix if present using utility function
     state_dict = checkpoint['model_state_dict']
     if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
         console.print("[yellow]Detected torch.compile() checkpoint, stripping prefix...[/yellow]")
-        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
+        state_dict = strip_compile_prefix(state_dict)
         checkpoint['model_state_dict'] = state_dict
 
     # Load model weights

@@ -44,10 +44,7 @@ from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.perplexity import evaluate_perplexity, calculate_perplexity_from_loss
 from src.transformer.device_utils import init_device, get_autocast_context
 from src.transformer.fineweb_dataset import FineWebDataset
-
-# Import encoding detection from train.py
-sys.path.append(str(Path(__file__).parent))
-from train import detect_encoding_from_checkpoint
+from src.transformer.checkpoint_utils import load_checkpoint as load_checkpoint_util
 
 
 class SimpleTextDataset(Dataset):
@@ -109,6 +106,9 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     """
     Load a model checkpoint.
 
+    Wrapper around checkpoint_utils.load_checkpoint() that maintains
+    backward compatibility with this file's API.
+
     Args:
         checkpoint_path: Path to the checkpoint file
         device: Device to load model on
@@ -116,47 +116,12 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     Returns:
         model: Loaded model
         checkpoint: Full checkpoint dict (contains config, loss, etc.)
+        detected_encoding: Detected encoding name
     """
-    print(f"Loading checkpoint: {checkpoint_path}")
+    # Use checkpoint utilities for loading
+    result = load_checkpoint_util(checkpoint_path, device=device, verbose=True)
 
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-
-    # Extract configuration
-    config = checkpoint['config']
-
-    # Strip torch.compile() prefix if present (_orig_mod.)
-    # Checkpoints saved from compiled models have this prefix on all keys
-    state_dict = checkpoint['model_state_dict']
-    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
-        print("Detected torch.compile() checkpoint, stripping prefix...")
-        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
-
-    # Create model with saved configuration
-    model = DecoderOnlyTransformer(
-        vocab_size=config['vocab_size'],
-        d_model=config['d_model'],
-        num_heads=config['num_heads'],
-        num_layers=config['num_layers'],
-        d_ff=config['d_ff'],
-        dropout=config['dropout'],
-    )
-
-    # Load weights
-    model.load_state_dict(state_dict)
-    model = model.to(device)
-    model.eval()
-
-    # Detect encoding
-    detected_encoding = detect_encoding_from_checkpoint(checkpoint)
-
-    print(f"  Epoch: {checkpoint['epoch']}")
-    print(f"  Encoding: {detected_encoding}")
-    print(f"  Training loss: {checkpoint['loss']:.4f}")
-    if 'perplexity' in checkpoint:
-        print(f"  Training perplexity: {checkpoint['perplexity']:.2f}")
-    print()
-
-    return model, checkpoint, detected_encoding
+    return result['model'], result['checkpoint'], result['encoding']
 
 
 def evaluate_checkpoint(checkpoint_path, seq_length=128, batch_size=8, device='cpu', encoding='cl100k_base', autocast_ctx=None, tokens_per_epoch=10_000_000):
@@ -208,8 +173,8 @@ def evaluate_checkpoint(checkpoint_path, seq_length=128, batch_size=8, device='c
     )
 
     print(f"Evaluation configuration:")
-    print(f"  Sequences: {len(dataset):,}")
-    print(f"  Batches: {len(dataloader):,}")
+    print(f"  Sequences: {tokens_per_epoch // seq_length:,}")
+    print(f"  Batches: Streaming")
     print(f"  Device: {device}")
     print()
 
@@ -343,7 +308,7 @@ def compare_checkpoints(checkpoint_dir, seq_length=128, device='cpu', encoding='
         results.append({
             'checkpoint': checkpoint_path.name,
             'epoch': checkpoint['epoch'],
-            'train_loss': checkpoint['loss'],
+            'train_loss': checkpoint.get('loss', None),
             'train_ppl': checkpoint.get('perplexity', None),
             'eval_loss': loss,
             'eval_ppl': perplexity,

@@ -60,14 +60,11 @@ from src.transformer.interpretability import (
     visualize_attention_pattern,
     visualize_induction_scores,
 )
+from src.transformer.checkpoint_utils import load_checkpoint as load_checkpoint_util
 import tiktoken
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
-
-# Import encoding detection from train.py
-sys.path.append(str(Path(__file__).parent))
-from train import detect_encoding_from_checkpoint
 
 
 def load_model(checkpoint_path, device):
@@ -85,48 +82,22 @@ def load_model(checkpoint_path, device):
 
     console.print(f"\n[cyan]Loading checkpoint from:[/cyan] {checkpoint_path}")
 
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    # Use checkpoint utilities for loading (verbose=False to control output)
+    result = load_checkpoint_util(checkpoint_path, device=device, verbose=False)
 
-    # Extract config
-    config = checkpoint.get('config', checkpoint.get('model_config', {}))
+    model = result['model']
+    config = result['config']
+    encoding_name = result['encoding']
 
-    # Detect encoding
-    encoding_name = detect_encoding_from_checkpoint(checkpoint)
     console.print(f"[cyan]Detected encoding:[/cyan] {encoding_name}")
 
     # Initialize tokenizer
     tokenizer = tiktoken.get_encoding(encoding_name)
 
-    # Filter config to only include DecoderOnlyTransformer parameters
-    model_params = {
-        'vocab_size', 'd_model', 'num_heads', 'num_layers',
-        'd_ff', 'max_seq_len', 'dropout'
-    }
-    filtered_config = {k: v for k, v in config.items() if k in model_params}
-
-    # Strip torch.compile() prefix if present (_orig_mod.)
-    # Checkpoints saved from compiled models have this prefix on all keys
-    state_dict = checkpoint['model_state_dict']
-    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
-        console.print("[yellow]Detected torch.compile() checkpoint, stripping prefix...[/yellow]")
-        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
-
-    # If max_seq_len not in config, infer from positional encoding shape
-    if 'max_seq_len' not in filtered_config:
-        pos_embedding_shape = state_dict['pos_encoding.pos_embedding.weight'].shape
-        filtered_config['max_seq_len'] = pos_embedding_shape[0]
-        console.print(f"[yellow]Inferred max_seq_len from checkpoint: {filtered_config['max_seq_len']}[/yellow]")
-
-    # Create model
-    model = DecoderOnlyTransformer(**filtered_config)
-    model.load_state_dict(state_dict)
-    model.to(device)
-    model.eval()
-
     console.print(f"[green]✓ Model loaded successfully[/green]")
-    console.print(f"[dim]Layers: {filtered_config['num_layers']}, "
-                 f"d_model: {filtered_config['d_model']}, "
-                 f"heads: {filtered_config['num_heads']}[/dim]\n")
+    console.print(f"[dim]Layers: {config['num_layers']}, "
+                 f"d_model: {config['d_model']}, "
+                 f"heads: {config['num_heads']}[/dim]\n")
 
     return model, config, tokenizer
 
