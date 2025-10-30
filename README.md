@@ -190,8 +190,8 @@ uv run python main.py train --resume
 uv run python main.py train --quick --resume    # Resume quick training
 uv run python main.py train --medium --resume   # Resume medium training
 
-# Use smaller vocabulary (50K tokens vs 100K default)
-uv run python main.py train --encoding p50k_base
+# Standard training with cl100k_base tokenizer (100K vocab)
+uv run python main.py train
 
 # Custom gradient accumulation (higher = more stable training)
 uv run python main.py train --accumulation-steps 32

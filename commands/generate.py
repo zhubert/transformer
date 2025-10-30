@@ -360,13 +360,6 @@ Examples:
         help="List all available presets and exit"
     )
 
-    parser.add_argument(
-        "--encoding",
-        type=str,
-        default="p50k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: p50k_base, ~50K vocab; cl100k_base: ~100K vocab)"
-    )
 
     args = parser.parse_args()
 

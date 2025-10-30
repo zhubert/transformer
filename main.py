@@ -116,13 +116,6 @@ def create_parser():
         action="store_true",
         help="Download shards for medium mode (50M tokens, ~5 GB)",
     )
-    download_parser.add_argument(
-        "--encoding",
-        type=str,
-        default="cl100k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: cl100k_base)",
-    )
 
     # ============================================================================
     # GENERATE subcommand
@@ -307,7 +300,7 @@ def main():
         train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume, compile=not args.no_compile)
 
     elif args.command == "download":
-        download_shards(quick=args.quick, medium=args.medium, encoding=args.encoding)
+        download_shards(quick=args.quick, medium=args.medium)
         # Explicitly exit to ensure background threads from datasets library are cleaned up
         sys.exit(0)
 

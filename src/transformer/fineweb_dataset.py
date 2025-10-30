@@ -167,7 +167,7 @@ class FineWebDataset(IterableDataset):
         self,
         cache_dir: str = "data/fineweb_cache",
         seq_length: int = 128,
-        encoding_name: str = "p50k_base",
+        encoding_name: str = "cl100k_base",
         tokens_per_epoch: int = 100_000_000,  # 100M tokens per epoch
         max_cached_shards: int = 5,
         dataset_name: str = "HuggingFaceFW/fineweb",
@@ -182,7 +182,7 @@ class FineWebDataset(IterableDataset):
         Args:
             cache_dir: Directory to cache downloaded shards
             seq_length: Length of each training sequence
-            encoding_name: tiktoken encoding to use (p50k_base ~50k vocab)
+            encoding_name: tiktoken encoding to use (cl100k_base ~100k vocab)
             tokens_per_epoch: How many tokens to process per epoch
                              100M = ~781K sequences with seq_length=128
                              This allows manageable epochs from huge dataset

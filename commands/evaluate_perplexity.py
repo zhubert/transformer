@@ -57,7 +57,7 @@ class SimpleTextDataset(Dataset):
     For training, use FineWebDataset instead.
     """
 
-    def __init__(self, text_file, seq_length=128, encoding_name="p50k_base"):
+    def __init__(self, text_file, seq_length=128, encoding_name="cl100k_base"):
         """
         Load text from a file and create training sequences.
 
@@ -158,7 +158,7 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     return model, checkpoint, detected_encoding
 
 
-def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8, device='cpu', encoding='p50k_base', autocast_ctx=None):
+def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8, device='cpu', encoding='cl100k_base', autocast_ctx=None):
     """
     Evaluate a single checkpoint on a dataset.
 
@@ -265,7 +265,7 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
     return perplexity, loss
 
 
-def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu', encoding='p50k_base', autocast_ctx=None):
+def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu', encoding='cl100k_base', autocast_ctx=None):
     """
     Compare all checkpoints in a directory to find the best one.
 
@@ -430,13 +430,6 @@ def main():
         default="cpu",
         choices=["cpu", "cuda", "mps"],
         help="Device to run evaluation on"
-    )
-    parser.add_argument(
-        "--encoding",
-        type=str,
-        default="p50k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: p50k_base, ~50K vocab; cl100k_base: ~100K vocab)"
     )
 
     args = parser.parse_args()

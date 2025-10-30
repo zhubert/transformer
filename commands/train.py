@@ -217,20 +217,14 @@ def detect_encoding_from_checkpoint(checkpoint):
         checkpoint: Loaded checkpoint dict
 
     Returns:
-        encoding_name: String like 'p50k_base' or 'cl100k_base'
+        encoding_name: String 'cl100k_base'
     """
     # Preferred: use stored encoding (new checkpoints)
     if 'encoding' in checkpoint.get('config', {}):
         return checkpoint['config']['encoding']
 
-    # Fallback: infer from vocab_size (backward compatibility with old checkpoints)
-    vocab_size = checkpoint['config']['vocab_size']
-    if vocab_size == 50281:
-        return 'p50k_base'
-    elif vocab_size == 100277:
-        return 'cl100k_base'
-    else:
-        raise ValueError(f"Unknown vocab size: {vocab_size}. Cannot detect encoding.")
+    # Fallback: Always use cl100k_base (backward compatibility with old checkpoints)
+    return 'cl100k_base'
 
 
 def get_encoding_short_name(encoding):
@@ -238,14 +232,12 @@ def get_encoding_short_name(encoding):
     Convert full encoding name to short version for filenames.
 
     Args:
-        encoding: Full encoding name like 'p50k_base' or 'cl100k_base'
+        encoding: Full encoding name like 'cl100k_base'
 
     Returns:
-        Short name like 'p50k' or 'cl100k'
+        Short name like 'cl100k'
     """
-    if encoding == 'p50k_base':
-        return 'p50k'
-    elif encoding == 'cl100k_base':
+    if encoding == 'cl100k_base':
         return 'cl100k'
     else:
         # Fallback: just remove '_base' suffix if present
@@ -392,14 +384,13 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, medium=False, accumulation_steps=16, resume=False, compile=True):
+def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_steps=16, resume=False, compile=True):
     """
     Main training function with gradient accumulation and validation.
 
     Args:
         debug: If True, print diagnostic information for debugging NaN issues
         use_mps: If True, try MPS (experimental - has known NaN issues)
-        encoding: Tokenizer encoding to use ("p50k_base" or "cl100k_base")
         quick: If True, use smaller model and fewer tokens for faster training
         medium: If True, use medium-sized model with good balance of quality and speed
         accumulation_steps: Number of batches to accumulate before updating weights.
@@ -433,6 +424,7 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
     """
 
     # Configuration
+    encoding = "cl100k_base"  # Only cl100k_base tokenizer supported
     SEQ_LENGTH = 128
     BATCH_SIZE = 8              # Reduced from 32 to fit in M1 memory
 
@@ -1250,13 +1242,6 @@ if __name__ == "__main__":
         help="Use MPS (Apple Silicon GPU) - EXPERIMENTAL, has known NaN issues"
     )
     parser.add_argument(
-        "--encoding",
-        type=str,
-        default="cl100k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: cl100k_base, ~100K vocab; p50k_base: ~50K vocab)"
-    )
-    parser.add_argument(
         "--quick",
         action="store_true",
         help="Quick training mode: smaller model (4 layers, d_model=128) and fewer tokens (10M/epoch)"
@@ -1284,7 +1269,6 @@ if __name__ == "__main__":
     train(
         debug=args.debug,
         use_mps=args.mps,
-        encoding=args.encoding,
         quick=args.quick,
         medium=args.medium,
         accumulation_steps=args.accumulation_steps,

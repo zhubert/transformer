@@ -58,15 +58,15 @@ def calculate_optimal_cache_size(tokens_per_epoch: int) -> int:
     return total_shards
 
 
-def download_shards(quick=False, medium=False, encoding="cl100k_base"):
+def download_shards(quick=False, medium=False):
     """
     Download all shards needed for training.
 
     Args:
         quick: If True, download shards for quick mode (10M tokens)
         medium: If True, download shards for medium mode (50M tokens)
-        encoding: Tokenizer encoding to use
     """
+    encoding = "cl100k_base"
     # Configuration based on mode
     if quick and medium:
         raise ValueError("Cannot use both --quick and --medium flags. Please choose one.")
@@ -238,17 +238,9 @@ if __name__ == "__main__":
         action="store_true",
         help="Download shards for medium mode (50M tokens, ~5 GB)"
     )
-    parser.add_argument(
-        "--encoding",
-        type=str,
-        default="cl100k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: cl100k_base)"
-    )
     args = parser.parse_args()
 
     download_shards(
         quick=args.quick,
-        medium=args.medium,
-        encoding=args.encoding
+        medium=args.medium
     )

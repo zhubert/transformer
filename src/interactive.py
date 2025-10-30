@@ -478,7 +478,6 @@ def download_menu() -> dict:
     return {
         'quick': quick,
         'medium': medium,
-        'encoding': 'cl100k_base',
     }
 
 
@@ -572,7 +571,6 @@ def run_download(config: dict):
     download_shards(
         quick=config['quick'],
         medium=config['medium'],
-        encoding=config['encoding'],
     )
 
 
