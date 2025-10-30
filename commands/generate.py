@@ -405,20 +405,11 @@ Examples:
     # Load model
     model, config, detected_encoding = load_model(checkpoint_path, device)
 
-    # Check for encoding mismatch
-    if detected_encoding != args.encoding:
-        print(f"ERROR: Checkpoint was trained with {detected_encoding}")
-        print(f"       but you're trying to generate with {args.encoding}")
-        print()
-        print(f"Please use the same encoding as the checkpoint:")
-        print(f"  uv run python commands/generate.py {checkpoint_path} --encoding {detected_encoding}")
-        print()
-        sys.exit(1)
-
-    # Initialize tokenizer
+    # Initialize tokenizer (always use cl100k_base)
+    encoding = "cl100k_base"
     print("Initializing tokenizer...")
-    print(f"  Using encoding: {args.encoding}")
-    tokenizer = tiktoken.get_encoding(args.encoding)
+    print(f"  Using encoding: {encoding}")
+    tokenizer = tiktoken.get_encoding(encoding)
     vocab_size = config['vocab_size']
     print(f"  Vocabulary size: {vocab_size:,}")
     print()

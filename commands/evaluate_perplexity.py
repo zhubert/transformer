@@ -451,7 +451,7 @@ def main():
             args.text_file,
             seq_length=args.seq_length,
             device=device,
-            encoding=args.encoding,
+            encoding="cl100k_base",
             autocast_ctx=autocast_ctx
         )
     elif args.checkpoint:
@@ -462,7 +462,7 @@ def main():
             seq_length=args.seq_length,
             batch_size=args.batch_size,
             device=device,
-            encoding=args.encoding,
+            encoding="cl100k_base",
             autocast_ctx=autocast_ctx
         )
     else:
@@ -485,7 +485,7 @@ def main():
             seq_length=args.seq_length,
             batch_size=args.batch_size,
             device=device,
-            encoding=args.encoding,
+            encoding="cl100k_base",
             autocast_ctx=autocast_ctx
         )
 
