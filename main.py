@@ -2,19 +2,26 @@
 """
 Transformer CLI - Main entry point for transformer operations.
 
-This CLI provides access to all transformer functionality:
+This CLI provides both an interactive mode and traditional command-line interface
+for all transformer functionality:
 - Training models
 - Generating text
 - Evaluating model performance
 - Comparing checkpoints
 - Demonstrating sampling strategies
+- Interpretability analysis
 
 Usage:
-    python main.py train [OPTIONS]
-    python main.py generate CHECKPOINT [OPTIONS]
-    python main.py evaluate [OPTIONS]
-    python main.py compare [OPTIONS]
-    python main.py demo-sampling
+    # Interactive mode (recommended for beginners)
+    uv run python main.py
+
+    # Direct command-line mode (for advanced users)
+    uv run python main.py train [OPTIONS]
+    uv run python main.py generate CHECKPOINT [OPTIONS]
+    uv run python main.py evaluate [OPTIONS]
+    uv run python main.py compare [OPTIONS]
+    uv run python main.py demo-sampling
+    uv run python main.py interpret [OPTIONS]
 """
 
 import sys
@@ -37,6 +44,7 @@ from commands.sampling_comparison import (
     demonstrate_with_model,
 )
 from commands import interpret
+from src.interactive import interactive_main
 
 
 def create_parser():
@@ -282,11 +290,10 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    # Show help if no command specified
+    # Launch interactive mode if no command specified
     if args.command is None:
-        parser.print_help()
-        print("\nUse 'python main.py <command> --help' for more information on a command.")
-        sys.exit(1)
+        interactive_main()
+        return
 
     # ============================================================================
     # Route to appropriate handler
