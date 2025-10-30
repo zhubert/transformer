@@ -375,10 +375,10 @@ def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
         return {
             'mode': 'single',
             'checkpoint': str(checkpoint_path),
-            'text_file': 'Singular.txt',
             'seq_length': 128,
             'batch_size': 8,
             'device': 'cpu',
+            'tokens_per_epoch': 10_000_000,
         }
     else:
         # Compare all - ask which directory
@@ -393,9 +393,9 @@ def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
         return {
             'mode': 'compare',
             'checkpoint_dir': str(checkpoint_dir),
-            'text_file': 'Singular.txt',
             'seq_length': 128,
             'device': 'cpu',
+            'tokens_per_epoch': 10_000_000,
         }
 
 
@@ -528,17 +528,17 @@ def run_evaluate(config: dict):
     if config['mode'] == 'single':
         evaluate_checkpoint(
             config['checkpoint'],
-            config['text_file'],
             seq_length=config['seq_length'],
             batch_size=config['batch_size'],
             device=config['device'],
+            tokens_per_epoch=config['tokens_per_epoch'],
         )
     else:  # compare
         compare_checkpoints(
             config['checkpoint_dir'],
-            config['text_file'],
             seq_length=config['seq_length'],
             device=config['device'],
+            tokens_per_epoch=config['tokens_per_epoch'],
         )
 
 

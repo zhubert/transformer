@@ -201,10 +201,10 @@ Examples:
         "--checkpoint", type=str, help="Path to specific checkpoint to evaluate"
     )
     evaluate_parser.add_argument(
-        "--text-file",
-        type=str,
-        default="Singular.txt",
-        help="Text file to evaluate on (default: Singular.txt)",
+        "--tokens",
+        type=int,
+        default=10_000_000,
+        help="Number of validation tokens to evaluate on (default: 10M)",
     )
     evaluate_parser.add_argument(
         "--seq-length", type=int, default=128, help="Sequence length (default: 128)"
@@ -235,10 +235,10 @@ Examples:
         help="Directory containing checkpoints (default: checkpoints)",
     )
     compare_parser.add_argument(
-        "--text-file",
-        type=str,
-        default="Singular.txt",
-        help="Text file to evaluate on (default: Singular.txt)",
+        "--tokens",
+        type=int,
+        default=10_000_000,
+        help="Number of validation tokens to evaluate on (default: 10M)",
     )
     compare_parser.add_argument(
         "--seq-length", type=int, default=128, help="Sequence length (default: 128)"
@@ -351,10 +351,10 @@ def main():
             # Evaluate specific checkpoint
             evaluate_checkpoint(
                 args.checkpoint,
-                args.text_file,
                 seq_length=args.seq_length,
                 batch_size=args.batch_size,
                 device=args.device,
+                tokens_per_epoch=args.tokens,
             )
         else:
             # Find and evaluate latest checkpoint
@@ -372,10 +372,10 @@ def main():
 
             evaluate_checkpoint(
                 str(latest_checkpoint),
-                args.text_file,
                 seq_length=args.seq_length,
                 batch_size=args.batch_size,
                 device=args.device,
+                tokens_per_epoch=args.tokens,
             )
 
     elif args.command == "compare":
@@ -385,9 +385,9 @@ def main():
         print()
         compare_checkpoints(
             args.checkpoint_dir,
-            args.text_file,
             seq_length=args.seq_length,
             device=args.device,
+            tokens_per_epoch=args.tokens,
         )
 
     elif args.command == "demo-sampling":
