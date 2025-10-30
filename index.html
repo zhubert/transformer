@@ -1939,30 +1939,46 @@ Result: Layer 4 recovery = 90%
               </div>
               <div class="terminal-line">
                 <span class="terminal-prompt">$</span>
-                <span class="terminal-command"> uv sync</span>
+                <span class="terminal-command"> make install</span>
               </div>
+              <div class="terminal-line"></div>
               <div class="terminal-line">
                 <span class="terminal-comment"
-                  ># Train the model (uses FineWeb dataset)</span
+                  ># Launch interactive CLI - easiest way to get started!</span
                 >
               </div>
               <div class="terminal-line">
                 <span class="terminal-prompt">$</span>
                 <span class="terminal-command">
-                  uv run python commands/train.py</span
-                >
-              </div>
-              <div class="terminal-line">
-                <span class="terminal-comment"># Generate text</span>
-              </div>
-              <div class="terminal-line">
-                <span class="terminal-prompt">$</span>
-                <span class="terminal-command">
-                  uv run python commands/generate.py --prompt "Once upon a
-                  time"</span
+                  uv run python main.py</span
                 >
               </div>
             </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Interactive Mode:</strong> The CLI provides a beautiful,
+              arrow-key navigated menu system. No flags to memorize! Just run
+              <code>uv run python main.py</code> and the interface guides you through:
+            </p>
+            <ul>
+              <li>Training models (Quick/Medium/Full modes)</li>
+              <li>Generating text with various sampling strategies</li>
+              <li>Evaluating and comparing checkpoints</li>
+              <li>Analyzing model internals (attention, logit lens, etc.)</li>
+              <li>Downloading training data for offline use</li>
+            </ul>
+            <p>
+              For advanced users, all operations are also available via
+              traditional command-line flags - see the
+              <a
+                href="https://github.com/zhubert/transformer/blob/main/README.md"
+                target="_blank"
+                >README</a
+              >
+              for details.
+            </p>
           </div>
 
           <div class="highlight">
