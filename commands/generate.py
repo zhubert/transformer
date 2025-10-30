@@ -188,7 +188,7 @@ def generate_text(model, tokenizer, prompt, max_length, sampling_method, samplin
         output_ids = model.generate(
             input_ids,
             max_length=max_length,
-            method=sampling_method,
+            sampling_strategy=sampling_method,
             **sampling_params
         )
 
