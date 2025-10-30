@@ -148,7 +148,11 @@ def load_model(checkpoint_path, device):
     model = model.to(device)
     model.eval()  # Set to evaluation mode
 
-    print(f"  Checkpoint from epoch {checkpoint['epoch']}, loss: {checkpoint['loss']:.4f}")
+    # Display checkpoint info (loss may not always be saved)
+    epoch_info = f"  Checkpoint from epoch {checkpoint['epoch']}"
+    if 'loss' in checkpoint:
+        epoch_info += f", loss: {checkpoint['loss']:.4f}"
+    print(epoch_info)
     print()
 
     return model, config, detected_encoding
