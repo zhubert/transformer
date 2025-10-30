@@ -123,6 +123,13 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     # Extract configuration
     config = checkpoint['config']
 
+    # Strip torch.compile() prefix if present (_orig_mod.)
+    # Checkpoints saved from compiled models have this prefix on all keys
+    state_dict = checkpoint['model_state_dict']
+    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
+        print("Detected torch.compile() checkpoint, stripping prefix...")
+        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
+
     # Create model with saved configuration
     model = DecoderOnlyTransformer(
         vocab_size=config['vocab_size'],
@@ -134,7 +141,7 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     )
 
     # Load weights
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model.load_state_dict(state_dict)
     model = model.to(device)
     model.eval()
 

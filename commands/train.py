@@ -324,27 +324,21 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, con
 
     checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
+    # Strip torch.compile() prefix if present (_orig_mod.)
+    # Checkpoints saved from compiled models have this prefix on all keys
+    state_dict = checkpoint['model_state_dict']
+    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
+        console.print("[yellow]Detected torch.compile() checkpoint, stripping prefix...[/yellow]")
+        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
+        checkpoint['model_state_dict'] = state_dict
+
     # Load model weights
     try:
         model.load_state_dict(checkpoint['model_state_dict'])
     except RuntimeError as e:
-        # Check if this is the torch.compile() prefix mismatch issue
-        error_str = str(e)
-        if '_orig_mod.' in error_str:
-            console.print("[bold red]Error:[/bold red] Checkpoint incompatible with torch.compile()")
-            console.print()
-            console.print("This checkpoint was saved from a model with a different compilation state.")
-            console.print()
-            console.print("[yellow]Solution:[/yellow]")
-            console.print("  • Run with --no-compile flag to resume without compilation:")
-            console.print(f"    [cyan]python main.py train --medium --resume --no-compile[/cyan]")
-            console.print()
-            console.print("  • After resuming, future checkpoints will work with both modes.")
-            console.print()
-            raise SystemExit(1)
-        else:
-            # Re-raise other errors
-            raise
+        # Re-raise any loading errors
+        console.print(f"[bold red]Error loading checkpoint:[/bold red] {e}")
+        raise
 
     # Load optimizer state
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -930,6 +924,9 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
         completed=0
     )
 
+    # Start the progress bar to enable time tracking
+    overall_progress.start()
+
     for epoch in range(start_epoch, NUM_EPOCHS):
         # ==============================================================================
         # TRAINING PHASE
@@ -1195,6 +1192,9 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
         # Update overall progress and remove batch task for this epoch
         overall_progress.update(epoch_task, advance=1)
         overall_progress.remove_task(batch_task)
+
+    # Stop the progress bar after all epochs are complete
+    overall_progress.stop()
 
     # Training complete
     synchronize()  # Ensure all operations complete

@@ -239,6 +239,13 @@ def demonstrate_with_model():
     checkpoint = torch.load(model_path, weights_only=False)
     vocab_size = checkpoint['vocab_size']
 
+    # Strip torch.compile() prefix if present (_orig_mod.)
+    # Checkpoints saved from compiled models have this prefix on all keys
+    state_dict = checkpoint['model_state_dict']
+    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
+        print("Detected torch.compile() checkpoint, stripping prefix...")
+        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
+
     model = DecoderOnlyTransformer(
         vocab_size=vocab_size,
         d_model=512,
@@ -249,7 +256,7 @@ def demonstrate_with_model():
         dropout=0.1,
     )
 
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model.load_state_dict(state_dict)
     model.eval()
 
     print("Model loaded successfully!")

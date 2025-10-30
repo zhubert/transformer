@@ -118,6 +118,20 @@ def load_model(checkpoint_path, device):
           f"{config['d_model']} d_model, {config['num_heads']} heads")
     print(f"  Encoding: {detected_encoding}")
 
+    # Strip torch.compile() prefix if present (_orig_mod.)
+    # Checkpoints saved from compiled models have this prefix on all keys
+    state_dict = checkpoint['model_state_dict']
+    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
+        print("  Detected torch.compile() checkpoint, stripping prefix...")
+        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
+
+    # Infer max_seq_len from positional encoding shape if not in config
+    max_seq_len = config.get('max_seq_len')
+    if max_seq_len is None:
+        pos_embedding_shape = state_dict['pos_encoding.pos_embedding.weight'].shape
+        max_seq_len = pos_embedding_shape[0]
+        print(f"  Inferred max_seq_len from checkpoint: {max_seq_len}")
+
     # Create model with saved configuration
     model = DecoderOnlyTransformer(
         vocab_size=config['vocab_size'],
@@ -125,11 +139,12 @@ def load_model(checkpoint_path, device):
         num_heads=config['num_heads'],
         num_layers=config['num_layers'],
         d_ff=config['d_ff'],
-        dropout=config['dropout']
+        dropout=config['dropout'],
+        max_seq_len=max_seq_len
     )
 
     # Load trained weights
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model.load_state_dict(state_dict)
     model = model.to(device)
     model.eval()  # Set to evaluation mode
 

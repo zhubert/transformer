@@ -104,15 +104,22 @@ def load_model(checkpoint_path, device):
     }
     filtered_config = {k: v for k, v in config.items() if k in model_params}
 
+    # Strip torch.compile() prefix if present (_orig_mod.)
+    # Checkpoints saved from compiled models have this prefix on all keys
+    state_dict = checkpoint['model_state_dict']
+    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
+        console.print("[yellow]Detected torch.compile() checkpoint, stripping prefix...[/yellow]")
+        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
+
     # If max_seq_len not in config, infer from positional encoding shape
     if 'max_seq_len' not in filtered_config:
-        pos_embedding_shape = checkpoint['model_state_dict']['pos_encoding.pos_embedding.weight'].shape
+        pos_embedding_shape = state_dict['pos_encoding.pos_embedding.weight'].shape
         filtered_config['max_seq_len'] = pos_embedding_shape[0]
         console.print(f"[yellow]Inferred max_seq_len from checkpoint: {filtered_config['max_seq_len']}[/yellow]")
 
     # Create model
     model = DecoderOnlyTransformer(**filtered_config)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
 
