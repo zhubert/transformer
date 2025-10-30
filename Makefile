@@ -49,7 +49,7 @@ test:
 test-cov:
 	uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
 
-# Clean up cache files
+# Clean up cache files (preserves data/fineweb_cache shards)
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
@@ -59,7 +59,6 @@ clean:
 	rm -rf htmlcov
 	rm -rf .coverage
 	rm -rf build dist *.egg-info
-	rm -rf data/fineweb_cache
 	rm -rf checkpoints
 	rm -rf checkpoints_medium
 	rm -rf checkpoints_quick
