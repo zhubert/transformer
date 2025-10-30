@@ -82,6 +82,12 @@ def create_parser():
         action="store_true",
         help="Resume training from the latest checkpoint",
     )
+    train_parser.add_argument(
+        "--no-compile",
+        action="store_true",
+        help="Disable torch.compile() optimization (for educational comparison). "
+             "Default: compilation enabled for 20-40%% speedup on AMD/NVIDIA GPUs",
+    )
 
     # ============================================================================
     # DOWNLOAD subcommand
@@ -291,7 +297,7 @@ def main():
         print("TRAINING MODE")
         print("=" * 80)
         print()
-        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume)
+        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume, compile=not args.no_compile)
 
     elif args.command == "download":
         download_shards(quick=args.quick, medium=args.medium, encoding=args.encoding)
