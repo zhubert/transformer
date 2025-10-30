@@ -415,9 +415,9 @@ def main():
     parser.add_argument(
         "--device",
         type=str,
-        default="cpu",
-        choices=["cpu", "cuda", "mps"],
-        help="Device to run evaluation on"
+        default=None,
+        choices=["cpu", "cuda", "mps", None],
+        help="Device to run evaluation on (default: auto-detect)"
     )
 
     args = parser.parse_args()
