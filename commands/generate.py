@@ -73,22 +73,22 @@ GENERATION_PRESETS = {
     "precise": {
         "method": "top_k_top_p",
         "description": "Focused and deterministic. Best for factual text and code generation",
-        "params": {"k": 40, "p": 0.85, "temperature": 0.7}
+        "params": {"top_k": 40, "top_p": 0.85, "temperature": 0.7}
     },
     "balanced": {
         "method": "top_k_top_p",
         "description": "Balanced quality and diversity. Good default for most tasks",
-        "params": {"k": 50, "p": 0.9, "temperature": 1.0}
+        "params": {"top_k": 50, "top_p": 0.9, "temperature": 1.0}
     },
     "creative": {
         "method": "top_k_top_p",
         "description": "More diverse and creative. Good for storytelling",
-        "params": {"k": 100, "p": 0.95, "temperature": 1.2}
+        "params": {"top_k": 100, "top_p": 0.95, "temperature": 1.2}
     },
     "very-creative": {
         "method": "top_k_top_p",
         "description": "Very diverse and experimental. Maximum creativity",
-        "params": {"k": 200, "p": 0.98, "temperature": 1.5}
+        "params": {"top_k": 200, "top_p": 0.98, "temperature": 1.5}
     }
 }
 
@@ -427,9 +427,9 @@ Examples:
     if args.temperature is not None:
         generation_config["params"]["temperature"] = args.temperature
     if args.top_k is not None:
-        generation_config["params"]["k"] = args.top_k
+        generation_config["params"]["top_k"] = args.top_k
     if args.top_p is not None:
-        generation_config["params"]["p"] = args.top_p
+        generation_config["params"]["top_p"] = args.top_p
 
     # Remove unused parameters based on method
     if generation_config["method"] == "greedy":
