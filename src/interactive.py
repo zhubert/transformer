@@ -27,6 +27,7 @@ from commands.generate import main as generate_main
 from commands.evaluate_perplexity import evaluate_checkpoint, compare_checkpoints
 from commands.sampling_comparison import demonstrate_sampling_strategies, demonstrate_with_model
 from commands import interpret
+from src.transformer.device_utils import init_device, get_autocast_context
 
 # Initialize Rich console for pretty output
 console = Console()
@@ -377,7 +378,7 @@ def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
             'checkpoint': str(checkpoint_path),
             'seq_length': 128,
             'batch_size': 8,
-            'device': 'cpu',
+            'device': None,  # Auto-detect device
             'tokens_per_epoch': 10_000_000,
         }
     else:
@@ -394,7 +395,7 @@ def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
             'mode': 'compare',
             'checkpoint_dir': str(checkpoint_dir),
             'seq_length': 128,
-            'device': 'cpu',
+            'device': None,  # Auto-detect device
             'tokens_per_epoch': 10_000_000,
         }
 
@@ -525,20 +526,35 @@ def run_evaluate(config: dict):
     console.print("=" * 80)
     print()
 
+    # Initialize device with proper setup
+    try:
+        device, device_name = init_device(config['device'], seed=42)
+        autocast_ctx = get_autocast_context(device.type)
+    except RuntimeError as e:
+        console.print(f"[yellow]Warning: {e}[/yellow]")
+        console.print("[yellow]Falling back to CPU[/yellow]")
+        device, device_name = init_device("cpu", seed=42)
+        autocast_ctx = get_autocast_context(device.type)
+    print()
+
     if config['mode'] == 'single':
         evaluate_checkpoint(
             config['checkpoint'],
             seq_length=config['seq_length'],
             batch_size=config['batch_size'],
-            device=config['device'],
+            device=device,
+            autocast_ctx=autocast_ctx,
             tokens_per_epoch=config['tokens_per_epoch'],
+            device_name=device_name,
         )
     else:  # compare
         compare_checkpoints(
             config['checkpoint_dir'],
             seq_length=config['seq_length'],
-            device=config['device'],
+            device=device,
+            autocast_ctx=autocast_ctx,
             tokens_per_epoch=config['tokens_per_epoch'],
+            device_name=device_name,
         )
 
 

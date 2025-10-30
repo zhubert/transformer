@@ -45,6 +45,7 @@ from commands.sampling_comparison import (
 )
 from commands import interpret
 from src.interactive import interactive_main
+from src.transformer.device_utils import init_device, get_autocast_context
 
 
 def create_parser():
@@ -347,14 +348,20 @@ def main():
         print("=" * 80)
         print()
 
+        # Initialize device properly
+        device, device_name = init_device(args.device, seed=42)
+        autocast_ctx = get_autocast_context(device.type)
+
         if args.checkpoint:
             # Evaluate specific checkpoint
             evaluate_checkpoint(
                 args.checkpoint,
                 seq_length=args.seq_length,
                 batch_size=args.batch_size,
-                device=args.device,
+                device=device,
                 tokens_per_epoch=args.tokens,
+                autocast_ctx=autocast_ctx,
+                device_name=device_name,
             )
         else:
             # Find and evaluate latest checkpoint
@@ -374,8 +381,10 @@ def main():
                 str(latest_checkpoint),
                 seq_length=args.seq_length,
                 batch_size=args.batch_size,
-                device=args.device,
+                device=device,
                 tokens_per_epoch=args.tokens,
+                autocast_ctx=autocast_ctx,
+                device_name=device_name,
             )
 
     elif args.command == "compare":
@@ -383,11 +392,18 @@ def main():
         print("COMPARISON MODE")
         print("=" * 80)
         print()
+
+        # Initialize device properly
+        device, device_name = init_device(args.device, seed=42)
+        autocast_ctx = get_autocast_context(device.type)
+
         compare_checkpoints(
             args.checkpoint_dir,
             seq_length=args.seq_length,
-            device=args.device,
+            device=device,
             tokens_per_epoch=args.tokens,
+            autocast_ctx=autocast_ctx,
+            device_name=device_name,
         )
 
     elif args.command == "demo-sampling":

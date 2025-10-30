@@ -124,7 +124,7 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     return result['model'], result['checkpoint'], result['encoding']
 
 
-def evaluate_checkpoint(checkpoint_path, seq_length=128, batch_size=8, device='cpu', encoding='cl100k_base', autocast_ctx=None, tokens_per_epoch=10_000_000):
+def evaluate_checkpoint(checkpoint_path, seq_length=128, batch_size=8, device='cpu', encoding='cl100k_base', autocast_ctx=None, tokens_per_epoch=10_000_000, device_name=None):
     """
     Evaluate a single checkpoint on FineWeb validation dataset.
 
@@ -138,6 +138,7 @@ def evaluate_checkpoint(checkpoint_path, seq_length=128, batch_size=8, device='c
         encoding: Tokenizer encoding to use
         autocast_ctx: Optional autocast context for mixed precision
         tokens_per_epoch: Number of validation tokens to evaluate on (default: 10M)
+        device_name: Human-readable device name (optional)
 
     Returns:
         perplexity: Perplexity on the dataset
@@ -173,9 +174,9 @@ def evaluate_checkpoint(checkpoint_path, seq_length=128, batch_size=8, device='c
     )
 
     print(f"Evaluation configuration:")
+    print(f"  Device: {device_name if device_name else device}")
     print(f"  Sequences: {tokens_per_epoch // seq_length:,}")
     print(f"  Batches: Streaming")
-    print(f"  Device: {device}")
     print()
 
     # Evaluate
@@ -235,7 +236,7 @@ def evaluate_checkpoint(checkpoint_path, seq_length=128, batch_size=8, device='c
     return perplexity, loss
 
 
-def compare_checkpoints(checkpoint_dir, seq_length=128, device='cpu', encoding='cl100k_base', autocast_ctx=None, tokens_per_epoch=10_000_000):
+def compare_checkpoints(checkpoint_dir, seq_length=128, device='cpu', encoding='cl100k_base', autocast_ctx=None, tokens_per_epoch=10_000_000, device_name=None):
     """
     Compare all checkpoints in a directory to find the best one.
 
@@ -248,6 +249,7 @@ def compare_checkpoints(checkpoint_dir, seq_length=128, device='cpu', encoding='
         encoding: Tokenizer encoding to use
         autocast_ctx: Optional autocast context for mixed precision
         tokens_per_epoch: Number of validation tokens to evaluate on (default: 10M)
+        device_name: Human-readable device name (optional)
     """
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*.pt"))
@@ -259,6 +261,7 @@ def compare_checkpoints(checkpoint_dir, seq_length=128, device='cpu', encoding='
     print("=" * 80)
     print(f"COMPARING {len(checkpoint_files)} CHECKPOINTS")
     print("=" * 80)
+    print(f"Device: {device_name if device_name else device}")
     print()
 
     # Detect encoding from first checkpoint
@@ -440,7 +443,8 @@ def main():
             device=device,
             encoding="cl100k_base",
             autocast_ctx=autocast_ctx,
-            tokens_per_epoch=args.tokens
+            tokens_per_epoch=args.tokens,
+            device_name=device_name
         )
     elif args.checkpoint:
         # Evaluate single checkpoint
@@ -451,7 +455,8 @@ def main():
             device=device,
             encoding="cl100k_base",
             autocast_ctx=autocast_ctx,
-            tokens_per_epoch=args.tokens
+            tokens_per_epoch=args.tokens,
+            device_name=device_name
         )
     else:
         # Default: find latest checkpoint
@@ -474,7 +479,8 @@ def main():
             device=device,
             encoding="cl100k_base",
             autocast_ctx=autocast_ctx,
-            tokens_per_epoch=args.tokens
+            tokens_per_epoch=args.tokens,
+            device_name=device_name
         )
 
 
