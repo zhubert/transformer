@@ -183,47 +183,77 @@
 
           <p>
             <strong>The solution: Position encoding.</strong> We need to give
-            the model information about where each token appears in the sequence.
-            Modern transformers use three main approaches, in order from simplest to most complex:
+            the model information about where each token appears in the
+            sequence. Modern transformers use three main approaches, in order
+            from simplest to most complex:
           </p>
 
-          <h4>Approach 1: ALiBi (Attention with Linear Biases) — Our Default! 🎯</h4>
+          <h4>
+            Approach 1: ALiBi (Attention with Linear Biases) — Our Default! 🎯
+          </h4>
           <p>
-            <strong>The simplest and most effective!</strong> Instead of modifying
-            embeddings or rotating vectors, ALiBi just adds distance-based penalties
-            directly to attention scores. Brilliantly simple:
+            <strong>The simplest and most effective!</strong> Instead of
+            modifying embeddings or rotating vectors, ALiBi just adds
+            distance-based penalties directly to attention scores. Brilliantly
+            simple:
           </p>
 
-          <p style="text-align: center; font-family: 'SF Mono', monospace; background: #f5f5f7; padding: 16px; border-radius: 8px; margin: 24px 0;">
+          <p
+            style="
+              text-align: center;
+              font-family: &quot;SF Mono&quot;, monospace;
+              background: #f5f5f7;
+              padding: 16px;
+              border-radius: 8px;
+              margin: 24px 0;
+            "
+          >
             attention_score[i,j] = Q·K / √d_k - slope × |i - j|
           </p>
 
           <p>
-            <strong>What this means:</strong> When position i attends to position j,
-            we subtract a penalty based on their distance. The further apart they are,
-            the more negative the penalty → lower attention!
+            <strong>What this means:</strong> When position i attends to
+            position j, we subtract a penalty based on their distance. The
+            further apart they are, the more negative the penalty → lower
+            attention!
           </p>
 
-          <p>
-            <strong>Example:</strong> Position 5 looking at the sequence:
-          </p>
+          <p><strong>Example:</strong> Position 5 looking at the sequence:</p>
           <ul>
-            <li>Position 5 (current): distance = 0 → penalty = 0 → full attention</li>
-            <li>Position 4 (1 away): distance = 1 → penalty = -0.25 → slight reduction</li>
-            <li>Position 3 (2 away): distance = 2 → penalty = -0.50 → moderate reduction</li>
-            <li>Position 0 (5 away): distance = 5 → penalty = -1.25 → strong reduction</li>
+            <li>
+              Position 5 (current): distance = 0 → penalty = 0 → full attention
+            </li>
+            <li>
+              Position 4 (1 away): distance = 1 → penalty = -0.25 → slight
+              reduction
+            </li>
+            <li>
+              Position 3 (2 away): distance = 2 → penalty = -0.50 → moderate
+              reduction
+            </li>
+            <li>
+              Position 0 (5 away): distance = 5 → penalty = -1.25 → strong
+              reduction
+            </li>
           </ul>
 
           <p>
-            <strong>Multiple heads with different "zoom levels":</strong> Each attention
-            head gets a different slope value, creating heads that focus at different
-            ranges:
+            <strong>Multiple heads with different "zoom levels":</strong> Each
+            attention head gets a different slope value, creating heads that
+            focus at different ranges:
           </p>
           <ul>
-            <li>Head 0 (slope = 0.25): Strong penalties → focuses on nearby tokens</li>
-            <li>Head 1 (slope = 0.0625): Moderate penalties → medium-range focus</li>
+            <li>
+              Head 0 (slope = 0.25): Strong penalties → focuses on nearby tokens
+            </li>
+            <li>
+              Head 1 (slope = 0.0625): Moderate penalties → medium-range focus
+            </li>
             <li>Head 2 (slope = 0.016): Gentle penalties → long-range focus</li>
-            <li>Head 3 (slope = 0.004): Very gentle → very long-range relationships</li>
+            <li>
+              Head 3 (slope = 0.004): Very gentle → very long-range
+              relationships
+            </li>
           </ul>
 
           <div class="code-window">
@@ -290,19 +320,66 @@
             </div>
           </div>
 
-          <h4>Approach 3: RoPE (Rotary Position Embeddings) — Also Excellent</h4>
+          <h4>
+            Approach 3: RoPE (Rotary Position Embeddings) — Also Excellent
+          </h4>
           <p>
-            <strong>The breakthrough idea:</strong> Instead of <em>adding</em>
-            position information to embeddings, we <em>rotate</em> the query and
-            key vectors by an angle proportional to their position. This is now
-            the standard approach in 2024!
+            <strong>The breakthrough idea:</strong> Instead of
+            <em>adding</em> position information to embeddings, we
+            <em>rotate</em> the query and key vectors by an angle proportional
+            to their position. This is now the standard approach in 2024!
           </p>
 
           <p>
-            <strong>The clock analogy:</strong> Imagine each token as a hand on a
-            clock. Position 0 points at 12 o'clock. Position 1 rotates to 1 o'clock.
-            Position 2 rotates to 2 o'clock. When two tokens "meet" in attention,
-            the angle between them automatically tells you their relative distance!
+            <strong>The clock analogy:</strong> Imagine each token as a hand on
+            a clock. Position 0 points at 12 o'clock. Position 1 rotates to 1
+            o'clock. Position 2 rotates to 2 o'clock. When two tokens "meet" in
+            attention, the angle between them automatically tells you their
+            relative distance!
+          </p>
+
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">class</span> <span class="class">RotaryPositionalEmbedding</span>(nn.Module):
+    <span class="string">"""RoPE: Rotary Position Embeddings (modern standard)."""</span>
+
+    <span class="keyword">def</span> <span class="function">forward</span>(self, q, k, position):
+        <span class="comment"># Instead of adding, we ROTATE q and k by position angle</span>
+        <span class="comment"># q, k: (batch, num_heads, seq_len, head_dim)</span>
+
+        <span class="comment"># Split dimensions into pairs and rotate each pair</span>
+        <span class="comment"># Rotation encodes position through geometry!</span>
+        q_rotated = <span class="function">apply_rotation</span>(q, position)
+        k_rotated = <span class="function">apply_rotation</span>(k, position)
+
+        <span class="comment"># When q_rotated @ k_rotated, relative position emerges!</span>
+        <span class="keyword">return</span> q_rotated, k_rotated  <span class="comment"># Encodes relative position</span></code></pre>
+            </div>
+          </div>
+
+          <p>
+            <strong>The Math (Simplified):</strong> For vectors at positions m
+            and n:
+          </p>
+          <ul>
+            <li>Rotate query q at position m by angle m×θ</li>
+            <li>Rotate key k at position n by angle n×θ</li>
+            <li>
+              When computing q·k, the result depends on (m-n), the relative
+              distance!
+            </li>
+            <li>This is the "angle difference" property of rotations</li>
+          </ul>
+
+          <p>
+            Different frequency bands allow the model to capture both
+            fine-grained local patterns (adjacent words like "the cat") and
+            long-range dependencies (distant references like "the cat ... it").
           </p>
 
           <div class="grid-3">
@@ -342,72 +419,39 @@
                 No complex rotation math or embedding layers.
               </li>
               <li>
-                <strong>BEST extrapolation:</strong> Benchmarks show ALiBi handles
-                extreme length changes better than RoPE or learned. Train on 512,
-                test on 10,000+ tokens!
+                <strong>BEST extrapolation:</strong> Benchmarks show ALiBi
+                handles extreme length changes better than RoPE or learned.
+                Train on 512, test on 10,000+ tokens!
               </li>
               <li>
-                <strong>Zero parameters:</strong> Like RoPE, purely mathematical.
-                No weights to learn = faster training, better generalization.
+                <strong>Zero parameters:</strong> Like RoPE, purely
+                mathematical. No weights to learn = faster training, better
+                generalization.
               </li>
               <li>
-                <strong>Different heads, different ranges:</strong> Geometric slope
-                sequence gives heads natural "zoom levels" from local to long-range.
+                <strong>Different heads, different ranges:</strong> Geometric
+                slope sequence gives heads natural "zoom levels" from local to
+                long-range.
               </li>
               <li>
-                <strong>Proven in production:</strong> Powers BLOOM (176B params),
-                MPT, and Falcon models.
+                <strong>Proven in production:</strong> Powers BLOOM (176B
+                params), MPT, and Falcon models.
               </li>
             </ul>
             <p>
               <strong>When to use alternatives:</strong>
             </p>
             <ul>
-              <li><strong>RoPE:</strong> Also excellent! Use for LLaMA-style models or if you prefer rotation-based encoding.</li>
-              <li><strong>Learned:</strong> Only for GPT-2/GPT-3 reproduction or educational comparison of historical approaches.</li>
+              <li>
+                <strong>RoPE:</strong> Also excellent! Use for LLaMA-style
+                models or if you prefer rotation-based encoding.
+              </li>
+              <li>
+                <strong>Learned:</strong> Only for GPT-2/GPT-3 reproduction or
+                educational comparison of historical approaches.
+              </li>
             </ul>
           </div>
-
-          <div class="code-window">
-            <div class="code-header">
-              <div class="code-dot red"></div>
-              <div class="code-dot yellow"></div>
-              <div class="code-dot green"></div>
-            </div>
-            <div class="code-content">
-              <pre><code><span class="keyword">class</span> <span class="class">RotaryPositionalEmbedding</span>(nn.Module):
-    <span class="string">"""RoPE: Rotary Position Embeddings (modern standard)."""</span>
-
-    <span class="keyword">def</span> <span class="function">forward</span>(self, q, k, position):
-        <span class="comment"># Instead of adding, we ROTATE q and k by position angle</span>
-        <span class="comment"># q, k: (batch, num_heads, seq_len, head_dim)</span>
-
-        <span class="comment"># Split dimensions into pairs and rotate each pair</span>
-        <span class="comment"># Rotation encodes position through geometry!</span>
-        q_rotated = <span class="function">apply_rotation</span>(q, position)
-        k_rotated = <span class="function">apply_rotation</span>(k, position)
-
-        <span class="comment"># When q_rotated @ k_rotated, relative position emerges!</span>
-        <span class="keyword">return</span> q_rotated, k_rotated  <span class="comment"># Encodes relative position</span></code></pre>
-            </div>
-          </div>
-
-          <p>
-            <strong>The Math (Simplified):</strong> For vectors at positions m and n:
-          </p>
-          <ul>
-            <li>Rotate query q at position m by angle m×θ</li>
-            <li>Rotate key k at position n by angle n×θ</li>
-            <li>When computing q·k, the result depends on (m-n), the relative distance!</li>
-            <li>This is the "angle difference" property of rotations</li>
-          </ul>
-
-          <p>
-            Different frequency bands allow the model to capture both fine-grained
-            local patterns (adjacent words like "the cat") and long-range dependencies
-            (distant references like "the cat ... it").
-          </p>
-
           <div class="highlight">
             <p>
               <strong>📝 Implementation:</strong>
@@ -2126,9 +2170,7 @@ Result: Layer 4 recovery = 90%
               </div>
               <div class="terminal-line">
                 <span class="terminal-prompt">$</span>
-                <span class="terminal-command">
-                  uv run python main.py</span
-                >
+                <span class="terminal-command"> uv run python main.py</span>
               </div>
             </div>
           </div>
@@ -2145,7 +2187,8 @@ Result: Layer 4 recovery = 90%
             <p>
               <strong>Interactive Mode:</strong> The CLI provides a beautiful,
               arrow-key navigated menu system. No flags to memorize! Just run
-              <code>uv run python main.py</code> and the interface guides you through:
+              <code>uv run python main.py</code> and the interface guides you
+              through:
             </p>
             <ul>
               <li>Training models (Quick/Medium/Full modes)</li>
