@@ -205,6 +205,7 @@ def infer_max_seq_len(state_dict: Dict[str, torch.Tensor]) -> int:
     # Check if this is ALiBi or RoPE (no learnable position parameters)
     # ALiBi has 'alibi.slopes' buffer
     # RoPE has 'rope.inv_freq' buffer
+    # Note: These buffers are registered with persistent=False, so they may not be saved
     has_alibi = any(k.startswith('alibi.') for k in state_dict.keys())
     has_rope = any(k.startswith('rope.') for k in state_dict.keys())
 
@@ -213,12 +214,11 @@ def infer_max_seq_len(state_dict: Dict[str, torch.Tensor]) -> int:
         # Use default value of 5000 (standard for this implementation)
         return 5000
 
-    # If we get here, we couldn't infer max_seq_len
-    raise KeyError(
-        f"Cannot infer max_seq_len: '{pos_embedding_key}' not found in state dict, "
-        f"and no ALiBi or RoPE buffers detected. "
-        f"Available keys: {list(state_dict.keys())[:10]}..."
-    )
+    # Backward compatibility: Old checkpoints used ALiBi (default) but buffers weren't saved
+    # If we can't find learned embeddings OR ALiBi/RoPE buffers, assume ALiBi/RoPE
+    # This handles checkpoints created before we added position_encoding_type to config
+    # and where ALiBi/RoPE buffers weren't saved (persistent=False)
+    return 5000
 
 
 def load_checkpoint(
@@ -368,15 +368,20 @@ def load_checkpoint(
         has_alibi = any(k.startswith('alibi.') for k in state_dict.keys())
         has_rope = any(k.startswith('rope.') for k in state_dict.keys())
 
-        if has_alibi:
+        if has_pos_embedding:
+            # Learned embeddings are always saved in state dict
+            position_encoding_type = 'learned'
+        elif has_alibi:
+            # ALiBi buffers found (though usually persistent=False)
             position_encoding_type = 'alibi'
         elif has_rope:
+            # RoPE buffers found (though usually persistent=False)
             position_encoding_type = 'rope'
-        elif has_pos_embedding:
-            position_encoding_type = 'learned'
         else:
-            # Default to learned for very old checkpoints
-            position_encoding_type = 'learned'
+            # No position encoding found in state dict
+            # Default to ALiBi (the current default, and most common for old checkpoints)
+            # ALiBi/RoPE buffers are registered with persistent=False, so they're not saved
+            position_encoding_type = 'alibi'
 
         if verbose:
             print(f"  Inferred position encoding type: {position_encoding_type}")
