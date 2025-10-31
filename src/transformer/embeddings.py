@@ -498,9 +498,17 @@ class RotaryPositionalEmbedding(nn.Module):
         end_pos = start_pos + seq_len
 
         # Extend cache if needed (for sequences longer than max_seq_len)
-        if end_pos > self._cached_seq_len:
-            # Precompute more values
-            new_max = max(end_pos, self._cached_seq_len * 2)
+        # OR if device changed (cache built at init on CPU, but model may be moved to GPU/MPS)
+        # The inv_freq buffer moves with model.to(device), but cached sin/cos don't automatically
+        needs_rebuild = (
+            end_pos > self._cached_seq_len or  # Need more values
+            (self._cached_cos is not None and
+             self._cached_cos.device != self.inv_freq.device)  # Wrong device
+        )
+
+        if needs_rebuild:
+            # Rebuild cache with correct length and device
+            new_max = max(end_pos, self._cached_seq_len * 2) if end_pos > self._cached_seq_len else self._cached_seq_len
             self._build_cache(new_max)
 
         # Get sin/cos for positions [start_pos, start_pos + seq_len)
@@ -780,7 +788,8 @@ class ALiBiPositionalBias(nn.Module):
         """
         # Create position indices
         # positions[i] = i for i in [0, 1, 2, ..., seq_len-1]
-        positions = torch.arange(seq_len).unsqueeze(0)  # (1, seq_len)
+        # IMPORTANT: Must be on same device as slopes for torch.compile() compatibility
+        positions = torch.arange(seq_len, device=self.slopes.device).unsqueeze(0)  # (1, seq_len)
 
         # Compute pairwise distances
         # distance[i, j] = |i - j|
@@ -832,10 +841,19 @@ class ALiBiPositionalBias(nn.Module):
             Causal masking should still be applied separately!
             ALiBi biases don't replace masking, they complement it.
         """
-        # Extend cache if needed
-        if seq_len > self._cached_seq_len:
-            # Need more bias values
-            new_max = max(seq_len, self._cached_seq_len * 2)
+        # Extend cache if needed OR if device changed
+        # The cache is built at init time (on CPU) but when model.to(device) is called,
+        # only registered buffers (slopes) move to the new device. We need to rebuild
+        # the cache if we detect a device mismatch.
+        needs_rebuild = (
+            seq_len > self._cached_seq_len or  # Need more values
+            (self._cached_bias is not None and
+             self._cached_bias.device != self.slopes.device)  # Wrong device
+        )
+
+        if needs_rebuild:
+            # Rebuild cache with correct length and device
+            new_max = max(seq_len, self._cached_seq_len * 2) if seq_len > self._cached_seq_len else self._cached_seq_len
             self._build_cache(new_max)
 
         # Return cached biases for the requested sequence length

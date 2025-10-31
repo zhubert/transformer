@@ -322,7 +322,7 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_steps=16, resume=False, compile=True):
+def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_steps=16, resume=False, compile=True, position_encoding_type='alibi'):
     """
     Main training function with gradient accumulation and validation.
 
@@ -338,6 +338,8 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
         resume: If True, resume training from the latest checkpoint
         compile: If True, use torch.compile() for 20-40% speedup (PyTorch 2.0+).
                 Recommended for AMD/NVIDIA GPUs. Adds ~1-2 min compilation on first epoch.
+        position_encoding_type: Type of position encoding ('alibi', 'rope', or 'learned').
+                               Default: 'alibi' (ALiBi - best extrapolation)
 
     What is Gradient Accumulation?
     ------------------------------
@@ -567,7 +569,8 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
         num_layers=NUM_LAYERS,
         d_ff=D_FF,
         max_seq_len=SEQ_LENGTH * 2,
-        dropout=DROPOUT
+        dropout=DROPOUT,
+        position_encoding_type=position_encoding_type
     )
     model = model.to(device)
 
@@ -631,6 +634,15 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
     model_table.add_row("Feed-forward dimension", str(D_FF))
     model_table.add_row("Dropout", str(DROPOUT))
     model_table.add_row("Max sequence length", str(SEQ_LENGTH * 2))
+
+    # Display position encoding type with description
+    position_encoding_display = {
+        'alibi': 'ALiBi (Attention with Linear Biases)',
+        'rope': 'RoPE (Rotary Position Embeddings)',
+        'learned': 'Learned positional embeddings'
+    }
+    model_table.add_row("Position encoding", position_encoding_display.get(position_encoding_type, position_encoding_type))
+
     model_table.add_row("[bold]Total parameters[/bold]", f"[bold]{num_params:,}[/bold]")
     model_table.add_row("Weight initialization", "[green]✓ No NaN detected[/green]")
     if compile:

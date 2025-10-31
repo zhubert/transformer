@@ -194,6 +194,7 @@ def train_menu() -> dict:
     debug = False
     use_mps = False
     compile = True
+    position_encoding_type = 'alibi'  # Default
 
     if show_advanced:
         debug = questionary.confirm(
@@ -214,6 +215,20 @@ def train_menu() -> dict:
             style=custom_style,
         ).ask()
 
+        # Position encoding type selection
+        position_encoding_choice = questionary.select(
+            "Position encoding type:",
+            choices=[
+                "alibi - ALiBi (Attention with Linear Biases) - RECOMMENDED",
+                "rope - RoPE (Rotary Position Embeddings) - Also excellent",
+                "learned - Learned embeddings (GPT-2/GPT-3 style)",
+            ],
+            default="alibi - ALiBi (Attention with Linear Biases) - RECOMMENDED",
+            style=custom_style,
+        ).ask()
+
+        position_encoding_type = position_encoding_choice.split(' - ')[0]
+
     return {
         'quick': quick,
         'medium': medium,
@@ -221,6 +236,7 @@ def train_menu() -> dict:
         'debug': debug,
         'use_mps': use_mps,
         'compile': compile,
+        'position_encoding_type': position_encoding_type,
     }
 
 
@@ -262,6 +278,7 @@ def continue_training_menu(scanner: CheckpointScanner) -> dict:
         'debug': False,
         'use_mps': False,
         'compile': True,
+        'position_encoding_type': 'alibi',  # Default when continuing
     }
 
 
@@ -501,6 +518,7 @@ def run_train(config: dict):
         medium=config['medium'],
         resume=config['resume'],
         compile=config['compile'],
+        position_encoding_type=config.get('position_encoding_type', 'alibi'),
     )
 
 

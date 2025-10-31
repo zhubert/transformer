@@ -97,6 +97,14 @@ def create_parser():
         help="Disable torch.compile() optimization (for educational comparison). "
              "Default: compilation enabled for 20-40%% speedup on AMD/NVIDIA GPUs",
     )
+    train_parser.add_argument(
+        "--position-encoding",
+        type=str,
+        choices=["alibi", "rope", "learned"],
+        default="alibi",
+        help="Position encoding type: alibi (ALiBi - recommended), rope (RoPE), or learned (GPT-2 style). "
+             "Default: alibi",
+    )
 
     # ============================================================================
     # DOWNLOAD subcommand
@@ -298,7 +306,7 @@ def main():
         print("TRAINING MODE")
         print("=" * 80)
         print()
-        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume, compile=not args.no_compile)
+        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume, compile=not args.no_compile, position_encoding_type=args.position_encoding)
 
     elif args.command == "download":
         download_shards(quick=args.quick, medium=args.medium)
