@@ -621,8 +621,6 @@ def interactive_main():
 
     # Scan for checkpoints
     scanner = CheckpointScanner()
-    scanner.display_summary()
-    console.print()
 
     # Main loop
     while True:

@@ -325,6 +325,11 @@ li code,
   pointer-events: none;
 }
 
+/* Dark screenshots (like terminal/CLI) - invert for light mode */
+.diagram img.dark-screenshot {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+
 /* Grid Layout */
 .grid {
   display: grid;
@@ -505,6 +510,11 @@ footer {
 
   .diagram img {
     filter: invert(0.9) hue-rotate(180deg);
+  }
+
+  /* Dark screenshots should NOT be inverted in dark mode */
+  .diagram img.dark-screenshot {
+    filter: none;
   }
 
   .hero {
