@@ -854,9 +854,6 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
         completed=0
     )
 
-    # Start the progress bar to enable time tracking
-    overall_progress.start()
-
     for epoch in range(start_epoch, NUM_EPOCHS):
         # ==============================================================================
         # TRAINING PHASE
