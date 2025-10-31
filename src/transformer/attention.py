@@ -21,9 +21,9 @@ class ScaledDotProductAttention(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, query, key, value, mask=None, debug=False):
+    def forward(self, query, key, value, mask=None, debug=False, alibi_bias=None):
         """
-        Compute scaled dot-product attention.
+        Compute scaled dot-product attention with optional ALiBi biases.
 
         Args:
             query: Query tensor of shape (batch, seq_len, d_k)
@@ -32,6 +32,9 @@ class ScaledDotProductAttention(nn.Module):
             mask: Optional mask tensor of shape (batch, seq_len, seq_len).
                   Positions with True/1 are masked (set to -inf before softmax).
             debug: If True, print diagnostic information for NaN detection
+            alibi_bias: Optional ALiBi bias tensor to add to attention scores
+                       Shape: (1, num_heads, query_seq_len, key_seq_len)
+                       Added BEFORE applying mask and softmax
 
         Returns:
             output: Attention output of shape (batch, seq_len, d_v)
@@ -45,6 +48,15 @@ class ScaledDotProductAttention(nn.Module):
         # key.transpose(-2, -1): (batch, d_k, seq_len)
         # scores: (batch, seq_len, seq_len)
         scores = torch.matmul(query, key.transpose(-2, -1)) / torch.sqrt(torch.tensor(d_k, dtype=torch.float32, device=query.device))
+
+        # Add ALiBi bias if provided (BEFORE masking!)
+        # ALiBi biases encourage attention to nearby tokens
+        # bias[i,j] = -slope × |i-j| (negative for all non-zero distances)
+        if alibi_bias is not None:
+            # ALiBi bias shape: (1, num_heads, query_seq_len, key_seq_len)
+            # Scores shape: (batch, num_heads, query_seq_len, key_seq_len)
+            # Broadcasting adds bias to all batch elements
+            scores = scores + alibi_bias
 
         # Debug: Check for NaN in scores
         if debug and (torch.isnan(scores).any() or torch.isinf(scores).any()):
@@ -128,7 +140,7 @@ class MultiHeadAttention(nn.Module):
     - Empirically verified in real models (GPT-2, BERT, etc.)
     """
 
-    def __init__(self, d_model, num_heads, rope=None):
+    def __init__(self, d_model, num_heads, rope=None, alibi=None):
         """
         Initialize multi-head attention.
 
@@ -137,10 +149,19 @@ class MultiHeadAttention(nn.Module):
             num_heads: Number of attention heads
             rope: Optional RotaryPositionalEmbedding instance
                  If provided, RoPE will be applied to Q and K
-                 If None, no position encoding is applied in attention
-                 (position info comes from additive embeddings instead)
+                 Cannot be used together with alibi
+            alibi: Optional ALiBiPositionalBias instance
+                  If provided, ALiBi biases will be added to attention scores
+                  Cannot be used together with rope
+
+        Note: Only one of rope or alibi should be provided. If both are None,
+              position info should come from additive embeddings (learned).
         """
         super().__init__()
+
+        # Ensure only one position encoding method is used
+        if rope is not None and alibi is not None:
+            raise ValueError("Cannot use both RoPE and ALiBi simultaneously. Choose one.")
 
         # Ensure d_model is divisible by num_heads
         assert d_model % num_heads == 0, \
@@ -162,8 +183,9 @@ class MultiHeadAttention(nn.Module):
         # Final output projection
         self.W_o = nn.Linear(d_model, d_model)
 
-        # Optional RoPE for position encoding
+        # Optional position encoding (only one at a time)
         self.rope = rope
+        self.alibi = alibi
 
     def forward(self, x, mask=None, cache=None, debug=False, return_attention_weights=False):
         """
@@ -330,18 +352,66 @@ class MultiHeadAttention(nn.Module):
             elif mask.dim() == 3:
                 mask = mask.unsqueeze(1)
 
+        # 4.5. Apply ALiBi biases if configured (BEFORE attention computation!)
+        # ALiBi adds biases directly to attention scores (Q @ K^T)
+        # Unlike RoPE which rotates Q/K, ALiBi modifies the similarity scores
+        alibi_bias = None
+        if self.alibi is not None:
+            # Get total sequence length (including cache if present)
+            # This is the key_seq_len that attention will use
+            key_seq_len = K.shape[2]  # (batch, num_heads, key_seq_len, d_k)
+
+            # Get ALiBi bias matrix for this sequence length
+            # Shape: (num_heads, key_seq_len, key_seq_len)
+            alibi_bias = self.alibi(key_seq_len)
+
+            # For decode mode with cache, we only need the bias for the new query position
+            # attending to all key positions (cached + new)
+            query_seq_len = Q.shape[2]  # Usually 1 in decode mode
+            if query_seq_len < key_seq_len:
+                # DECODE MODE: Q is just the new token, K includes cached + new
+                # We need biases for: new query position attending to all keys
+                # Take the last query_seq_len rows (corresponding to new queries)
+                alibi_bias = alibi_bias[:, -query_seq_len:, :]
+                # Shape: (num_heads, query_seq_len, key_seq_len)
+
+            # Add batch dimension for broadcasting
+            # (num_heads, query_seq_len, key_seq_len) → (1, num_heads, query_seq_len, key_seq_len)
+            alibi_bias = alibi_bias.unsqueeze(0)
+
+            # This will be added to attention scores in the attention function
+            # We'll pass it through the mask parameter (combine with causal mask if needed)
+
+        # Combine ALiBi bias with causal mask if both present
+        if alibi_bias is not None:
+            # ALiBi biases should be ADDED to scores, not masked
+            # We need to handle this in the attention mechanism
+            # For now, we'll modify the mask parameter to include both
+            if mask is not None:
+                # Mask has -inf for masked positions
+                # ALiBi has distance penalties for valid positions
+                # We need to pass both to attention separately
+                # Since ScaledDotProductAttention doesn't support this yet,
+                # we'll combine them: where mask is True (masked), keep -inf
+                # where mask is False (valid), add ALiBi bias
+                pass  # Will handle below in attention call
+
         # 5. Apply scaled dot-product attention to each head in parallel
         # PREFILL: Q, K, V all have same seq_len (full prompt)
         # DECODE: Q has seq_len=1 (new token), K,V have cached_len+1 (all tokens)
         #
-        # Attention computes: softmax(Q @ K^T / √d_k) @ V
+        # Attention computes: softmax(Q @ K^T / √d_k + ALiBi_bias) @ V
         # In decode mode:
         #   Q: (batch, num_heads, 1, d_k)        ← New token only
         #   K: (batch, num_heads, cached_len+1, d_k)  ← All tokens
         #   K^T: (batch, num_heads, d_k, cached_len+1)
         #   Q @ K^T: (batch, num_heads, 1, cached_len+1) ← Attend to all!
+        #   + ALiBi_bias: (1, num_heads, 1, cached_len+1) ← Distance penalties
         #   output: (batch, num_heads, 1, d_k)   ← Output for new token only
-        output, attn_weights = self.attention(Q, K, V, mask, debug=debug)
+
+        # Pass ALiBi bias to attention (will be added to scores)
+        # We need to update ScaledDotProductAttention to accept bias parameter
+        output, attn_weights = self.attention(Q, K, V, mask, debug=debug, alibi_bias=alibi_bias)
 
         # 6. Concatenate heads
         # Transpose: (batch, num_heads, seq_len, d_k) → (batch, seq_len, num_heads, d_k)

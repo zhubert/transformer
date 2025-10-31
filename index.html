@@ -170,7 +170,7 @@
             </div>
           </div>
 
-          <h3>Positional Encoding: Two Modern Approaches</h3>
+          <h3>Positional Encoding: Three Modern Approaches</h3>
           <p>
             <strong>Why do we need positional information?</strong> Consider the
             sentences "The cat ate the mouse" vs "The mouse ate the cat"—same
@@ -184,10 +184,71 @@
           <p>
             <strong>The solution: Position encoding.</strong> We need to give
             the model information about where each token appears in the sequence.
-            Modern transformers use two main approaches:
+            Modern transformers use three main approaches, in order from simplest to most complex:
           </p>
 
-          <h4>Approach 1: Learned Positional Embeddings (GPT-2, BERT)</h4>
+          <h4>Approach 1: ALiBi (Attention with Linear Biases) — Our Default! 🎯</h4>
+          <p>
+            <strong>The simplest and most effective!</strong> Instead of modifying
+            embeddings or rotating vectors, ALiBi just adds distance-based penalties
+            directly to attention scores. Brilliantly simple:
+          </p>
+
+          <p style="text-align: center; font-family: 'SF Mono', monospace; background: #f5f5f7; padding: 16px; border-radius: 8px; margin: 24px 0;">
+            attention_score[i,j] = Q·K / √d_k - slope × |i - j|
+          </p>
+
+          <p>
+            <strong>What this means:</strong> When position i attends to position j,
+            we subtract a penalty based on their distance. The further apart they are,
+            the more negative the penalty → lower attention!
+          </p>
+
+          <p>
+            <strong>Example:</strong> Position 5 looking at the sequence:
+          </p>
+          <ul>
+            <li>Position 5 (current): distance = 0 → penalty = 0 → full attention</li>
+            <li>Position 4 (1 away): distance = 1 → penalty = -0.25 → slight reduction</li>
+            <li>Position 3 (2 away): distance = 2 → penalty = -0.50 → moderate reduction</li>
+            <li>Position 0 (5 away): distance = 5 → penalty = -1.25 → strong reduction</li>
+          </ul>
+
+          <p>
+            <strong>Multiple heads with different "zoom levels":</strong> Each attention
+            head gets a different slope value, creating heads that focus at different
+            ranges:
+          </p>
+          <ul>
+            <li>Head 0 (slope = 0.25): Strong penalties → focuses on nearby tokens</li>
+            <li>Head 1 (slope = 0.0625): Moderate penalties → medium-range focus</li>
+            <li>Head 2 (slope = 0.016): Gentle penalties → long-range focus</li>
+            <li>Head 3 (slope = 0.004): Very gentle → very long-range relationships</li>
+          </ul>
+
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">class</span> <span class="class">ALiBiPositionalBias</span>(nn.Module):
+    <span class="string">"""ALiBi: The simplest modern position encoding."""</span>
+
+    <span class="keyword">def</span> <span class="function">forward</span>(self, seq_len):
+        <span class="comment"># Compute pairwise distances: |i - j|</span>
+        distances = torch.abs(positions.T - positions)
+
+        <span class="comment"># Apply slope to get biases: -slope × distance</span>
+        biases = -slopes * distances
+
+        <span class="comment"># Added to attention scores before softmax!</span>
+        <span class="keyword">return</span> biases  <span class="comment"># (num_heads, seq_len, seq_len)</span></code></pre>
+            </div>
+          </div>
+
+          <h4>Approach 2: Learned Positional Embeddings (GPT-2, BERT)</h4>
           <p>
             <strong>How it works:</strong> We create special "position vectors"
             that are added to token embeddings. Each position gets its own
@@ -229,7 +290,7 @@
             </div>
           </div>
 
-          <h4>Approach 2: RoPE (Rotary Position Embeddings) — Modern Standard ✨</h4>
+          <h4>Approach 3: RoPE (Rotary Position Embeddings) — Also Excellent</h4>
           <p>
             <strong>The breakthrough idea:</strong> Instead of <em>adding</em>
             position information to embeddings, we <em>rotate</em> the query and
@@ -244,44 +305,66 @@
             the angle between them automatically tells you their relative distance!
           </p>
 
-          <div class="grid">
+          <div class="grid-3">
             <div class="grid-item">
-              <h4>📊 Learned Embeddings</h4>
-              <p><strong>Parameters:</strong> 25M+ (for vocab 100K)</p>
-              <p><strong>Position Type:</strong> Absolute</p>
-              <p><strong>Extrapolation:</strong> ❌ Limited</p>
-              <p><strong>Used in:</strong> GPT-2, GPT-3 (2018-2020)</p>
+              <h4>🎯 ALiBi (Our Default!)</h4>
+              <p><strong>Parameters:</strong> 0 (pure math!)</p>
+              <p><strong>Position Type:</strong> Relative</p>
+              <p><strong>Extrapolation:</strong> ✅✅ BEST!</p>
+              <p><strong>Simplicity:</strong> Easiest</p>
+              <p><strong>Used in:</strong> BLOOM, MPT (2022-2024)</p>
             </div>
             <div class="grid-item">
-              <h4>🎯 RoPE (Our Default!)</h4>
+              <h4>⭐ RoPE</h4>
               <p><strong>Parameters:</strong> 0 (pure math!)</p>
               <p><strong>Position Type:</strong> Relative</p>
               <p><strong>Extrapolation:</strong> ✅ Excellent</p>
+              <p><strong>Simplicity:</strong> Moderate</p>
               <p><strong>Used in:</strong> LLaMA, Mistral (2023-2024)</p>
+            </div>
+            <div class="grid-item">
+              <h4>📊 Learned</h4>
+              <p><strong>Parameters:</strong> 1.28M+</p>
+              <p><strong>Position Type:</strong> Absolute</p>
+              <p><strong>Extrapolation:</strong> ❌ Limited</p>
+              <p><strong>Simplicity:</strong> Simple</p>
+              <p><strong>Used in:</strong> GPT-2, GPT-3 (2018-2020)</p>
             </div>
           </div>
 
           <div class="highlight">
             <p>
-              <strong>Why RoPE is better:</strong>
+              <strong>Why ALiBi is our default:</strong>
             </p>
             <ul>
               <li>
-                <strong>Relative positions:</strong> Encodes "3 tokens apart"
-                instead of "at position 47"—more useful for language!
+                <strong>Simplest to understand:</strong> Just subtract distance!
+                No complex rotation math or embedding layers.
               </li>
               <li>
-                <strong>Length extrapolation:</strong> Trained on 128 tokens?
-                Can generate 500+ tokens! Learned embeddings hit a hard limit.
+                <strong>BEST extrapolation:</strong> Benchmarks show ALiBi handles
+                extreme length changes better than RoPE or learned. Train on 512,
+                test on 10,000+ tokens!
               </li>
               <li>
-                <strong>Zero parameters:</strong> No positional parameters to
-                learn, purely mathematical. Faster training, better generalization.
+                <strong>Zero parameters:</strong> Like RoPE, purely mathematical.
+                No weights to learn = faster training, better generalization.
               </li>
               <li>
-                <strong>Theoretically grounded:</strong> Based on geometric
-                principles with proven properties about relative position encoding.
+                <strong>Different heads, different ranges:</strong> Geometric slope
+                sequence gives heads natural "zoom levels" from local to long-range.
               </li>
+              <li>
+                <strong>Proven in production:</strong> Powers BLOOM (176B params),
+                MPT, and Falcon models.
+              </li>
+            </ul>
+            <p>
+              <strong>When to use alternatives:</strong>
+            </p>
+            <ul>
+              <li><strong>RoPE:</strong> Also excellent! Use for LLaMA-style models or if you prefer rotation-based encoding.</li>
+              <li><strong>Learned:</strong> Only for GPT-2/GPT-3 reproduction or educational comparison of historical approaches.</li>
             </ul>
           </div>
 

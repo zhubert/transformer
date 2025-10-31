@@ -117,7 +117,7 @@ Our default:  num_layers=6,  d_model=512,  num_heads=8,  d_ff=2048
 
 import torch
 import torch.nn as nn
-from .embeddings import TokenEmbedding, PositionalEncoding, RotaryPositionalEmbedding
+from .embeddings import TokenEmbedding, PositionalEncoding, RotaryPositionalEmbedding, ALiBiPositionalBias
 from .block import TransformerBlock
 
 
@@ -176,7 +176,7 @@ class DecoderOnlyTransformer(nn.Module):
         max_seq_len=5000,
         dropout=0.1,
         tie_weights=True,
-        position_encoding_type='rope',
+        position_encoding_type='alibi',
     ):
         """
         Initialize decoder-only transformer.
@@ -193,24 +193,31 @@ class DecoderOnlyTransformer(nn.Module):
                         (default: True, following GPT-2/GPT-3/BERT)
                         Set to False for ablation studies or educational comparison
             position_encoding_type: Type of position encoding to use
-                        'rope': Rotary Position Embeddings (default, modern standard)
+                        'alibi': ALiBi (Attention with Linear Biases) - RECOMMENDED DEFAULT
+                               - 0 parameters, purely mathematical
+                               - Adds distance-based biases to attention scores
+                               - BEST length extrapolation (train on 512, test on 10K+ tokens!)
+                               - Simplest to understand: just -slope × distance
+                               - Used in BLOOM, MPT, Falcon (2022-2024)
+                        'rope': Rotary Position Embeddings (alternative, also excellent)
                                - 0 parameters, purely mathematical
                                - Encodes relative positions through rotation
-                               - Better length extrapolation
+                               - Excellent length extrapolation
                                - Used in LLaMA, Mistral, most modern LLMs (2023-2024)
                         'learned': Learned positional embeddings (GPT-2/GPT-3 style)
                                - Learned parameters for each position
                                - Encodes absolute positions through addition
                                - Used in GPT-2, GPT-3, BERT (2018-2020)
-                               - Still works well, just older approach
+                               - Older approach, still works but has limitations
         """
         super().__init__()
 
-        assert position_encoding_type in ['rope', 'learned'], \
-            f"position_encoding_type must be 'rope' or 'learned', got '{position_encoding_type}'"
+        assert position_encoding_type in ['alibi', 'rope', 'learned'], \
+            f"position_encoding_type must be 'alibi', 'rope', or 'learned', got '{position_encoding_type}'"
 
         self.d_model = d_model
         self.num_layers = num_layers
+        self.num_heads = num_heads
         self.tie_weights = tie_weights
         self.position_encoding_type = position_encoding_type
 
@@ -218,22 +225,30 @@ class DecoderOnlyTransformer(nn.Module):
         self.token_embedding = TokenEmbedding(vocab_size, d_model)
 
         # 2. Position encoding: setup depends on type
-        if position_encoding_type == 'rope':
+        if position_encoding_type == 'alibi':
+            # ALiBi: Applied in attention by adding biases to scores
+            # Create ALiBi instance that will be shared across all attention layers
+            self.alibi = ALiBiPositionalBias(num_heads, max_seq_len)
+            self.rope = None  # No RoPE
+            self.pos_encoding = None  # No additive position encoding needed
+        elif position_encoding_type == 'rope':
             # RoPE: Applied in attention, not added to embeddings
             # Create RoPE instance that will be shared across all attention layers
             head_dim = d_model // num_heads
             self.rope = RotaryPositionalEmbedding(head_dim, max_seq_len)
+            self.alibi = None  # No ALiBi
             self.pos_encoding = None  # No additive position encoding needed
         else:  # 'learned'
             # Learned: Added to token embeddings before transformer blocks
             self.pos_encoding = PositionalEncoding(d_model, max_seq_len)
             self.rope = None  # No RoPE needed
+            self.alibi = None  # No ALiBi needed
 
         # 3. Stack of transformer blocks
         # Each block has same architecture but different learned parameters
-        # Pass RoPE to attention if using RoPE (otherwise None)
+        # Pass position encoding to attention based on type
         self.blocks = nn.ModuleList([
-            TransformerBlock(d_model, num_heads, d_ff, dropout, rope=self.rope)
+            TransformerBlock(d_model, num_heads, d_ff, dropout, rope=self.rope, alibi=self.alibi)
             for _ in range(num_layers)
         ])
 

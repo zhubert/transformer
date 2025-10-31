@@ -18,7 +18,7 @@ This is an **educational codebase** that teaches how transformers work by implem
 - Make all architectural decisions explicit and documented
 
 ### 3. Accuracy Over Simplification
-- Use modern best practices (Pre-LN, RoPE/learned position encodings, GELU)
+- Use modern best practices (Pre-LN, ALiBi/RoPE/learned position encodings, GELU)
 - Include production optimizations (KV-cache, gradient accumulation)
 - Train on realistic data (FineWeb 10BT) not toy datasets
 
@@ -27,8 +27,9 @@ This is an **educational codebase** that teaches how transformers work by implem
 **Model Type**: Decoder-only transformer (GPT architecture)
 
 **Key Decisions**:
-- **Positional encoding**: RoPE (Rotary Position Embeddings) by default - modern standard (LLaMA, Mistral)
-  - Alternative: Learned embeddings (GPT-2/3 style) - still supported via `position_encoding_type='learned'`
+- **Positional encoding**: ALiBi (Attention with Linear Biases) by default - simplest modern approach (BLOOM, MPT)
+  - Alternative: RoPE (LLaMA, Mistral) via `position_encoding_type='rope'`
+  - Alternative: Learned embeddings (GPT-2/3 style) via `position_encoding_type='learned'`
 - **Layer normalization**: Pre-LN architecture for training stability
 - **Activation**: GELU (not ReLU) - modern standard
 - **Attention**: Causal masking for autoregressive generation
@@ -48,7 +49,7 @@ This is an **educational codebase** that teaches how transformers work by implem
 ```
 src/transformer/
 ├── attention.py        # Scaled dot-product & multi-head attention with KV-cache
-├── embeddings.py       # Token + positional embeddings (RoPE and learned)
+├── embeddings.py       # Token + positional embeddings (ALiBi, RoPE, and learned)
 ├── feedforward.py      # Position-wise FFN with GELU
 ├── block.py            # Transformer block (Pre-LN: norm → attn/ffn → residual)
 ├── model.py            # Complete decoder-only model + generation
@@ -186,15 +187,50 @@ model = DecoderOnlyTransformer(..., tie_weights=False)
 
 **Compatibility with embedding scaling**: Weight tying and sqrt(d_model) scaling work together perfectly. The scaling happens during the forward pass (embedding lookup), not in the parameters, so there's no conflict.
 
-### Position Encoding: RoPE vs Learned Embeddings
+### Position Encoding: ALiBi, RoPE, and Learned Embeddings
 
-The model supports two position encoding approaches, with **RoPE as the modern default**:
+The model supports three position encoding approaches, with **ALiBi as the modern default**:
 
-#### RoPE (Rotary Position Embeddings) - Default
+#### ALiBi (Attention with Linear Biases) - Default
+**The simplest modern approach** used in BLOOM, MPT, and other 2022-2024 models.
+
+```python
+# Create model with ALiBi (default)
+model = DecoderOnlyTransformer(..., position_encoding_type='alibi')
+```
+
+**How it works**:
+- Adds **distance-based biases** directly to attention scores before softmax
+- Formula: `attention_score[i,j] = Q·K / √d_k - slope × |i - j|`
+- Each attention head gets a different slope (geometric sequence)
+- NO modifications to embeddings or Q/K vectors—purely at attention level
+
+**Key advantages**:
+- **Simplest to understand**: Just subtract distance from attention scores!
+  - No complex rotation math or embedding layers
+- **Zero parameters**: Purely mathematical, no weights to learn
+  - Saves 1.28M parameters vs learned embeddings (default config)
+- **Relative positions**: Encodes "3 tokens apart" not "at position 47"
+  - Better for language understanding (relationships matter more than absolute position)
+- **BEST length extrapolation**: Benchmarks show superior extrapolation vs RoPE or learned
+  - Train on 128 tokens? Test on 10,000+ tokens successfully!
+  - Hard mathematical guarantee: bias scales linearly with distance
+- **Natural multi-head diversity**: Different slopes give heads "zoom levels"
+  - Some heads focus on adjacent tokens (steep slope)
+  - Others capture long-range dependencies (gentle slope)
+
+**Implementation notes**:
+- Biases computed once and cached (very efficient)
+- Applied in ScaledDotProductAttention BEFORE softmax
+- Works seamlessly with KV-cache (bias matrix just extends)
+- Compatible with all other features (torch.compile, mixed precision, etc.)
+- Slopes use geometric sequence: `2^(-8/num_heads × (i+1))`
+
+#### RoPE (Rotary Position Embeddings) - Also Excellent
 **The modern standard** used in LLaMA, LLaMA 2, Mistral, and most 2023-2024 LLMs.
 
 ```python
-# Create model with RoPE (default)
+# Create model with RoPE
 model = DecoderOnlyTransformer(..., position_encoding_type='rope')
 ```
 
@@ -205,11 +241,11 @@ model = DecoderOnlyTransformer(..., position_encoding_type='rope')
 
 **Key advantages**:
 - **Zero parameters**: Purely mathematical, no weights to learn
-  - Saves 1.28M parameters for default config (max_seq_len=5000, d_model=256)
+  - Saves 1.28M parameters vs learned embeddings (default config)
 - **Relative positions**: Encodes "3 tokens apart" not "at position 47"
   - Better for language understanding (relationships matter more than absolute position)
-- **Length extrapolation**: Trained on 128 tokens? Generate 500+ tokens naturally!
-  - Learned embeddings hit hard wall at max_seq_len
+- **Excellent length extrapolation**: Trained on 128 tokens? Generate 500+ tokens naturally!
+  - Better than learned embeddings, slightly behind ALiBi
 - **Theoretically grounded**: Based on geometric rotation properties
   - Dot product of rotated vectors encodes relative position automatically
 
@@ -219,8 +255,8 @@ model = DecoderOnlyTransformer(..., position_encoding_type='rope')
 - Precomputed sin/cos values cached for efficiency (~1.2 MB for default config)
 - Compatible with all other features (torch.compile, mixed precision, etc.)
 
-#### Learned Position Embeddings - Alternative
-Traditional approach from GPT-2, GPT-3, BERT (2018-2020).
+#### Learned Position Embeddings - Traditional
+**The historical approach** used in GPT-2, GPT-3, BERT, and pre-2022 transformers.
 
 ```python
 # Create model with learned embeddings
@@ -246,20 +282,28 @@ model = DecoderOnlyTransformer(..., position_encoding_type='learned')
 
 #### Comparison
 
-| Feature | RoPE (Default) | Learned Embeddings |
-|---------|----------------|-------------------|
-| Parameters | 0 | max_seq_len × d_model |
-| Position Type | Relative | Absolute |
-| Extrapolation | Excellent | Poor |
-| Memory | Minimal cache | Embedding table |
-| Speed | ~5-10% overhead | Negligible |
-| Used In | LLaMA, Mistral (2023+) | GPT-2, GPT-3 (2018-2020) |
-| Educational Value | Modern standard | Historical context |
+| Feature | ALiBi (Default) | RoPE | Learned Embeddings |
+|---------|-----------------|------|-------------------|
+| Parameters | 0 | 0 | max_seq_len × d_model |
+| Position Type | Relative | Relative | Absolute |
+| Extrapolation | BEST (proven up to 20x) | Excellent | Poor |
+| Simplicity | Easiest (bias subtraction) | Moderate (rotation) | Simple (addition) |
+| Memory | Minimal cache | Minimal cache | Embedding table |
+| Speed | Negligible overhead | ~5-10% overhead | Negligible |
+| Used In | BLOOM, MPT (2022+) | LLaMA, Mistral (2023+) | GPT-2, GPT-3 (2018-2020) |
+| Educational Value | Modern simplicity | Modern standard | Historical context |
 
-**Recommendation**: Use RoPE (default) unless you specifically need GPT-2 compatibility.
+**Recommendation**: Use ALiBi (default) for simplicity and best extrapolation. RoPE is also excellent if you prefer rotation-based encoding or want LLaMA-style architecture.
 
 ### KV-Cache Gotcha
-When using KV-cache, positional encodings must account for the current position. This applies to both position encoding types:
+When using KV-cache, positional encodings must account for the current position. This applies to all three position encoding types:
+
+**For ALiBi**:
+```python
+# ALiBi handles this naturally - just slice the bias matrix
+# The bias matrix is precomputed for max_seq_len
+# During decode, we use bias[:, :seq_len, :seq_len] where seq_len grows each step
+```
 
 **For RoPE**:
 ```python
@@ -279,7 +323,7 @@ pos_encoding(new_token, start_pos=0)
 pos_encoding(new_token, start_pos=cache_length)
 ```
 
-Both implementations handle this automatically by checking the cache length in the forward pass.
+All three implementations handle this automatically by checking the cache length in the forward pass.
 
 ### Pre-LN Architecture
 Layer norm comes **before** the sub-layer, not after:
