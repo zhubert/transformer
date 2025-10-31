@@ -2,19 +2,26 @@
 """
 Transformer CLI - Main entry point for transformer operations.
 
-This CLI provides access to all transformer functionality:
+This CLI provides both an interactive mode and traditional command-line interface
+for all transformer functionality:
 - Training models
 - Generating text
 - Evaluating model performance
 - Comparing checkpoints
 - Demonstrating sampling strategies
+- Interpretability analysis
 
 Usage:
-    python main.py train [OPTIONS]
-    python main.py generate CHECKPOINT [OPTIONS]
-    python main.py evaluate [OPTIONS]
-    python main.py compare [OPTIONS]
-    python main.py demo-sampling
+    # Interactive mode (recommended for beginners)
+    uv run python main.py
+
+    # Direct command-line mode (for advanced users)
+    uv run python main.py train [OPTIONS]
+    uv run python main.py generate CHECKPOINT [OPTIONS]
+    uv run python main.py evaluate [OPTIONS]
+    uv run python main.py compare [OPTIONS]
+    uv run python main.py demo-sampling
+    uv run python main.py interpret [OPTIONS]
 """
 
 import sys
@@ -37,6 +44,8 @@ from commands.sampling_comparison import (
     demonstrate_with_model,
 )
 from commands import interpret
+from src.interactive import interactive_main
+from src.transformer.device_utils import init_device, get_autocast_context
 
 
 def create_parser():
@@ -107,13 +116,6 @@ def create_parser():
         "--medium",
         action="store_true",
         help="Download shards for medium mode (50M tokens, ~5 GB)",
-    )
-    download_parser.add_argument(
-        "--encoding",
-        type=str,
-        default="cl100k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: cl100k_base)",
     )
 
     # ============================================================================
@@ -200,10 +202,10 @@ Examples:
         "--checkpoint", type=str, help="Path to specific checkpoint to evaluate"
     )
     evaluate_parser.add_argument(
-        "--text-file",
-        type=str,
-        default="Singular.txt",
-        help="Text file to evaluate on (default: Singular.txt)",
+        "--tokens",
+        type=int,
+        default=10_000_000,
+        help="Number of validation tokens to evaluate on (default: 10M)",
     )
     evaluate_parser.add_argument(
         "--seq-length", type=int, default=128, help="Sequence length (default: 128)"
@@ -234,10 +236,10 @@ Examples:
         help="Directory containing checkpoints (default: checkpoints)",
     )
     compare_parser.add_argument(
-        "--text-file",
-        type=str,
-        default="Singular.txt",
-        help="Text file to evaluate on (default: Singular.txt)",
+        "--tokens",
+        type=int,
+        default=10_000_000,
+        help="Number of validation tokens to evaluate on (default: 10M)",
     )
     compare_parser.add_argument(
         "--seq-length", type=int, default=128, help="Sequence length (default: 128)"
@@ -282,11 +284,10 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    # Show help if no command specified
+    # Launch interactive mode if no command specified
     if args.command is None:
-        parser.print_help()
-        print("\nUse 'python main.py <command> --help' for more information on a command.")
-        sys.exit(1)
+        interactive_main()
+        return
 
     # ============================================================================
     # Route to appropriate handler
@@ -300,7 +301,7 @@ def main():
         train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume, compile=not args.no_compile)
 
     elif args.command == "download":
-        download_shards(quick=args.quick, medium=args.medium, encoding=args.encoding)
+        download_shards(quick=args.quick, medium=args.medium)
         # Explicitly exit to ensure background threads from datasets library are cleaned up
         sys.exit(0)
 
@@ -347,14 +348,20 @@ def main():
         print("=" * 80)
         print()
 
+        # Initialize device properly
+        device, device_name = init_device(args.device, seed=42)
+        autocast_ctx = get_autocast_context(device.type)
+
         if args.checkpoint:
             # Evaluate specific checkpoint
             evaluate_checkpoint(
                 args.checkpoint,
-                args.text_file,
                 seq_length=args.seq_length,
                 batch_size=args.batch_size,
-                device=args.device,
+                device=device,
+                tokens_per_epoch=args.tokens,
+                autocast_ctx=autocast_ctx,
+                device_name=device_name,
             )
         else:
             # Find and evaluate latest checkpoint
@@ -372,10 +379,12 @@ def main():
 
             evaluate_checkpoint(
                 str(latest_checkpoint),
-                args.text_file,
                 seq_length=args.seq_length,
                 batch_size=args.batch_size,
-                device=args.device,
+                device=device,
+                tokens_per_epoch=args.tokens,
+                autocast_ctx=autocast_ctx,
+                device_name=device_name,
             )
 
     elif args.command == "compare":
@@ -383,11 +392,18 @@ def main():
         print("COMPARISON MODE")
         print("=" * 80)
         print()
+
+        # Initialize device properly
+        device, device_name = init_device(args.device, seed=42)
+        autocast_ctx = get_autocast_context(device.type)
+
         compare_checkpoints(
             args.checkpoint_dir,
-            args.text_file,
             seq_length=args.seq_length,
-            device=args.device,
+            device=device,
+            tokens_per_epoch=args.tokens,
+            autocast_ctx=autocast_ctx,
+            device_name=device_name,
         )
 
     elif args.command == "demo-sampling":

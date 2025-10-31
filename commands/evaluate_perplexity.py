@@ -43,10 +43,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.perplexity import evaluate_perplexity, calculate_perplexity_from_loss
 from src.transformer.device_utils import init_device, get_autocast_context
-
-# Import encoding detection from train.py
-sys.path.append(str(Path(__file__).parent))
-from train import detect_encoding_from_checkpoint
+from src.transformer.fineweb_dataset import FineWebDataset
+from src.transformer.checkpoint_utils import load_checkpoint as load_checkpoint_util
 
 
 class SimpleTextDataset(Dataset):
@@ -57,7 +55,7 @@ class SimpleTextDataset(Dataset):
     For training, use FineWebDataset instead.
     """
 
-    def __init__(self, text_file, seq_length=128, encoding_name="p50k_base"):
+    def __init__(self, text_file, seq_length=128, encoding_name="cl100k_base"):
         """
         Load text from a file and create training sequences.
 
@@ -108,6 +106,9 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     """
     Load a model checkpoint.
 
+    Wrapper around checkpoint_utils.load_checkpoint() that maintains
+    backward compatibility with this file's API.
+
     Args:
         checkpoint_path: Path to the checkpoint file
         device: Device to load model on
@@ -115,63 +116,29 @@ def load_checkpoint(checkpoint_path, device='cpu'):
     Returns:
         model: Loaded model
         checkpoint: Full checkpoint dict (contains config, loss, etc.)
+        detected_encoding: Detected encoding name
     """
-    print(f"Loading checkpoint: {checkpoint_path}")
+    # Use checkpoint utilities for loading
+    result = load_checkpoint_util(checkpoint_path, device=device, verbose=True)
 
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-
-    # Extract configuration
-    config = checkpoint['config']
-
-    # Strip torch.compile() prefix if present (_orig_mod.)
-    # Checkpoints saved from compiled models have this prefix on all keys
-    state_dict = checkpoint['model_state_dict']
-    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
-        print("Detected torch.compile() checkpoint, stripping prefix...")
-        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
-
-    # Create model with saved configuration
-    model = DecoderOnlyTransformer(
-        vocab_size=config['vocab_size'],
-        d_model=config['d_model'],
-        num_heads=config['num_heads'],
-        num_layers=config['num_layers'],
-        d_ff=config['d_ff'],
-        dropout=config['dropout'],
-    )
-
-    # Load weights
-    model.load_state_dict(state_dict)
-    model = model.to(device)
-    model.eval()
-
-    # Detect encoding
-    detected_encoding = detect_encoding_from_checkpoint(checkpoint)
-
-    print(f"  Epoch: {checkpoint['epoch']}")
-    print(f"  Encoding: {detected_encoding}")
-    print(f"  Training loss: {checkpoint['loss']:.4f}")
-    if 'perplexity' in checkpoint:
-        print(f"  Training perplexity: {checkpoint['perplexity']:.2f}")
-    print()
-
-    return model, checkpoint, detected_encoding
+    return result['model'], result['checkpoint'], result['encoding']
 
 
-def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8, device='cpu', encoding='p50k_base', autocast_ctx=None):
+def evaluate_checkpoint(checkpoint_path, seq_length=128, batch_size=8, device='cpu', encoding='cl100k_base', autocast_ctx=None, tokens_per_epoch=10_000_000, device_name=None):
     """
-    Evaluate a single checkpoint on a dataset.
+    Evaluate a single checkpoint on FineWeb validation dataset.
 
-    This is useful for final evaluation on a test set.
+    This is useful for final evaluation on held-out data.
 
     Args:
         checkpoint_path: Path to model checkpoint
-        text_file: Path to text file for evaluation
         seq_length: Sequence length for evaluation
         batch_size: Batch size for evaluation
         device: Device to run on
         encoding: Tokenizer encoding to use
         autocast_ctx: Optional autocast context for mixed precision
+        tokens_per_epoch: Number of validation tokens to evaluate on (default: 10M)
+        device_name: Human-readable device name (optional)
 
     Returns:
         perplexity: Perplexity on the dataset
@@ -180,19 +147,23 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
     # Load model
     model, checkpoint, detected_encoding = load_checkpoint(checkpoint_path, device=device)
 
-    # Check for encoding mismatch
-    if detected_encoding != encoding:
-        print(f"  ERROR: Checkpoint was trained with {detected_encoding}")
-        print(f"         but you're trying to evaluate with {encoding}")
-        print()
-        print(f"  Please use the same encoding as the checkpoint:")
-        print(f"    uv run python commands/evaluate_perplexity.py --encoding {detected_encoding}")
-        print()
-        sys.exit(1)
+    # Use detected encoding from checkpoint
+    encoding = detected_encoding
 
-    # Load dataset
-    print(f"Loading evaluation dataset: {text_file}")
-    dataset = SimpleTextDataset(text_file, seq_length=seq_length, encoding_name=encoding)
+    # Load FineWeb validation dataset
+    print(f"Loading FineWeb validation dataset...")
+    print(f"  Tokens: {tokens_per_epoch:,}")
+    print(f"  Sequences: {tokens_per_epoch // seq_length:,}")
+    dataset = FineWebDataset(
+        cache_dir="data/fineweb_cache",
+        seq_length=seq_length,
+        tokens_per_epoch=tokens_per_epoch,
+        max_cached_shards=20,  # Evaluation can cache more
+        seed=42,
+        encoding_name=encoding,
+        split="validation",  # Use validation split
+        validation_fraction=0.1
+    )
     print()
 
     dataloader = DataLoader(
@@ -203,9 +174,9 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
     )
 
     print(f"Evaluation configuration:")
-    print(f"  Sequences: {len(dataset):,}")
-    print(f"  Batches: {len(dataloader):,}")
-    print(f"  Device: {device}")
+    print(f"  Device: {device_name if device_name else device}")
+    print(f"  Sequences: {tokens_per_epoch // seq_length:,}")
+    print(f"  Batches: Streaming")
     print()
 
     # Evaluate
@@ -265,7 +236,7 @@ def evaluate_checkpoint(checkpoint_path, text_file, seq_length=128, batch_size=8
     return perplexity, loss
 
 
-def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu', encoding='p50k_base', autocast_ctx=None):
+def compare_checkpoints(checkpoint_dir, seq_length=128, device='cpu', encoding='cl100k_base', autocast_ctx=None, tokens_per_epoch=10_000_000, device_name=None):
     """
     Compare all checkpoints in a directory to find the best one.
 
@@ -273,11 +244,12 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu',
 
     Args:
         checkpoint_dir: Directory containing checkpoints
-        text_file: Text file to evaluate on
         seq_length: Sequence length
         device: Device to run on
         encoding: Tokenizer encoding to use
         autocast_ctx: Optional autocast context for mixed precision
+        tokens_per_epoch: Number of validation tokens to evaluate on (default: 10M)
+        device_name: Human-readable device name (optional)
     """
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*.pt"))
@@ -289,10 +261,29 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu',
     print("=" * 80)
     print(f"COMPARING {len(checkpoint_files)} CHECKPOINTS")
     print("=" * 80)
+    print(f"Device: {device_name if device_name else device}")
     print()
 
-    # Load dataset once
-    dataset = SimpleTextDataset(text_file, seq_length=seq_length, encoding_name=encoding)
+    # Detect encoding from first checkpoint
+    _, first_checkpoint, detected_encoding = load_checkpoint(str(checkpoint_files[0]), device=device)
+    encoding = detected_encoding
+
+    # Load FineWeb validation dataset once
+    print(f"Loading FineWeb validation dataset...")
+    print(f"  Tokens: {tokens_per_epoch:,}")
+    print(f"  Sequences: {tokens_per_epoch // seq_length:,}")
+    dataset = FineWebDataset(
+        cache_dir="data/fineweb_cache",
+        seq_length=seq_length,
+        tokens_per_epoch=tokens_per_epoch,
+        max_cached_shards=20,  # Evaluation can cache more
+        seed=42,
+        encoding_name=encoding,
+        split="validation",  # Use validation split
+        validation_fraction=0.1
+    )
+    print()
+
     dataloader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False)
 
     results = []
@@ -320,7 +311,7 @@ def compare_checkpoints(checkpoint_dir, text_file, seq_length=128, device='cpu',
         results.append({
             'checkpoint': checkpoint_path.name,
             'epoch': checkpoint['epoch'],
-            'train_loss': checkpoint['loss'],
+            'train_loss': checkpoint.get('loss', None),
             'train_ppl': checkpoint.get('perplexity', None),
             'eval_loss': loss,
             'eval_ppl': perplexity,
@@ -402,10 +393,10 @@ def main():
         help="Directory containing checkpoints (for comparison mode)"
     )
     parser.add_argument(
-        "--text-file",
-        type=str,
-        default="Singular.txt",
-        help="Text file to evaluate on"
+        "--tokens",
+        type=int,
+        default=10_000_000,
+        help="Number of validation tokens to evaluate on (default: 10M)"
     )
     parser.add_argument(
         "--seq-length",
@@ -427,16 +418,9 @@ def main():
     parser.add_argument(
         "--device",
         type=str,
-        default="cpu",
-        choices=["cpu", "cuda", "mps"],
-        help="Device to run evaluation on"
-    )
-    parser.add_argument(
-        "--encoding",
-        type=str,
-        default="p50k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: p50k_base, ~50K vocab; cl100k_base: ~100K vocab)"
+        default=None,
+        choices=["cpu", "cuda", "mps", None],
+        help="Device to run evaluation on (default: auto-detect)"
     )
 
     args = parser.parse_args()
@@ -455,22 +439,24 @@ def main():
         # Compare all checkpoints
         compare_checkpoints(
             args.checkpoint_dir,
-            args.text_file,
             seq_length=args.seq_length,
             device=device,
-            encoding=args.encoding,
-            autocast_ctx=autocast_ctx
+            encoding="cl100k_base",
+            autocast_ctx=autocast_ctx,
+            tokens_per_epoch=args.tokens,
+            device_name=device_name
         )
     elif args.checkpoint:
         # Evaluate single checkpoint
         evaluate_checkpoint(
             args.checkpoint,
-            args.text_file,
             seq_length=args.seq_length,
             batch_size=args.batch_size,
             device=device,
-            encoding=args.encoding,
-            autocast_ctx=autocast_ctx
+            encoding="cl100k_base",
+            autocast_ctx=autocast_ctx,
+            tokens_per_epoch=args.tokens,
+            device_name=device_name
         )
     else:
         # Default: find latest checkpoint
@@ -488,12 +474,13 @@ def main():
 
         evaluate_checkpoint(
             latest_checkpoint,
-            args.text_file,
             seq_length=args.seq_length,
             batch_size=args.batch_size,
             device=device,
-            encoding=args.encoding,
-            autocast_ctx=autocast_ctx
+            encoding="cl100k_base",
+            autocast_ctx=autocast_ctx,
+            tokens_per_epoch=args.tokens,
+            device_name=device_name
         )
 
 

@@ -56,11 +56,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.device_utils import init_device, get_autocast_context
+from src.transformer.checkpoint_utils import load_checkpoint
 import tiktoken
-
-# Import encoding detection from train.py
-sys.path.append(str(Path(__file__).parent))
-from train import detect_encoding_from_checkpoint
 
 
 # Generation presets for different use cases
@@ -73,22 +70,22 @@ GENERATION_PRESETS = {
     "precise": {
         "method": "top_k_top_p",
         "description": "Focused and deterministic. Best for factual text and code generation",
-        "params": {"k": 40, "p": 0.85, "temperature": 0.7}
+        "params": {"top_k": 40, "top_p": 0.85, "temperature": 0.7}
     },
     "balanced": {
         "method": "top_k_top_p",
         "description": "Balanced quality and diversity. Good default for most tasks",
-        "params": {"k": 50, "p": 0.9, "temperature": 1.0}
+        "params": {"top_k": 50, "top_p": 0.9, "temperature": 1.0}
     },
     "creative": {
         "method": "top_k_top_p",
         "description": "More diverse and creative. Good for storytelling",
-        "params": {"k": 100, "p": 0.95, "temperature": 1.2}
+        "params": {"top_k": 100, "top_p": 0.95, "temperature": 1.2}
     },
     "very-creative": {
         "method": "top_k_top_p",
         "description": "Very diverse and experimental. Maximum creativity",
-        "params": {"k": 200, "p": 0.98, "temperature": 1.5}
+        "params": {"top_k": 200, "top_p": 0.98, "temperature": 1.5}
     }
 }
 
@@ -106,52 +103,15 @@ def load_model(checkpoint_path, device):
         config: Model configuration dict
         detected_encoding: Detected encoding from checkpoint
     """
-    print(f"Loading model from {checkpoint_path}...")
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    # Use checkpoint utilities for loading
+    result = load_checkpoint(checkpoint_path, device=device, verbose=True)
 
-    config = checkpoint['config']
-
-    # Detect encoding
-    detected_encoding = detect_encoding_from_checkpoint(checkpoint)
-
+    # Display model config
+    config = result['config']
     print(f"  Model config: {config['num_layers']} layers, "
           f"{config['d_model']} d_model, {config['num_heads']} heads")
-    print(f"  Encoding: {detected_encoding}")
 
-    # Strip torch.compile() prefix if present (_orig_mod.)
-    # Checkpoints saved from compiled models have this prefix on all keys
-    state_dict = checkpoint['model_state_dict']
-    if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
-        print("  Detected torch.compile() checkpoint, stripping prefix...")
-        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
-
-    # Infer max_seq_len from positional encoding shape if not in config
-    max_seq_len = config.get('max_seq_len')
-    if max_seq_len is None:
-        pos_embedding_shape = state_dict['pos_encoding.pos_embedding.weight'].shape
-        max_seq_len = pos_embedding_shape[0]
-        print(f"  Inferred max_seq_len from checkpoint: {max_seq_len}")
-
-    # Create model with saved configuration
-    model = DecoderOnlyTransformer(
-        vocab_size=config['vocab_size'],
-        d_model=config['d_model'],
-        num_heads=config['num_heads'],
-        num_layers=config['num_layers'],
-        d_ff=config['d_ff'],
-        dropout=config['dropout'],
-        max_seq_len=max_seq_len
-    )
-
-    # Load trained weights
-    model.load_state_dict(state_dict)
-    model = model.to(device)
-    model.eval()  # Set to evaluation mode
-
-    print(f"  Checkpoint from epoch {checkpoint['epoch']}, loss: {checkpoint['loss']:.4f}")
-    print()
-
-    return model, config, detected_encoding
+    return result['model'], result['config'], result['encoding']
 
 
 def generate_text(model, tokenizer, prompt, max_length, sampling_method, sampling_params, device, autocast_ctx):
@@ -184,7 +144,7 @@ def generate_text(model, tokenizer, prompt, max_length, sampling_method, samplin
         output_ids = model.generate(
             input_ids,
             max_length=max_length,
-            method=sampling_method,
+            sampling_strategy=sampling_method,
             **sampling_params
         )
 
@@ -356,13 +316,6 @@ Examples:
         help="List all available presets and exit"
     )
 
-    parser.add_argument(
-        "--encoding",
-        type=str,
-        default="p50k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: p50k_base, ~50K vocab; cl100k_base: ~100K vocab)"
-    )
 
     args = parser.parse_args()
 
@@ -408,20 +361,11 @@ Examples:
     # Load model
     model, config, detected_encoding = load_model(checkpoint_path, device)
 
-    # Check for encoding mismatch
-    if detected_encoding != args.encoding:
-        print(f"ERROR: Checkpoint was trained with {detected_encoding}")
-        print(f"       but you're trying to generate with {args.encoding}")
-        print()
-        print(f"Please use the same encoding as the checkpoint:")
-        print(f"  uv run python commands/generate.py {checkpoint_path} --encoding {detected_encoding}")
-        print()
-        sys.exit(1)
-
-    # Initialize tokenizer
+    # Initialize tokenizer (always use cl100k_base)
+    encoding = "cl100k_base"
     print("Initializing tokenizer...")
-    print(f"  Using encoding: {args.encoding}")
-    tokenizer = tiktoken.get_encoding(args.encoding)
+    print(f"  Using encoding: {encoding}")
+    tokenizer = tiktoken.get_encoding(encoding)
     vocab_size = config['vocab_size']
     print(f"  Vocabulary size: {vocab_size:,}")
     print()
@@ -439,9 +383,9 @@ Examples:
     if args.temperature is not None:
         generation_config["params"]["temperature"] = args.temperature
     if args.top_k is not None:
-        generation_config["params"]["k"] = args.top_k
+        generation_config["params"]["top_k"] = args.top_k
     if args.top_p is not None:
-        generation_config["params"]["p"] = args.top_p
+        generation_config["params"]["top_p"] = args.top_p
 
     # Remove unused parameters based on method
     if generation_config["method"] == "greedy":

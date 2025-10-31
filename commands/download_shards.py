@@ -39,34 +39,18 @@ import argparse
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.fineweb_dataset import FineWebDataset
+from src.transformer.dataset_utils import calculate_optimal_cache_size
 
 
-def calculate_optimal_cache_size(tokens_per_epoch: int) -> int:
-    """
-    Calculate optimal shard cache size based on tokens per epoch.
-
-    Args:
-        tokens_per_epoch: Number of tokens to process per epoch
-
-    Returns:
-        max_cached_shards: Number of shards to keep in cache
-    """
-    TOKENS_PER_SHARD = 500_000
-    train_shards = tokens_per_epoch / TOKENS_PER_SHARD
-    val_shards = (tokens_per_epoch / 10) / TOKENS_PER_SHARD
-    total_shards = int((train_shards + val_shards) * 1.2)
-    return total_shards
-
-
-def download_shards(quick=False, medium=False, encoding="cl100k_base"):
+def download_shards(quick=False, medium=False):
     """
     Download all shards needed for training.
 
     Args:
         quick: If True, download shards for quick mode (10M tokens)
         medium: If True, download shards for medium mode (50M tokens)
-        encoding: Tokenizer encoding to use
     """
+    encoding = "cl100k_base"
     # Configuration based on mode
     if quick and medium:
         raise ValueError("Cannot use both --quick and --medium flags. Please choose one.")
@@ -238,17 +222,9 @@ if __name__ == "__main__":
         action="store_true",
         help="Download shards for medium mode (50M tokens, ~5 GB)"
     )
-    parser.add_argument(
-        "--encoding",
-        type=str,
-        default="cl100k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: cl100k_base)"
-    )
     args = parser.parse_args()
 
     download_shards(
         quick=args.quick,
-        medium=args.medium,
-        encoding=args.encoding
+        medium=args.medium
     )

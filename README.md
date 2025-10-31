@@ -28,35 +28,57 @@ pip install uv
 
 **Install Project Dependencies:**
 ```bash
-# Install dependencies (PyTorch, tiktoken, NumPy, datasets, rich)
+# Install dependencies (PyTorch, tiktoken, NumPy, datasets, rich, questionary)
 make install              # Default: NVIDIA CUDA or CPU
 make install-rocm         # For AMD GPUs with ROCm (Linux only)
 
 # Run all tests
 make test
+```
 
-# Pre-download training data (optional, but recommended for offline training)
-make download-medium    # Download ~5 GB for medium mode
-make download-quick     # Download ~1 GB for quick mode
-make download           # Download ~10 GB for default mode
+### Interactive CLI (Recommended!)
 
-# Train on FineWeb (100M tokens per epoch)
-make train
+The easiest way to use this project is through the interactive CLI:
 
-# Medium training (balanced quality & speed, 50M tokens/epoch, 15 epochs)
-# Epoch 1: ~2h on M3 (downloads+caches shards), Epochs 2-15: ~30-60min (cached)
-make train-medium
+```bash
+# Launch interactive mode - no flags to memorize!
+uv run python main.py
+```
 
-# Quick training (smaller model, 10M tokens/epoch, 10 epochs, ~40-50min/epoch on M1, ~7-8h total)
-make train-quick
+The interactive CLI provides a beautiful, arrow-key navigated menu system that lets you:
+- ✨ **Train models** - Choose Quick/Medium/Full modes with smart defaults
+- 🎨 **Generate text** - Select checkpoints, presets, and settings interactively
+- 📊 **Evaluate models** - Compare checkpoints or calculate perplexity
+- 🔍 **Analyze internals** - Explore attention patterns, logit lens, induction heads
+- ⬇️ **Download data** - Pre-download training shards for offline use
 
-# Resume training from latest checkpoint
-make resume          # Resume standard training
-make resume-medium   # Resume medium training
-make resume-quick    # Resume quick training
+**Features:**
+- Auto-detects available checkpoints and shows status
+- Colorful tables and progress indicators
+- Helpful explanations for each option
+- No need to remember complex command-line flags!
 
-# Generate text (interactive mode)
-make generate
+### Advanced: Command-Line Interface
+
+For power users and automation, all operations are also available via traditional CLI commands:
+
+```bash
+# Training
+uv run python main.py train --medium      # Medium mode
+uv run python main.py train --quick       # Quick mode
+uv run python main.py train --resume      # Resume training
+
+# Generation
+uv run python main.py generate checkpoints/model_epoch_15.pt --preset balanced
+
+# Evaluation
+uv run python main.py evaluate --checkpoint checkpoints/model_epoch_15.pt
+
+# Interpretability
+uv run python main.py interpret logit-lens checkpoints/model_epoch_15.pt
+
+# Download data
+uv run python main.py download --medium
 ```
 
 ## What's Inside
@@ -190,8 +212,8 @@ uv run python main.py train --resume
 uv run python main.py train --quick --resume    # Resume quick training
 uv run python main.py train --medium --resume   # Resume medium training
 
-# Use smaller vocabulary (50K tokens vs 100K default)
-uv run python main.py train --encoding p50k_base
+# Standard training with cl100k_base tokenizer (100K vocab)
+uv run python main.py train
 
 # Custom gradient accumulation (higher = more stable training)
 uv run python main.py train --accumulation-steps 32

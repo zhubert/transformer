@@ -162,94 +162,16 @@ from src.transformer.device_utils import (
     init_device, get_autocast_context, get_synchronize_fn,
     get_memory_stats_fn, print_device_info
 )
+from src.transformer.dataset_utils import calculate_optimal_cache_size
+from src.transformer.checkpoint_utils import (
+    detect_encoding,
+    get_encoding_short_name,
+    strip_compile_prefix,
+)
 
 
-def calculate_optimal_cache_size(tokens_per_epoch: int) -> int:
-    """
-    Calculate optimal shard cache size based on tokens per epoch.
-
-    Why this matters:
-    -----------------
-    FineWeb streams data in shards (~500K tokens each, ~40MB on disk).
-    If the cache is too small, shards are evicted and re-downloaded every epoch,
-    wasting network bandwidth and making training much slower.
-
-    This function calculates how many shards are needed to cover an entire epoch
-    (including validation data) so that after epoch 1, all shards are cached
-    and epochs 2+ run at maximum speed with no network I/O.
-
-    Performance Impact:
-    -------------------
-    - Small cache (5 shards): ~105 shards re-downloaded per epoch → 2h/epoch on M3 Pro
-    - Optimal cache: All shards cached after epoch 1 → ~30-60min/epoch on M3 Pro
-
-    Speedup: 2-4x faster after epoch 1!
-
-    Args:
-        tokens_per_epoch: Number of tokens to process per epoch
-
-    Returns:
-        max_cached_shards: Number of shards to keep in cache
-
-    Cache Sizes:
-        - Quick (10M tokens): ~26 shards, ~1.0 GB disk
-        - Medium (50M tokens): ~132 shards, ~5.2 GB disk
-        - Default (100M tokens): ~264 shards, ~10.3 GB disk
-    """
-    # Each shard contains ~500K tokens (approximate)
-    TOKENS_PER_SHARD = 500_000
-
-    # Calculate shards needed for training (90% of data) and validation (10%)
-    train_shards = tokens_per_epoch / TOKENS_PER_SHARD
-    val_shards = (tokens_per_epoch / 10) / TOKENS_PER_SHARD
-
-    # Add 20% buffer for safety (shard sizes vary slightly)
-    total_shards = int((train_shards + val_shards) * 1.2)
-
-    return total_shards
-
-
-def detect_encoding_from_checkpoint(checkpoint):
-    """
-    Detect encoding from checkpoint, with backward compatibility.
-
-    Args:
-        checkpoint: Loaded checkpoint dict
-
-    Returns:
-        encoding_name: String like 'p50k_base' or 'cl100k_base'
-    """
-    # Preferred: use stored encoding (new checkpoints)
-    if 'encoding' in checkpoint.get('config', {}):
-        return checkpoint['config']['encoding']
-
-    # Fallback: infer from vocab_size (backward compatibility with old checkpoints)
-    vocab_size = checkpoint['config']['vocab_size']
-    if vocab_size == 50281:
-        return 'p50k_base'
-    elif vocab_size == 100277:
-        return 'cl100k_base'
-    else:
-        raise ValueError(f"Unknown vocab size: {vocab_size}. Cannot detect encoding.")
-
-
-def get_encoding_short_name(encoding):
-    """
-    Convert full encoding name to short version for filenames.
-
-    Args:
-        encoding: Full encoding name like 'p50k_base' or 'cl100k_base'
-
-    Returns:
-        Short name like 'p50k' or 'cl100k'
-    """
-    if encoding == 'p50k_base':
-        return 'p50k'
-    elif encoding == 'cl100k_base':
-        return 'cl100k'
-    else:
-        # Fallback: just remove '_base' suffix if present
-        return encoding.replace('_base', '')
+# Utility functions are now imported from checkpoint_utils and dataset_utils
+# Previously they were defined here, causing code duplication across commands
 
 
 def get_device_type_from_args(use_mps=False):
@@ -324,12 +246,11 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, con
 
     checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-    # Strip torch.compile() prefix if present (_orig_mod.)
-    # Checkpoints saved from compiled models have this prefix on all keys
+    # Strip torch.compile() prefix if present using utility function
     state_dict = checkpoint['model_state_dict']
     if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
         console.print("[yellow]Detected torch.compile() checkpoint, stripping prefix...[/yellow]")
-        state_dict = {k.replace('_orig_mod.', '', 1): v for k, v in state_dict.items()}
+        state_dict = strip_compile_prefix(state_dict)
         checkpoint['model_state_dict'] = state_dict
 
     # Load model weights
@@ -392,14 +313,13 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, medium=False, accumulation_steps=16, resume=False, compile=True):
+def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_steps=16, resume=False, compile=True):
     """
     Main training function with gradient accumulation and validation.
 
     Args:
         debug: If True, print diagnostic information for debugging NaN issues
         use_mps: If True, try MPS (experimental - has known NaN issues)
-        encoding: Tokenizer encoding to use ("p50k_base" or "cl100k_base")
         quick: If True, use smaller model and fewer tokens for faster training
         medium: If True, use medium-sized model with good balance of quality and speed
         accumulation_steps: Number of batches to accumulate before updating weights.
@@ -433,6 +353,7 @@ def train(debug=False, use_mps=False, encoding="cl100k_base", quick=False, mediu
     """
 
     # Configuration
+    encoding = "cl100k_base"  # Only cl100k_base tokenizer supported
     SEQ_LENGTH = 128
     BATCH_SIZE = 8              # Reduced from 32 to fit in M1 memory
 
@@ -1250,13 +1171,6 @@ if __name__ == "__main__":
         help="Use MPS (Apple Silicon GPU) - EXPERIMENTAL, has known NaN issues"
     )
     parser.add_argument(
-        "--encoding",
-        type=str,
-        default="cl100k_base",
-        choices=["p50k_base", "cl100k_base"],
-        help="Tokenizer encoding to use (default: cl100k_base, ~100K vocab; p50k_base: ~50K vocab)"
-    )
-    parser.add_argument(
         "--quick",
         action="store_true",
         help="Quick training mode: smaller model (4 layers, d_model=128) and fewer tokens (10M/epoch)"
@@ -1284,7 +1198,6 @@ if __name__ == "__main__":
     train(
         debug=args.debug,
         use_mps=args.mps,
-        encoding=args.encoding,
         quick=args.quick,
         medium=args.medium,
         accumulation_steps=args.accumulation_steps,
