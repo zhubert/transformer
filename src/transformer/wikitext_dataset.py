@@ -83,6 +83,7 @@ class WikiTextDataset(IterableDataset):
         seq_length: int = 128,
         encoding_name: str = "cl100k_base",
         split: str = "train",
+        tokens_per_epoch: int = None,
     ):
         """
         Initialize WikiText-103 dataset.
@@ -94,11 +95,14 @@ class WikiTextDataset(IterableDataset):
                   - "train": ~100M tokens for training
                   - "validation": ~217K tokens for validation during training
                   - "test": ~245K tokens for final evaluation
+            tokens_per_epoch: How many tokens to process per epoch (None = unlimited, process entire dataset)
+                             This allows you to control epoch length for consistent training
         """
         super().__init__()
 
         self.seq_length = seq_length
         self.split = split
+        self.tokens_per_epoch = tokens_per_epoch
 
         # Validate split parameter
         if split not in ["train", "validation", "test"]:
@@ -160,14 +164,24 @@ class WikiTextDataset(IterableDataset):
         """
         Iterate through the dataset, yielding (input, target) pairs.
 
+        If tokens_per_epoch is set, stops after that many tokens have been processed.
+        Otherwise, processes the entire dataset.
+
         Yields:
             (input_tensor, target_tensor) pairs of shape (seq_length,)
         """
         # WikiText-103 provides 'text' field with raw text
         texts = self.dataset["text"]
 
-        # Tokenize and yield sequences
-        yield from self._tokenize_and_chunk(texts)
+        # Tokenize and yield sequences, with optional token limit
+        tokens_processed = 0
+        for input_seq, target_seq in self._tokenize_and_chunk(texts):
+            # Check if yielding this sequence would exceed the limit
+            if self.tokens_per_epoch is not None and tokens_processed + self.seq_length > self.tokens_per_epoch:
+                break
+
+            yield input_seq, target_seq
+            tokens_processed += self.seq_length
 
     def decode(self, token_ids):
         """

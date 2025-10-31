@@ -481,13 +481,16 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
             seq_length=SEQ_LENGTH,
             encoding_name=encoding,
             split="train",
+            tokens_per_epoch=TOKENS_PER_EPOCH,
         )
 
-        # Validation dataset
+        # Validation dataset (10% of training tokens)
+        val_tokens_per_epoch = TOKENS_PER_EPOCH // 10
         val_dataset = WikiTextDataset(
             seq_length=SEQ_LENGTH,
             encoding_name=encoding,
             split="validation",
+            tokens_per_epoch=val_tokens_per_epoch,
         )
     else:  # fineweb (default)
         console.print("[bold]Loading FineWeb dataset...[/bold]")
@@ -565,7 +568,17 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
             "validation"
         )
         dataset_table.add_row(
-            "Size",
+            "Tokens per epoch",
+            f"{TOKENS_PER_EPOCH:,}",
+            f"{val_tokens_per_epoch:,}"
+        )
+        dataset_table.add_row(
+            "Sequences per epoch",
+            f"~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}",
+            f"~{val_tokens_per_epoch // SEQ_LENGTH:,}"
+        )
+        dataset_table.add_row(
+            "Total dataset size",
             "~100M tokens",
             "~217K tokens"
         )
