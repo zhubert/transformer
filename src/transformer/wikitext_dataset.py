@@ -116,7 +116,6 @@ class WikiTextDataset(IterableDataset):
             "wikitext",
             "wikitext-103-raw-v1",
             split=split,
-            trust_remote_code=True,
         )
 
     def _tokenize_and_chunk(
