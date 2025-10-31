@@ -51,7 +51,8 @@ def create_test_checkpoint(
     Returns:
         Path to temporary checkpoint file
     """
-    # Create model
+    # Create model with learned position embeddings for backward compatibility testing
+    # This ensures the tests work with checkpoints that have pos_encoding.pos_embedding.weight
     model = DecoderOnlyTransformer(
         vocab_size=vocab_size,
         d_model=d_model,
@@ -60,6 +61,7 @@ def create_test_checkpoint(
         d_ff=d_ff,
         max_seq_len=max_seq_len,
         dropout=dropout,
+        position_encoding_type='learned',  # Use learned for backward compatibility tests
     )
 
     # Get state dict
@@ -336,6 +338,7 @@ class TestCheckpointLoading:
                     d_ff=256,
                     max_seq_len=128,
                     dropout=0.1,
+                    position_encoding_type='learned',  # Match test checkpoint
                 )
                 compiled_model = torch.compile(model, backend="inductor", mode="default")
 

@@ -166,11 +166,12 @@ def infer_max_seq_len(state_dict: Dict[str, torch.Tensor]) -> int:
     Why is this needed?
     -------------------
     Older checkpoints don't store max_seq_len in the config dict. But we can
-    infer it from the shape of the positional embedding weight matrix.
+    infer it from the shape of the positional embedding weight matrix (for learned
+    position embeddings) or use a sensible default (for ALiBi/RoPE).
 
-    Positional embedding shape: (max_seq_len, d_model)
-                                  ^^^^^^^^^^^
-                                  This is what we need!
+    Position Encoding Types:
+    - Learned: Has 'pos_encoding.pos_embedding.weight' with shape (max_seq_len, d_model)
+    - ALiBi/RoPE: No learnable position parameters, use default max_seq_len=5000
 
     Args:
         state_dict: Model state dict (after stripping compile prefix)
@@ -179,26 +180,45 @@ def infer_max_seq_len(state_dict: Dict[str, torch.Tensor]) -> int:
         max_seq_len: Maximum sequence length the model supports
 
     Raises:
-        KeyError: If positional embedding not found in state dict
+        KeyError: If positional embedding not found AND no ALiBi/RoPE buffers detected
 
     Example:
+        >>> # Learned position embeddings
         >>> state_dict = {'pos_encoding.pos_embedding.weight': torch.randn(256, 512)}
         >>> max_seq_len = infer_max_seq_len(state_dict)
         >>> print(max_seq_len)  # 256
+
+        >>> # ALiBi (no pos_embedding)
+        >>> state_dict = {'alibi.slopes': torch.randn(8), 'token_embedding.embedding.weight': ...}
+        >>> max_seq_len = infer_max_seq_len(state_dict)
+        >>> print(max_seq_len)  # 5000 (default)
     """
     pos_embedding_key = 'pos_encoding.pos_embedding.weight'
 
-    if pos_embedding_key not in state_dict:
-        raise KeyError(
-            f"Cannot infer max_seq_len: '{pos_embedding_key}' not found in state dict. "
-            f"Available keys: {list(state_dict.keys())[:5]}..."
-        )
+    # Check if this is a learned position encoding checkpoint
+    if pos_embedding_key in state_dict:
+        # Shape is (max_seq_len, d_model), we want the first dimension
+        pos_embedding_shape = state_dict[pos_embedding_key].shape
+        max_seq_len = pos_embedding_shape[0]
+        return max_seq_len
 
-    # Shape is (max_seq_len, d_model), we want the first dimension
-    pos_embedding_shape = state_dict[pos_embedding_key].shape
-    max_seq_len = pos_embedding_shape[0]
+    # Check if this is ALiBi or RoPE (no learnable position parameters)
+    # ALiBi has 'alibi.slopes' buffer
+    # RoPE has 'rope.inv_freq' buffer
+    has_alibi = any(k.startswith('alibi.') for k in state_dict.keys())
+    has_rope = any(k.startswith('rope.') for k in state_dict.keys())
 
-    return max_seq_len
+    if has_alibi or has_rope:
+        # ALiBi and RoPE don't have max_seq_len in state dict
+        # Use default value of 5000 (standard for this implementation)
+        return 5000
+
+    # If we get here, we couldn't infer max_seq_len
+    raise KeyError(
+        f"Cannot infer max_seq_len: '{pos_embedding_key}' not found in state dict, "
+        f"and no ALiBi or RoPE buffers detected. "
+        f"Available keys: {list(state_dict.keys())[:10]}..."
+    )
 
 
 def load_checkpoint(
@@ -338,6 +358,29 @@ def load_checkpoint(
     # Detect encoding
     encoding = detect_encoding(checkpoint)
 
+    # Detect position encoding type from state dict
+    # Check config first (newer checkpoints), then infer from state dict
+    if 'position_encoding_type' in config:
+        position_encoding_type = config['position_encoding_type']
+    else:
+        # Infer from state dict for backward compatibility
+        has_pos_embedding = 'pos_encoding.pos_embedding.weight' in state_dict
+        has_alibi = any(k.startswith('alibi.') for k in state_dict.keys())
+        has_rope = any(k.startswith('rope.') for k in state_dict.keys())
+
+        if has_alibi:
+            position_encoding_type = 'alibi'
+        elif has_rope:
+            position_encoding_type = 'rope'
+        elif has_pos_embedding:
+            position_encoding_type = 'learned'
+        else:
+            # Default to learned for very old checkpoints
+            position_encoding_type = 'learned'
+
+        if verbose:
+            print(f"  Inferred position encoding type: {position_encoding_type}")
+
     # Create model if not provided (inference mode)
     if model is None:
         model = DecoderOnlyTransformer(
@@ -349,6 +392,7 @@ def load_checkpoint(
             dropout=config['dropout'],
             max_seq_len=config.get('max_seq_len', 5000),
             tie_weights=config.get('tie_weights', True),
+            position_encoding_type=position_encoding_type,
         )
 
     # Check if model is compiled (wrapped in OptimizedModule)

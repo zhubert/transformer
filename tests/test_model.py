@@ -128,27 +128,60 @@ class TestDecoderOnlyTransformer:
 
     def test_all_components_integrated(self):
         """Test that all components are correctly integrated."""
-        from src.transformer.embeddings import TokenEmbedding, PositionalEncoding
+        from src.transformer.embeddings import TokenEmbedding, PositionalEncoding, ALiBiPositionalBias, RotaryPositionalEmbedding
         from src.transformer.block import TransformerBlock
 
         vocab_size = 500
-        model = DecoderOnlyTransformer(vocab_size, d_model=128, num_heads=4, num_layers=2, d_ff=512)
+        d_model = 128
+        num_heads = 4
 
-        # Check that all components exist
-        assert isinstance(model.token_embedding, TokenEmbedding)
-        assert isinstance(model.pos_encoding, PositionalEncoding)
-        assert isinstance(model.blocks[0], TransformerBlock)
-        assert isinstance(model.ln_f, torch.nn.LayerNorm)
-        assert isinstance(model.output_proj, torch.nn.Linear)
+        # Test with all three position encoding types
+        for pos_type in ['alibi', 'rope', 'learned']:
+            model = DecoderOnlyTransformer(
+                vocab_size,
+                d_model=d_model,
+                num_heads=num_heads,
+                num_layers=2,
+                d_ff=512,
+                position_encoding_type=pos_type
+            )
 
-        # Check dimensions
-        assert model.output_proj.in_features == 128  # d_model
-        assert model.output_proj.out_features == 500  # vocab_size
+            # Check that all common components exist
+            assert isinstance(model.token_embedding, TokenEmbedding)
+            assert isinstance(model.blocks[0], TransformerBlock)
+            assert isinstance(model.ln_f, torch.nn.LayerNorm)
+            assert isinstance(model.output_proj, torch.nn.Linear)
+
+            # Check position encoding based on type
+            if pos_type == 'alibi':
+                assert isinstance(model.alibi, ALiBiPositionalBias)
+                assert model.pos_encoding is None
+                assert model.rope is None
+            elif pos_type == 'rope':
+                assert isinstance(model.rope, RotaryPositionalEmbedding)
+                assert model.pos_encoding is None
+                assert model.alibi is None
+            else:  # 'learned'
+                assert isinstance(model.pos_encoding, PositionalEncoding)
+                assert model.rope is None
+                assert model.alibi is None
+
+            # Check dimensions
+            assert model.output_proj.in_features == d_model
+            assert model.output_proj.out_features == vocab_size
 
     def test_gradients_flow_through_entire_model(self):
         """Test that gradients flow from output back to embeddings."""
         vocab_size = 500
-        model = DecoderOnlyTransformer(vocab_size, d_model=128, num_heads=4, num_layers=2, d_ff=512)
+        # Use learned position embeddings for this test to check pos_encoding gradients
+        model = DecoderOnlyTransformer(
+            vocab_size,
+            d_model=128,
+            num_heads=4,
+            num_layers=2,
+            d_ff=512,
+            position_encoding_type='learned'
+        )
 
         batch_size = 2
         seq_len = 5
