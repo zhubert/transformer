@@ -1,4 +1,4 @@
-.PHONY: help install install-rocm test test-cov clean
+.PHONY: help install install-rocm test test-cov clean run
 
 # Default target
 help:
@@ -14,7 +14,7 @@ help:
 	@echo "  make clean         - Remove cache files, checkpoints, and build artifacts"
 	@echo ""
 	@echo "Using the Transformer:"
-	@echo "  uv run python main.py     - Launch interactive CLI (recommended!)"
+	@echo "  make run                  - Launch interactive CLI (recommended!)"
 	@echo "  uv run python main.py --help - Show advanced command-line options"
 
 # Install dependencies (default: NVIDIA CUDA or CPU)
@@ -33,6 +33,10 @@ test:
 # Run tests with coverage
 test-cov:
 	uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
+
+# Run the interactive CLI
+run:
+	uv run python main.py
 
 # Clean up cache files (preserves data/fineweb_cache shards)
 clean:
