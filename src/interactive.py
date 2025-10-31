@@ -429,8 +429,9 @@ def interpret_menu(scanner: CheckpointScanner) -> Optional[dict]:
         "Select analysis:",
         choices=[
             "attention - Visualize attention patterns",
-            "embeddings - Analyze token embeddings",
-            "neurons - Analyze individual neurons",
+            "logit-lens - See how predictions evolve through layers",
+            "induction-heads - Detect pattern-matching circuits",
+            "patch - Causal intervention experiments",
             "all - Run all analyses",
         ],
         style=custom_style,
@@ -438,11 +439,16 @@ def interpret_menu(scanner: CheckpointScanner) -> Optional[dict]:
 
     analysis_type = analysis.split(' - ')[0]
 
-    # Get prompt for attention analysis
+    # Get prompt for analyses that need text input
     prompt = None
-    if analysis_type in ['attention', 'all']:
+    if analysis_type in ['attention', 'logit-lens', 'all']:
+        prompt_text = {
+            'attention': "Enter text to analyze (for attention visualization):",
+            'logit-lens': "Enter text to analyze (for logit lens):",
+            'all': "Enter text to analyze (for attention and logit lens):",
+        }
         prompt = questionary.text(
-            "Enter text to analyze (for attention visualization):",
+            prompt_text.get(analysis_type, "Enter text to analyze:"),
             default="The quick brown fox jumps over the lazy dog",
             style=custom_style,
         ).ask()
@@ -574,6 +580,25 @@ def run_interpret(config: dict):
     args.prompt = config.get('prompt')
     args.output_dir = "interpretability_output"
     args.device = "cpu"
+
+    # Set attributes required by interpret commands
+    # These match the defaults from argparse in interpret.py
+    args.text = args.prompt  # Commands expect 'text' not 'prompt'
+    args.demo = False
+    args.interactive = False
+    args.top_k = 5
+    args.temperature = 1.0
+    args.layer = None
+    args.head = None
+
+    # Attributes for induction-heads command
+    args.num_sequences = 100
+    args.seq_length = 40
+
+    # Attributes for patch command
+    args.clean = None
+    args.corrupted = None
+    args.target = None
 
     interpret.main(args)
 

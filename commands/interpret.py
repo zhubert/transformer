@@ -817,5 +817,84 @@ def setup_parser(parser):
 
 def main(args):
     """Main entry point for interpret command."""
-    # Call the appropriate subcommand function
-    args.func(args)
+    # Check if called from argparse (has func attribute) or interactive CLI (has analysis attribute)
+    if hasattr(args, 'func'):
+        # Called from argparse - use the subcommand function
+        args.func(args)
+    elif hasattr(args, 'analysis'):
+        # Called from interactive CLI - map analysis type to function
+        console = Console()
+
+        # Map analysis types to command functions
+        analysis_map = {
+            'attention': cmd_attention,
+            'logit-lens': cmd_logit_lens,
+            'induction-heads': cmd_induction_heads,
+            'patch': cmd_patch,
+        }
+
+        # Set up args for the command functions
+        # Interactive CLI provides: checkpoint, analysis, prompt, output_dir, device
+        # Command functions expect: checkpoint, text, demo, interactive, layer, head, etc.
+
+        if args.analysis == 'all':
+            # Run all available analyses
+            console.print("[bold cyan]Running all available analyses...[/bold cyan]\n")
+
+            # Run attention analysis
+            if args.prompt:
+                args.text = args.prompt
+                args.demo = False
+                args.interactive = False
+                args.layer = None
+                args.head = None
+                console.print("[bold]1. Attention Pattern Analysis[/bold]")
+                cmd_attention(args)
+                console.print()
+
+            # Run logit lens
+            args.text = args.prompt if args.prompt else None
+            args.demo = False
+            args.interactive = False
+            console.print("[bold]2. Logit Lens Analysis[/bold]")
+            cmd_logit_lens(args)
+            console.print()
+
+            console.print("[green]✓ All analyses complete![/green]")
+
+        elif args.analysis in analysis_map:
+            # Run specific analysis
+            func = analysis_map[args.analysis]
+
+            # Set up common args
+            args.text = args.prompt if hasattr(args, 'prompt') else None
+            args.demo = False
+            args.interactive = False
+
+            # Attention-specific args
+            if args.analysis == 'attention':
+                args.layer = None
+                args.head = None
+
+            func(args)
+
+        elif args.analysis in ['embeddings', 'neurons']:
+            # These analyses are not yet implemented
+            console.print(f"[yellow]Note: '{args.analysis}' analysis is not yet implemented.[/yellow]")
+            console.print("[dim]Available analyses: attention, logit-lens, induction-heads, patch[/dim]")
+            console.print()
+            console.print("[cyan]Running attention analysis instead...[/cyan]\n")
+
+            # Fall back to attention analysis
+            args.text = args.prompt if hasattr(args, 'prompt') else None
+            args.demo = False
+            args.interactive = False
+            args.layer = None
+            args.head = None
+            cmd_attention(args)
+
+        else:
+            console.print(f"[red]Unknown analysis type: {args.analysis}[/red]")
+            console.print("[dim]Available: attention, logit-lens, induction-heads, patch, all[/dim]")
+    else:
+        raise ValueError("args object must have either 'func' or 'analysis' attribute")
