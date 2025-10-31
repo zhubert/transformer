@@ -23,6 +23,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from commands.train import train
 from commands.download_shards import download_shards
+from commands.download_wikitext import download_wikitext
 from commands.generate import main as generate_main
 from commands.evaluate_perplexity import evaluate_checkpoint, compare_checkpoints
 from commands.sampling_comparison import demonstrate_sampling_strategies, demonstrate_with_model
@@ -511,28 +512,49 @@ def download_menu() -> dict:
     """Data download menu."""
     console.print("\n[bold cyan]Download Training Data[/bold cyan]\n")
 
-    mode = questionary.select(
-        "Select dataset size:",
+    # Select dataset type
+    dataset_choice = questionary.select(
+        "Select dataset to download:",
         choices=[
-            "Quick (10M tokens, ~1 GB)",
-            "Medium (50M tokens, ~5 GB)",
-            "Full (100M tokens, ~10 GB)",
+            "fineweb - FineWeb 10B tokens (realistic web text) [DEFAULT]",
+            "wikitext - WikiText-103 100M tokens (clean Wikipedia)",
         ],
+        default="fineweb - FineWeb 10B tokens (realistic web text) [DEFAULT]",
         style=custom_style,
     ).ask()
 
-    # Parse mode
-    if mode.startswith("Quick"):
-        quick, medium = True, False
-    elif mode.startswith("Medium"):
-        quick, medium = False, True
-    else:
-        quick, medium = False, False
+    dataset = dataset_choice.split(' - ')[0]
 
-    return {
-        'quick': quick,
-        'medium': medium,
-    }
+    # For FineWeb, ask about size
+    if dataset == 'fineweb':
+        mode = questionary.select(
+            "Select dataset size:",
+            choices=[
+                "Quick (10M tokens, ~1 GB)",
+                "Medium (50M tokens, ~5 GB)",
+                "Full (100M tokens, ~10 GB)",
+            ],
+            style=custom_style,
+        ).ask()
+
+        # Parse mode
+        if mode.startswith("Quick"):
+            quick, medium = True, False
+        elif mode.startswith("Medium"):
+            quick, medium = False, True
+        else:
+            quick, medium = False, False
+
+        return {
+            'dataset': 'fineweb',
+            'quick': quick,
+            'medium': medium,
+        }
+    else:
+        # WikiText - no size selection needed (always downloads full dataset)
+        return {
+            'dataset': 'wikitext',
+        }
 
 
 def run_train(config: dict):
@@ -658,10 +680,15 @@ def run_download(config: dict):
     console.print("=" * 80)
     print()
 
-    download_shards(
-        quick=config['quick'],
-        medium=config['medium'],
-    )
+    dataset = config.get('dataset', 'fineweb')
+
+    if dataset == 'fineweb':
+        download_shards(
+            quick=config.get('quick', False),
+            medium=config.get('medium', False),
+        )
+    elif dataset == 'wikitext':
+        download_wikitext()
 
 
 def interactive_main():
