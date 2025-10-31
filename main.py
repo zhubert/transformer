@@ -105,6 +105,14 @@ def create_parser():
         help="Position encoding type: alibi (ALiBi - recommended), rope (RoPE), or learned (GPT-2 style). "
              "Default: alibi",
     )
+    train_parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["fineweb", "wikitext"],
+        default="fineweb",
+        help="Dataset to use: fineweb (10B tokens, realistic) or wikitext (100M tokens, benchmark). "
+             "Default: fineweb",
+    )
 
     # ============================================================================
     # DOWNLOAD subcommand
@@ -306,7 +314,7 @@ def main():
         print("TRAINING MODE")
         print("=" * 80)
         print()
-        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume, compile=not args.no_compile, position_encoding_type=args.position_encoding)
+        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume, compile=not args.no_compile, position_encoding_type=args.position_encoding, dataset=args.dataset)
 
     elif args.command == "download":
         download_shards(quick=args.quick, medium=args.medium)
@@ -374,7 +382,9 @@ def main():
         else:
             # Find and evaluate latest checkpoint
             checkpoint_dir = Path(args.checkpoint_dir) if hasattr(args, 'checkpoint_dir') else Path("checkpoints")
-            checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*.pt"))
+            # New format: model_epoch_5_fineweb.pt
+            checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*_*.pt"),
+                                     key=lambda x: int(x.stem.split('_')[2]))
 
             if not checkpoint_files:
                 print(f"No checkpoints found in {checkpoint_dir}")

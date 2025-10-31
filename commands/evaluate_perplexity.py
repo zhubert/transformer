@@ -252,7 +252,9 @@ def compare_checkpoints(checkpoint_dir, seq_length=128, device='cpu', encoding='
         device_name: Human-readable device name (optional)
     """
     checkpoint_dir = Path(checkpoint_dir)
-    checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*.pt"))
+    # New format: model_epoch_5_fineweb.pt
+    checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*_*.pt"),
+                             key=lambda x: int(x.stem.split('_')[2]))
 
     if not checkpoint_files:
         print(f"No checkpoints found in {checkpoint_dir}")
@@ -461,7 +463,9 @@ def main():
     else:
         # Default: find latest checkpoint
         checkpoint_dir = Path(args.checkpoint_dir)
-        checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*.pt"))
+        # New format: model_epoch_5_fineweb.pt
+        checkpoint_files = sorted(checkpoint_dir.glob("model_epoch_*_*.pt"),
+                                 key=lambda x: int(x.stem.split('_')[2]))
 
         if not checkpoint_files:
             print(f"No checkpoints found in {checkpoint_dir}")

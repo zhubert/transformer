@@ -61,7 +61,9 @@ class CheckpointScanner:
         """Scan all checkpoint directories for model files."""
         for mode, dir_path in self.checkpoint_dirs.items():
             if dir_path.exists():
-                checkpoints = sorted(dir_path.glob('model_epoch_*.pt'))
+                # New format: model_epoch_5_fineweb.pt
+                checkpoints = sorted(dir_path.glob('model_epoch_*_*.pt'),
+                                   key=lambda x: int(x.stem.split('_')[2]))
                 if checkpoints:
                     self.checkpoints[mode] = checkpoints
 
@@ -158,6 +160,19 @@ def train_menu() -> dict:
     """Training configuration menu."""
     console.print("\n[bold cyan]Training Configuration[/bold cyan]\n")
 
+    # Select dataset
+    dataset_choice = questionary.select(
+        "Select dataset:",
+        choices=[
+            "fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]",
+            "wikitext - WikiText-103 100M tokens (clean Wikipedia, easier)",
+        ],
+        default="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]",
+        style=custom_style,
+    ).ask()
+
+    dataset = dataset_choice.split(' - ')[0]
+
     # Select training mode
     mode = questionary.select(
         "Select training mode:",
@@ -230,6 +245,7 @@ def train_menu() -> dict:
         position_encoding_type = position_encoding_choice.split(' - ')[0]
 
     return {
+        'dataset': dataset,
         'quick': quick,
         'medium': medium,
         'resume': resume,
@@ -263,6 +279,19 @@ def continue_training_menu(scanner: CheckpointScanner) -> dict:
     if not confirm:
         return None
 
+    # Select dataset for continued training
+    dataset_choice = questionary.select(
+        "Select dataset for continued training:",
+        choices=[
+            "fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]",
+            "wikitext - WikiText-103 100M tokens (clean Wikipedia, easier)",
+        ],
+        default="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]",
+        style=custom_style,
+    ).ask()
+
+    dataset = dataset_choice.split(' - ')[0]
+
     # Auto-detect mode settings
     if mode == 'quick':
         quick, medium = True, False
@@ -272,6 +301,7 @@ def continue_training_menu(scanner: CheckpointScanner) -> dict:
         quick, medium = False, False
 
     return {
+        'dataset': dataset,
         'quick': quick,
         'medium': medium,
         'resume': True,
@@ -519,6 +549,7 @@ def run_train(config: dict):
         resume=config['resume'],
         compile=config['compile'],
         position_encoding_type=config.get('position_encoding_type', 'alibi'),
+        dataset=config.get('dataset', 'fineweb'),
     )
 
 

@@ -155,6 +155,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.fineweb_dataset import FineWebDataset
+from src.transformer.wikitext_dataset import WikiTextDataset
 from src.transformer.scheduler import get_cosine_schedule_with_warmup
 from src.transformer.perplexity import calculate_perplexity_from_loss
 from src.transformer.training_utils import GradientAccumulator
@@ -191,18 +192,26 @@ def get_device_type_from_args(use_mps=False):
 
 def find_latest_checkpoint(checkpoint_dir, encoding):
     """
-    Find the latest checkpoint for a given encoding.
+    Find the latest checkpoint in a directory.
+
+    Expected format: model_epoch_5_fineweb.pt or model_epoch_5_wikitext.pt
 
     Args:
         checkpoint_dir: Directory containing checkpoints
-        encoding: Encoding name (e.g., 'cl100k_base')
+        encoding: Encoding name (unused, kept for API compatibility)
 
     Returns:
         Path to latest checkpoint, or None if no checkpoints found
     """
-    encoding_short = get_encoding_short_name(encoding)
-    pattern = f"model_epoch_*_{encoding_short}.pt"
+    # New format: model_epoch_*_*.pt (e.g., model_epoch_5_fineweb.pt)
+    pattern = "model_epoch_*_*.pt"
     checkpoints = list(checkpoint_dir.glob(pattern))
+
+    # Filter to only include correct format (4 parts: model_epoch_5_fineweb)
+    checkpoints = [
+        ckpt for ckpt in checkpoints
+        if len(ckpt.stem.split('_')) == 4
+    ]
 
     if not checkpoints:
         return None
@@ -210,11 +219,10 @@ def find_latest_checkpoint(checkpoint_dir, encoding):
     # Extract epoch numbers and find maximum
     epoch_numbers = []
     for ckpt in checkpoints:
-        # Parse: model_epoch_5_cl100k.pt -> epoch 5
+        # Parse: model_epoch_5_fineweb.pt -> epoch 5
         try:
             parts = ckpt.stem.split('_')
-            epoch_idx = parts.index('epoch') + 1
-            epoch_num = int(parts[epoch_idx])
+            epoch_num = int(parts[2])  # parts[0]=model, parts[1]=epoch, parts[2]=number, parts[3]=dataset
             epoch_numbers.append((epoch_num, ckpt))
         except (ValueError, IndexError):
             continue
@@ -298,6 +306,20 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, con
     if 'current_lr' in checkpoint:
         info_table.add_row("Learning rate", f"{checkpoint['current_lr']:.6f}")
 
+    # Display dataset and position encoding if available
+    if 'config' in checkpoint:
+        config = checkpoint['config']
+        if 'dataset' in config:
+            info_table.add_row("Dataset", config['dataset'].upper())
+        if 'position_encoding_type' in config:
+            position_encoding_display = {
+                'alibi': 'ALiBi (Attention with Linear Biases)',
+                'rope': 'RoPE (Rotary Position Embeddings)',
+                'learned': 'Learned embeddings (GPT-2 style)'
+            }
+            encoding_display = position_encoding_display.get(config['position_encoding_type'], config['position_encoding_type'])
+            info_table.add_row("Position encoding", encoding_display)
+
     console.print(info_table)
     console.print()
 
@@ -322,7 +344,7 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_steps=16, resume=False, compile=True, position_encoding_type='alibi'):
+def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_steps=16, resume=False, compile=True, position_encoding_type='alibi', dataset='fineweb'):
     """
     Main training function with gradient accumulation and validation.
 
@@ -333,6 +355,7 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
         medium: If True, use medium-sized model with good balance of quality and speed
         accumulation_steps: Number of batches to accumulate before updating weights.
                            Effective batch size = BATCH_SIZE × accumulation_steps
+        dataset: Which dataset to use - 'fineweb' or 'wikitext' (default: 'fineweb')
                            Higher values = more stable training but slower updates
                            Recommended: 16-32 for hobby hardware
         resume: If True, resume training from the latest checkpoint
@@ -450,33 +473,50 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
     get_max_memory = get_memory_stats_fn(device.type)
 
     # Load datasets (train and validation)
-    console.print("[bold]Loading FineWeb dataset...[/bold]")
+    if dataset == 'wikitext':
+        console.print("[bold]Loading WikiText-103 dataset...[/bold]")
 
-    # Training dataset (90% of data)
-    train_dataset = FineWebDataset(
-        cache_dir="data/fineweb_cache",
-        seq_length=SEQ_LENGTH,
-        tokens_per_epoch=TOKENS_PER_EPOCH,
-        max_cached_shards=MAX_CACHED_SHARDS,
-        seed=42,  # Reproducible shard selection
-        encoding_name=encoding,
-        split="train",  # Use training split
-        validation_fraction=0.1  # 10% reserved for validation
-    )
+        # Training dataset
+        train_dataset = WikiTextDataset(
+            seq_length=SEQ_LENGTH,
+            encoding_name=encoding,
+            split="train",
+        )
 
-    # Validation dataset (10% of data)
-    # Use fewer tokens for validation to save time
-    val_tokens_per_epoch = TOKENS_PER_EPOCH // 10  # 10% of training tokens
-    val_dataset = FineWebDataset(
-        cache_dir="data/fineweb_cache",
-        seq_length=SEQ_LENGTH,
-        tokens_per_epoch=val_tokens_per_epoch,
-        max_cached_shards=MAX_CACHED_SHARDS,
-        seed=42,  # Same seed for consistency
-        encoding_name=encoding,
-        split="validation",  # Use validation split (different shards!)
-        validation_fraction=0.1
-    )
+        # Validation dataset
+        val_dataset = WikiTextDataset(
+            seq_length=SEQ_LENGTH,
+            encoding_name=encoding,
+            split="validation",
+        )
+    else:  # fineweb (default)
+        console.print("[bold]Loading FineWeb dataset...[/bold]")
+
+        # Training dataset (90% of data)
+        train_dataset = FineWebDataset(
+            cache_dir="data/fineweb_cache",
+            seq_length=SEQ_LENGTH,
+            tokens_per_epoch=TOKENS_PER_EPOCH,
+            max_cached_shards=MAX_CACHED_SHARDS,
+            seed=42,  # Reproducible shard selection
+            encoding_name=encoding,
+            split="train",  # Use training split
+            validation_fraction=0.1  # 10% reserved for validation
+        )
+
+        # Validation dataset (10% of data)
+        # Use fewer tokens for validation to save time
+        val_tokens_per_epoch = TOKENS_PER_EPOCH // 10  # 10% of training tokens
+        val_dataset = FineWebDataset(
+            cache_dir="data/fineweb_cache",
+            seq_length=SEQ_LENGTH,
+            tokens_per_epoch=val_tokens_per_epoch,
+            max_cached_shards=MAX_CACHED_SHARDS,
+            seed=42,  # Same seed for consistency
+            encoding_name=encoding,
+            split="validation",  # Use validation split (different shards!)
+            validation_fraction=0.1
+        )
 
     # Create dataset info table
     dataset_table = Table(title="Dataset Configuration", show_header=True, header_style="bold green")
@@ -485,32 +525,55 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
     dataset_table.add_column("Validation", style="yellow", justify="right")
 
     dataset_table.add_row(
-        "Tokens per epoch",
-        f"{TOKENS_PER_EPOCH:,}",
-        f"{val_tokens_per_epoch:,}"
-    )
-    dataset_table.add_row(
-        "Sequences per epoch",
-        f"~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}",
-        f"~{val_tokens_per_epoch // SEQ_LENGTH:,}"
+        "Dataset",
+        dataset.upper(),
+        dataset.upper()
     )
     dataset_table.add_row(
         "Vocabulary size",
         f"{train_dataset.vocab_size:,}",
         f"{val_dataset.vocab_size:,}"
     )
-    dataset_table.add_row(
-        "Cache directory",
-        "data/fineweb_cache",
-        "data/fineweb_cache"
-    )
-    # Calculate cache size in GB for display
-    cache_size_gb = (MAX_CACHED_SHARDS * 40) / 1024  # ~40MB per shard
-    dataset_table.add_row(
-        "Max cached shards",
-        f"{MAX_CACHED_SHARDS} (~{cache_size_gb:.1f} GB)",
-        f"{MAX_CACHED_SHARDS} (~{cache_size_gb:.1f} GB)"
-    )
+
+    if dataset == 'fineweb':
+        dataset_table.add_row(
+            "Tokens per epoch",
+            f"{TOKENS_PER_EPOCH:,}",
+            f"{val_tokens_per_epoch:,}"
+        )
+        dataset_table.add_row(
+            "Sequences per epoch",
+            f"~{TOKENS_PER_EPOCH // SEQ_LENGTH:,}",
+            f"~{val_tokens_per_epoch // SEQ_LENGTH:,}"
+        )
+        dataset_table.add_row(
+            "Cache directory",
+            "data/fineweb_cache",
+            "data/fineweb_cache"
+        )
+        # Calculate cache size in GB for display
+        cache_size_gb = (MAX_CACHED_SHARDS * 40) / 1024  # ~40MB per shard
+        dataset_table.add_row(
+            "Max cached shards",
+            f"{MAX_CACHED_SHARDS} (~{cache_size_gb:.1f} GB)",
+            f"{MAX_CACHED_SHARDS} (~{cache_size_gb:.1f} GB)"
+        )
+    else:  # wikitext
+        dataset_table.add_row(
+            "Split",
+            "train",
+            "validation"
+        )
+        dataset_table.add_row(
+            "Size",
+            "~100M tokens",
+            "~217K tokens"
+        )
+        dataset_table.add_row(
+            "Source",
+            "Wikipedia articles",
+            "Wikipedia articles"
+        )
 
     console.print(dataset_table)
     console.print()
@@ -1101,9 +1164,8 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
         ))
         console.print()
 
-        # Save checkpoint with encoding in filename
-        encoding_short = get_encoding_short_name(encoding)
-        checkpoint_path = CHECKPOINT_DIR / f"model_epoch_{epoch + 1}_{encoding_short}.pt"
+        # Save checkpoint with dataset in filename (encoding removed since only cl100k_base is supported)
+        checkpoint_path = CHECKPOINT_DIR / f"model_epoch_{epoch + 1}_{dataset}.pt"
         torch.save({
             'epoch': epoch + 1,
             'model_state_dict': model.state_dict(),
@@ -1122,6 +1184,8 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
                 'd_ff': D_FF,
                 'dropout': DROPOUT,
                 'encoding': encoding,  # Store encoding for detection
+                'dataset': dataset,  # Store dataset name for tracking
+                'position_encoding_type': position_encoding_type,  # Store position encoding type
                 'accumulation_steps': accumulation_steps,  # Store for reference
             }
         }, checkpoint_path)
@@ -1211,6 +1275,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Resume training from the latest checkpoint. Automatically loads model, optimizer, and scheduler state."
     )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["fineweb", "wikitext"],
+        default="fineweb",
+        help="Dataset to use for training: 'fineweb' (10B tokens, realistic) or 'wikitext' (100M tokens, benchmark). Default: fineweb"
+    )
     args = parser.parse_args()
 
     train(
@@ -1219,5 +1290,6 @@ if __name__ == "__main__":
         quick=args.quick,
         medium=args.medium,
         accumulation_steps=args.accumulation_steps,
-        resume=args.resume
+        resume=args.resume,
+        dataset=args.dataset
     )

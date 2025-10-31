@@ -5,8 +5,9 @@ import torch
 from pathlib import Path
 
 checkpoint_dir = Path("checkpoints")
-checkpoints = sorted(checkpoint_dir.glob("model_epoch_*.pt"),
-                     key=lambda x: int(x.stem.split('_')[-1]))
+# New format: model_epoch_5_fineweb.pt -> parts[2] is epoch number
+checkpoints = sorted(checkpoint_dir.glob("model_epoch_*_*.pt"),
+                     key=lambda x: int(x.stem.split('_')[2]))
 
 print("=" * 80)
 print("TRAINING PROGRESSION ANALYSIS")
