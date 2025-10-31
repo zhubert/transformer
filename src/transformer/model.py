@@ -117,7 +117,7 @@ Our default:  num_layers=6,  d_model=512,  num_heads=8,  d_ff=2048
 
 import torch
 import torch.nn as nn
-from .embeddings import TokenEmbedding, PositionalEncoding
+from .embeddings import TokenEmbedding, PositionalEncoding, RotaryPositionalEmbedding
 from .block import TransformerBlock
 
 
@@ -176,6 +176,7 @@ class DecoderOnlyTransformer(nn.Module):
         max_seq_len=5000,
         dropout=0.1,
         tie_weights=True,
+        position_encoding_type='rope',
     ):
         """
         Initialize decoder-only transformer.
@@ -191,23 +192,48 @@ class DecoderOnlyTransformer(nn.Module):
             tie_weights: Whether to tie embedding and output projection weights
                         (default: True, following GPT-2/GPT-3/BERT)
                         Set to False for ablation studies or educational comparison
+            position_encoding_type: Type of position encoding to use
+                        'rope': Rotary Position Embeddings (default, modern standard)
+                               - 0 parameters, purely mathematical
+                               - Encodes relative positions through rotation
+                               - Better length extrapolation
+                               - Used in LLaMA, Mistral, most modern LLMs (2023-2024)
+                        'learned': Learned positional embeddings (GPT-2/GPT-3 style)
+                               - Learned parameters for each position
+                               - Encodes absolute positions through addition
+                               - Used in GPT-2, GPT-3, BERT (2018-2020)
+                               - Still works well, just older approach
         """
         super().__init__()
+
+        assert position_encoding_type in ['rope', 'learned'], \
+            f"position_encoding_type must be 'rope' or 'learned', got '{position_encoding_type}'"
 
         self.d_model = d_model
         self.num_layers = num_layers
         self.tie_weights = tie_weights
+        self.position_encoding_type = position_encoding_type
 
         # 1. Token embedding: converts token IDs to dense vectors
         self.token_embedding = TokenEmbedding(vocab_size, d_model)
 
-        # 2. Positional encoding: adds position information
-        self.pos_encoding = PositionalEncoding(d_model, max_seq_len)
+        # 2. Position encoding: setup depends on type
+        if position_encoding_type == 'rope':
+            # RoPE: Applied in attention, not added to embeddings
+            # Create RoPE instance that will be shared across all attention layers
+            head_dim = d_model // num_heads
+            self.rope = RotaryPositionalEmbedding(head_dim, max_seq_len)
+            self.pos_encoding = None  # No additive position encoding needed
+        else:  # 'learned'
+            # Learned: Added to token embeddings before transformer blocks
+            self.pos_encoding = PositionalEncoding(d_model, max_seq_len)
+            self.rope = None  # No RoPE needed
 
         # 3. Stack of transformer blocks
         # Each block has same architecture but different learned parameters
+        # Pass RoPE to attention if using RoPE (otherwise None)
         self.blocks = nn.ModuleList([
-            TransformerBlock(d_model, num_heads, d_ff, dropout)
+            TransformerBlock(d_model, num_heads, d_ff, dropout, rope=self.rope)
             for _ in range(num_layers)
         ])
 
@@ -388,21 +414,26 @@ class DecoderOnlyTransformer(nn.Module):
         if debug and torch.isnan(x).any():
             print(f"NaN after token_embedding! Stats: min={x.min()}, max={x.max()}")
 
-        # 2. Add positional encoding: (batch, seq_len, d_model) → (batch, seq_len, d_model)
-        # Calculate starting position based on cache
-        # If using cache, start_pos = length of cached sequence
-        # Otherwise, start_pos = 0
-        if use_cache and caches is not None:
-            # In decode mode, get position from cache length
-            # All layers should have same cache length, so check first layer
-            start_pos = caches[0]['keys'].shape[2]  # Shape: (batch, num_heads, seq_len, d_k)
-        else:
-            # In prefill mode or no cache, start from position 0
-            start_pos = 0
+        # 2. Add positional encoding (for learned embeddings only)
+        # RoPE is applied in attention, not here
+        if self.position_encoding_type == 'learned':
+            # Learned position encoding: added to token embeddings
+            # Calculate starting position based on cache
+            # If using cache, start_pos = length of cached sequence
+            # Otherwise, start_pos = 0
+            if use_cache and caches is not None:
+                # In decode mode, get position from cache length
+                # All layers should have same cache length, so check first layer
+                start_pos = caches[0]['keys'].shape[2]  # Shape: (batch, num_heads, seq_len, d_k)
+            else:
+                # In prefill mode or no cache, start from position 0
+                start_pos = 0
 
-        x = self.pos_encoding(x, start_pos=start_pos)
-        if debug and torch.isnan(x).any():
-            print(f"NaN after pos_encoding! Stats: min={x.min()}, max={x.max()}")
+            x = self.pos_encoding(x, start_pos=start_pos)
+            if debug and torch.isnan(x).any():
+                print(f"NaN after pos_encoding! Stats: min={x.min()}, max={x.max()}")
+        # Note: For RoPE, position encoding happens inside attention layers
+        # No addition to embeddings here!
 
         # 3. Pass through all transformer blocks, collecting updated caches
         new_caches = []

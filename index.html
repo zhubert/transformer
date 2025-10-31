@@ -170,7 +170,7 @@
             </div>
           </div>
 
-          <h3>Positional Encoding</h3>
+          <h3>Positional Encoding: Two Modern Approaches</h3>
           <p>
             <strong>Why do we need positional information?</strong> Consider the
             sentences "The cat ate the mouse" vs "The mouse ate the cat"—same
@@ -182,25 +182,23 @@
           </p>
 
           <p>
-            <strong>The solution: Positional encodings.</strong> We add
-            positional information to our embeddings by creating special
-            "position vectors" that encode where each token appears in the
-            sequence. For position 0, we create one vector. For position 1, a
-            different vector. And so on.
+            <strong>The solution: Position encoding.</strong> We need to give
+            the model information about where each token appears in the sequence.
+            Modern transformers use two main approaches:
+          </p>
+
+          <h4>Approach 1: Learned Positional Embeddings (GPT-2, BERT)</h4>
+          <p>
+            <strong>How it works:</strong> We create special "position vectors"
+            that are added to token embeddings. Each position gets its own
+            learnable embedding—position 0 has one vector, position 1 has
+            another, and so on. These are learned during training, just like
+            token embeddings.
           </p>
 
           <p>
-            <strong>Two approaches:</strong> The original transformer paper used
-            fixed sinusoidal patterns (mathematical functions that encode
-            position), but modern models like GPT-2, GPT-3, and BERT use
-            <em>learned</em> positional embeddings—each position gets its own
-            embedding that the model learns during training, just like token
-            embeddings.
-          </p>
-
-          <p>
-            We add (not concatenate) these position embeddings to the token
-            embeddings, so each token now carries information about both
+            We <em>add</em> (not concatenate) these position embeddings to the
+            token embeddings, so each token now carries information about both
             <em>what</em> it is and <em>where</em> it is in the sequence.
           </p>
 
@@ -212,7 +210,7 @@
             </div>
             <div class="code-content">
               <pre><code><span class="keyword">class</span> <span class="class">PositionalEncoding</span>(nn.Module):
-    <span class="string">"""Add position information to token embeddings."""</span>
+    <span class="string">"""Learned positional embeddings (GPT-2 style)."""</span>
 
     <span class="keyword">def</span> <span class="function">__init__</span>(self, d_model, max_seq_len=<span class="string">5000</span>):
         <span class="keyword">super</span>().__init__()
@@ -225,11 +223,107 @@
         <span class="comment"># Create position indices: [0, 1, 2, ..., seq_len-1]</span>
         positions = torch.arange(seq_len, device=x.device)
 
-        <span class="comment"># Get position embeddings and add to input</span>
+        <span class="comment"># Get position embeddings and ADD to input</span>
         pos_emb = self.pos_embedding(positions)
-        <span class="keyword">return</span> x + pos_emb  <span class="comment"># Broadcasting handles batch</span></code></pre>
+        <span class="keyword">return</span> x + pos_emb  <span class="comment"># Encodes absolute position</span></code></pre>
             </div>
           </div>
+
+          <h4>Approach 2: RoPE (Rotary Position Embeddings) — Modern Standard ✨</h4>
+          <p>
+            <strong>The breakthrough idea:</strong> Instead of <em>adding</em>
+            position information to embeddings, we <em>rotate</em> the query and
+            key vectors by an angle proportional to their position. This is now
+            the standard approach in 2024!
+          </p>
+
+          <p>
+            <strong>The clock analogy:</strong> Imagine each token as a hand on a
+            clock. Position 0 points at 12 o'clock. Position 1 rotates to 1 o'clock.
+            Position 2 rotates to 2 o'clock. When two tokens "meet" in attention,
+            the angle between them automatically tells you their relative distance!
+          </p>
+
+          <div class="grid">
+            <div class="grid-item">
+              <h4>📊 Learned Embeddings</h4>
+              <p><strong>Parameters:</strong> 25M+ (for vocab 100K)</p>
+              <p><strong>Position Type:</strong> Absolute</p>
+              <p><strong>Extrapolation:</strong> ❌ Limited</p>
+              <p><strong>Used in:</strong> GPT-2, GPT-3 (2018-2020)</p>
+            </div>
+            <div class="grid-item">
+              <h4>🎯 RoPE (Our Default!)</h4>
+              <p><strong>Parameters:</strong> 0 (pure math!)</p>
+              <p><strong>Position Type:</strong> Relative</p>
+              <p><strong>Extrapolation:</strong> ✅ Excellent</p>
+              <p><strong>Used in:</strong> LLaMA, Mistral (2023-2024)</p>
+            </div>
+          </div>
+
+          <div class="highlight">
+            <p>
+              <strong>Why RoPE is better:</strong>
+            </p>
+            <ul>
+              <li>
+                <strong>Relative positions:</strong> Encodes "3 tokens apart"
+                instead of "at position 47"—more useful for language!
+              </li>
+              <li>
+                <strong>Length extrapolation:</strong> Trained on 128 tokens?
+                Can generate 500+ tokens! Learned embeddings hit a hard limit.
+              </li>
+              <li>
+                <strong>Zero parameters:</strong> No positional parameters to
+                learn, purely mathematical. Faster training, better generalization.
+              </li>
+              <li>
+                <strong>Theoretically grounded:</strong> Based on geometric
+                principles with proven properties about relative position encoding.
+              </li>
+            </ul>
+          </div>
+
+          <div class="code-window">
+            <div class="code-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <div class="code-content">
+              <pre><code><span class="keyword">class</span> <span class="class">RotaryPositionalEmbedding</span>(nn.Module):
+    <span class="string">"""RoPE: Rotary Position Embeddings (modern standard)."""</span>
+
+    <span class="keyword">def</span> <span class="function">forward</span>(self, q, k, position):
+        <span class="comment"># Instead of adding, we ROTATE q and k by position angle</span>
+        <span class="comment"># q, k: (batch, num_heads, seq_len, head_dim)</span>
+
+        <span class="comment"># Split dimensions into pairs and rotate each pair</span>
+        <span class="comment"># Rotation encodes position through geometry!</span>
+        q_rotated = <span class="function">apply_rotation</span>(q, position)
+        k_rotated = <span class="function">apply_rotation</span>(k, position)
+
+        <span class="comment"># When q_rotated @ k_rotated, relative position emerges!</span>
+        <span class="keyword">return</span> q_rotated, k_rotated  <span class="comment"># Encodes relative position</span></code></pre>
+            </div>
+          </div>
+
+          <p>
+            <strong>The Math (Simplified):</strong> For vectors at positions m and n:
+          </p>
+          <ul>
+            <li>Rotate query q at position m by angle m×θ</li>
+            <li>Rotate key k at position n by angle n×θ</li>
+            <li>When computing q·k, the result depends on (m-n), the relative distance!</li>
+            <li>This is the "angle difference" property of rotations</li>
+          </ul>
+
+          <p>
+            Different frequency bands allow the model to capture both fine-grained
+            local patterns (adjacent words like "the cat") and long-range dependencies
+            (distant references like "the cat ... it").
+          </p>
 
           <div class="highlight">
             <p>

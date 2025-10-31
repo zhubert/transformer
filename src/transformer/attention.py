@@ -128,13 +128,17 @@ class MultiHeadAttention(nn.Module):
     - Empirically verified in real models (GPT-2, BERT, etc.)
     """
 
-    def __init__(self, d_model, num_heads):
+    def __init__(self, d_model, num_heads, rope=None):
         """
         Initialize multi-head attention.
 
         Args:
             d_model: Model dimension (must be divisible by num_heads)
             num_heads: Number of attention heads
+            rope: Optional RotaryPositionalEmbedding instance
+                 If provided, RoPE will be applied to Q and K
+                 If None, no position encoding is applied in attention
+                 (position info comes from additive embeddings instead)
         """
         super().__init__()
 
@@ -157,6 +161,9 @@ class MultiHeadAttention(nn.Module):
 
         # Final output projection
         self.W_o = nn.Linear(d_model, d_model)
+
+        # Optional RoPE for position encoding
+        self.rope = rope
 
     def forward(self, x, mask=None, cache=None, debug=False, return_attention_weights=False):
         """
@@ -272,6 +279,29 @@ class MultiHeadAttention(nn.Module):
         Q = Q.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
         K = K.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
         V = V.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
+
+        # 2.5. Apply RoPE if configured (BEFORE caching!)
+        # RoPE rotates Q and K based on their absolute positions
+        # This must happen before concatenating with cached K, V
+        if self.rope is not None:
+            # Determine starting position for RoPE
+            # If using cache, start_pos = length of cached sequence
+            # Otherwise, start_pos = 0
+            if not is_prefill:
+                # DECODE MODE: Get position from cache length
+                # All layers should have same cache length, so check cache
+                start_pos = cache['keys'].shape[2]  # Shape: (batch, num_heads, seq_len, d_k)
+            else:
+                # PREFILL MODE: Start from position 0
+                start_pos = 0
+
+            # Apply RoPE rotation to Q and K
+            # This encodes position information through rotation
+            # Q, K: (batch, num_heads, seq_len, d_k)
+            # Returns: rotated Q, K with same shape
+            Q, K = self.rope(Q, K, start_pos=start_pos)
+            # Now Q and K contain position information through their rotations!
+            # When we compute Q @ K^T, the relative positions are automatically encoded
 
         # 3. Handle KV-cache: concatenate with cached K, V
         if not is_prefill:

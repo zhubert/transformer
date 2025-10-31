@@ -108,7 +108,7 @@ class TransformerBlock(nn.Module):
     where normalization happens before attention/FFN rather than after.
     """
 
-    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+    def __init__(self, d_model, num_heads, d_ff, dropout=0.1, rope=None):
         """
         Initialize transformer block.
 
@@ -117,11 +117,14 @@ class TransformerBlock(nn.Module):
             num_heads: Number of attention heads
             d_ff: Hidden dimension of feed-forward network (typically 4 * d_model)
             dropout: Dropout probability for regularization (default: 0.1)
+            rope: Optional RotaryPositionalEmbedding instance
+                 If provided, will be passed to attention layer for RoPE
+                 If None, attention uses learned position embeddings (additive)
         """
         super().__init__()
 
-        # Multi-head self-attention
-        self.attention = MultiHeadAttention(d_model, num_heads)
+        # Multi-head self-attention (with optional RoPE)
+        self.attention = MultiHeadAttention(d_model, num_heads, rope=rope)
 
         # Position-wise feed-forward network
         self.ffn = FeedForward(d_model, d_ff, dropout)

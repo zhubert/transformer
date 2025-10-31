@@ -18,7 +18,7 @@ This is an **educational codebase** that teaches how transformers work by implem
 - Make all architectural decisions explicit and documented
 
 ### 3. Accuracy Over Simplification
-- Use modern best practices (Pre-LN, learned positional embeddings, GELU)
+- Use modern best practices (Pre-LN, RoPE/learned position encodings, GELU)
 - Include production optimizations (KV-cache, gradient accumulation)
 - Train on realistic data (FineWeb 10BT) not toy datasets
 
@@ -27,7 +27,8 @@ This is an **educational codebase** that teaches how transformers work by implem
 **Model Type**: Decoder-only transformer (GPT architecture)
 
 **Key Decisions**:
-- **Positional encoding**: Learned embeddings (not sinusoidal) - matches GPT-2/3/BERT
+- **Positional encoding**: RoPE (Rotary Position Embeddings) by default - modern standard (LLaMA, Mistral)
+  - Alternative: Learned embeddings (GPT-2/3 style) - still supported via `position_encoding_type='learned'`
 - **Layer normalization**: Pre-LN architecture for training stability
 - **Activation**: GELU (not ReLU) - modern standard
 - **Attention**: Causal masking for autoregressive generation
@@ -47,7 +48,7 @@ This is an **educational codebase** that teaches how transformers work by implem
 ```
 src/transformer/
 ├── attention.py        # Scaled dot-product & multi-head attention with KV-cache
-├── embeddings.py       # Token + learned positional embeddings
+├── embeddings.py       # Token + positional embeddings (RoPE and learned)
 ├── feedforward.py      # Position-wise FFN with GELU
 ├── block.py            # Transformer block (Pre-LN: norm → attn/ffn → residual)
 ├── model.py            # Complete decoder-only model + generation
@@ -185,15 +186,100 @@ model = DecoderOnlyTransformer(..., tie_weights=False)
 
 **Compatibility with embedding scaling**: Weight tying and sqrt(d_model) scaling work together perfectly. The scaling happens during the forward pass (embedding lookup), not in the parameters, so there's no conflict.
 
-### KV-Cache Gotcha
-When using KV-cache, positional encodings must account for the current position:
+### Position Encoding: RoPE vs Learned Embeddings
+
+The model supports two position encoding approaches, with **RoPE as the modern default**:
+
+#### RoPE (Rotary Position Embeddings) - Default
+**The modern standard** used in LLaMA, LLaMA 2, Mistral, and most 2023-2024 LLMs.
+
 ```python
-# WRONG: Always encodes position 0 for new tokens
+# Create model with RoPE (default)
+model = DecoderOnlyTransformer(..., position_encoding_type='rope')
+```
+
+**How it works**:
+- Instead of adding position information, **rotates** Q and K vectors by angle proportional to position
+- Rotation happens in attention mechanism, not in embeddings
+- Each pair of dimensions rotated by different frequency (logarithmically spaced)
+
+**Key advantages**:
+- **Zero parameters**: Purely mathematical, no weights to learn
+  - Saves 1.28M parameters for default config (max_seq_len=5000, d_model=256)
+- **Relative positions**: Encodes "3 tokens apart" not "at position 47"
+  - Better for language understanding (relationships matter more than absolute position)
+- **Length extrapolation**: Trained on 128 tokens? Generate 500+ tokens naturally!
+  - Learned embeddings hit hard wall at max_seq_len
+- **Theoretically grounded**: Based on geometric rotation properties
+  - Dot product of rotated vectors encodes relative position automatically
+
+**Implementation notes**:
+- Applied to Q and K in attention, NOT to V (V carries content, not position)
+- Works seamlessly with KV-cache (each new token rotated by its absolute position)
+- Precomputed sin/cos values cached for efficiency (~1.2 MB for default config)
+- Compatible with all other features (torch.compile, mixed precision, etc.)
+
+#### Learned Position Embeddings - Alternative
+Traditional approach from GPT-2, GPT-3, BERT (2018-2020).
+
+```python
+# Create model with learned embeddings
+model = DecoderOnlyTransformer(..., position_encoding_type='learned')
+```
+
+**How it works**:
+- Learnable embedding for each position (like token embeddings)
+- Added to token embeddings before transformer blocks
+- Encodes absolute positions
+
+**Trade-offs**:
+- **Parameters**: Requires max_seq_len × d_model parameters
+  - Default config: 5000 × 256 = 1.28M parameters
+- **Absolute positions**: "This is position 47" not "3 tokens apart"
+- **Fixed length**: Cannot extrapolate beyond max_seq_len
+- **Still works well**: Proven approach, just older
+
+**When to use**:
+- Reproducing GPT-2/GPT-3 style models exactly
+- Ablation studies comparing position encoding methods
+- Educational comparison to understand the difference
+
+#### Comparison
+
+| Feature | RoPE (Default) | Learned Embeddings |
+|---------|----------------|-------------------|
+| Parameters | 0 | max_seq_len × d_model |
+| Position Type | Relative | Absolute |
+| Extrapolation | Excellent | Poor |
+| Memory | Minimal cache | Embedding table |
+| Speed | ~5-10% overhead | Negligible |
+| Used In | LLaMA, Mistral (2023+) | GPT-2, GPT-3 (2018-2020) |
+| Educational Value | Modern standard | Historical context |
+
+**Recommendation**: Use RoPE (default) unless you specifically need GPT-2 compatibility.
+
+### KV-Cache Gotcha
+When using KV-cache, positional encodings must account for the current position. This applies to both position encoding types:
+
+**For RoPE**:
+```python
+# WRONG: Always rotates by position 0
+rope(q, k, start_pos=0)
+
+# RIGHT: Track cache length for correct absolute position
+rope(q, k, start_pos=cache_length)
+```
+
+**For Learned Embeddings**:
+```python
+# WRONG: Always encodes position 0
 pos_encoding(new_token, start_pos=0)
 
 # RIGHT: Track cache length to get correct position
 pos_encoding(new_token, start_pos=cache_length)
 ```
+
+Both implementations handle this automatically by checking the cache length in the forward pass.
 
 ### Pre-LN Architecture
 Layer norm comes **before** the sub-layer, not after:
