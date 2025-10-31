@@ -351,8 +351,15 @@ def load_checkpoint(
             tie_weights=config.get('tie_weights', True),
         )
 
-    # Load model weights
-    model.load_state_dict(state_dict)
+    # Check if model is compiled (wrapped in OptimizedModule)
+    is_compiled = hasattr(model, '_orig_mod')
+    target_model = model._orig_mod if is_compiled else model
+
+    # Load model weights into underlying model if compiled
+    target_model.load_state_dict(state_dict)
+    if is_compiled and verbose:
+        print("  Loaded into underlying model (compiled model detected)")
+
     model = model.to(device)
 
     # Set to eval mode by default (can be changed to train() by caller)

@@ -246,6 +246,9 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, con
 
     checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
+    # Check if model is compiled (wrapped in OptimizedModule)
+    is_compiled = hasattr(model, '_orig_mod')
+
     # Strip torch.compile() prefix if present using utility function
     state_dict = checkpoint['model_state_dict']
     if any(k.startswith('_orig_mod.') for k in state_dict.keys()):
@@ -253,9 +256,15 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scheduler, con
         state_dict = strip_compile_prefix(state_dict)
         checkpoint['model_state_dict'] = state_dict
 
+    # Load into underlying model if compiled, otherwise load normally
+    # This avoids the _orig_mod. prefix mismatch when resuming with compile=True
+    target_model = model._orig_mod if is_compiled else model
+
     # Load model weights
     try:
-        model.load_state_dict(checkpoint['model_state_dict'])
+        target_model.load_state_dict(checkpoint['model_state_dict'])
+        if is_compiled:
+            console.print("[dim]Loaded into underlying model (compiled model detected)[/dim]")
     except RuntimeError as e:
         # Re-raise any loading errors
         console.print(f"[bold red]Error loading checkpoint:[/bold red] {e}")

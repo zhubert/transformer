@@ -299,6 +299,73 @@ class TestCheckpointLoading:
             # Clean up
             Path(checkpoint_path).unlink()
 
+    def test_load_into_compiled_model(self):
+        """
+        Test loading checkpoint into a compiled model.
+
+        This tests the bug fix where loading a checkpoint into a torch.compile()
+        model would fail due to _orig_mod. prefix mismatch.
+
+        Scenario:
+        1. Create a checkpoint (with or without compile prefix)
+        2. Create and compile a model
+        3. Load checkpoint into the compiled model
+        4. Verify loading succeeds
+        """
+        # Test both cases: checkpoint with and without compile prefix
+        for use_prefix in [False, True]:
+            checkpoint_path = create_test_checkpoint(
+                vocab_size=1000,
+                d_model=64,
+                num_heads=4,
+                num_layers=2,
+                max_seq_len=128,
+                use_compile_prefix=use_prefix
+            )
+
+            try:
+                # Load checkpoint using the checkpoint_utils function
+                from src.transformer.checkpoint_utils import load_checkpoint as util_load_checkpoint
+
+                # Create and compile a model
+                model = DecoderOnlyTransformer(
+                    vocab_size=1000,
+                    d_model=64,
+                    num_heads=4,
+                    num_layers=2,
+                    d_ff=256,
+                    max_seq_len=128,
+                    dropout=0.1,
+                )
+                compiled_model = torch.compile(model, backend="inductor", mode="default")
+
+                # Load checkpoint into compiled model
+                result = util_load_checkpoint(
+                    checkpoint_path,
+                    device='cpu',
+                    load_training_state=False,
+                    model=compiled_model,
+                    verbose=False
+                )
+
+                # Verify model loaded successfully
+                loaded_model = result['model']
+                assert hasattr(loaded_model, '_orig_mod')  # Still compiled
+
+                # Test forward pass works
+                batch_size = 2
+                seq_len = 10
+                input_ids = torch.randint(0, 1000, (batch_size, seq_len))
+                with torch.no_grad():
+                    output = loaded_model(input_ids)
+                    if isinstance(output, tuple):
+                        output = output[0]
+                    assert output.shape == (batch_size, seq_len, 1000)
+
+            finally:
+                # Clean up
+                Path(checkpoint_path).unlink()
+
 
 if __name__ == '__main__':
     # Run tests with pytest
