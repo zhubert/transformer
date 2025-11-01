@@ -702,30 +702,58 @@ class TestDownloadMenu:
 
     def test_quick_dataset_selection(self, mock_questionary):
         """Test selecting Quick dataset size."""
-        mock_questionary.select.return_value.ask.return_value = "Quick (10M tokens, ~1 GB)"
+        # Mock both questionary calls: dataset selection, then size selection
+        mock_questionary.select.side_effect = [
+            Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text) [DEFAULT]")),
+            Mock(ask=Mock(return_value="Quick (10M tokens, ~1 GB)")),
+        ]
 
         config = download_menu()
 
+        assert config['dataset'] == 'fineweb'
         assert config['quick'] is True
         assert config['medium'] is False
 
     def test_medium_dataset_selection(self, mock_questionary):
         """Test selecting Medium dataset size."""
-        mock_questionary.select.return_value.ask.return_value = "Medium (50M tokens, ~5 GB)"
+        # Mock both questionary calls: dataset selection, then size selection
+        mock_questionary.select.side_effect = [
+            Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text) [DEFAULT]")),
+            Mock(ask=Mock(return_value="Medium (50M tokens, ~5 GB)")),
+        ]
 
         config = download_menu()
 
+        assert config['dataset'] == 'fineweb'
         assert config['quick'] is False
         assert config['medium'] is True
 
     def test_full_dataset_selection(self, mock_questionary):
         """Test selecting Full dataset size."""
-        mock_questionary.select.return_value.ask.return_value = "Full (100M tokens, ~10 GB)"
+        # Mock both questionary calls: dataset selection, then size selection
+        mock_questionary.select.side_effect = [
+            Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text) [DEFAULT]")),
+            Mock(ask=Mock(return_value="Full (100M tokens, ~10 GB)")),
+        ]
 
         config = download_menu()
 
+        assert config['dataset'] == 'fineweb'
         assert config['quick'] is False
         assert config['medium'] is False
+
+    def test_wikitext_dataset_selection(self, mock_questionary):
+        """Test selecting WikiText dataset."""
+        # Mock dataset selection only (WikiText doesn't ask for size)
+        mock_questionary.select.return_value.ask.return_value = \
+            "wikitext - WikiText-103 100M tokens (clean Wikipedia)"
+
+        config = download_menu()
+
+        assert config['dataset'] == 'wikitext'
+        # WikiText config doesn't include 'quick' and 'medium' keys
+        assert 'quick' not in config
+        assert 'medium' not in config
 
 
 class TestMainMenu:
