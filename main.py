@@ -76,17 +76,6 @@ def create_parser():
         help="Use MPS (Apple Silicon GPU) - EXPERIMENTAL, has known NaN issues",
     )
     train_parser.add_argument(
-        "--quick",
-        action="store_true",
-        help="Quick training mode: smaller model (4 layers, d_model=128) and fewer tokens (10M/epoch)",
-    )
-    train_parser.add_argument(
-        "--medium",
-        action="store_true",
-        help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch × 15 epochs). "
-             "Epoch 1: ~2h (builds cache), Epochs 2+: ~30-60min (cached)",
-    )
-    train_parser.add_argument(
         "--resume",
         action="store_true",
         help="Resume training from the latest checkpoint",
@@ -124,14 +113,11 @@ def create_parser():
                     "This allows you to train later without internet access.",
     )
     download_parser.add_argument(
-        "--quick",
-        action="store_true",
-        help="Download shards for quick mode (10M tokens, ~1 GB)",
-    )
-    download_parser.add_argument(
-        "--medium",
-        action="store_true",
-        help="Download shards for medium mode (50M tokens, ~5 GB)",
+        "--tokens",
+        type=int,
+        default=50_000_000,
+        help="Number of tokens to download (default: 50M tokens, ~5 GB). "
+             "Examples: 10M (~1 GB), 50M (~5 GB), 100M (~10 GB)",
     )
 
     # ============================================================================
@@ -314,10 +300,10 @@ def main():
         print("TRAINING MODE")
         print("=" * 80)
         print()
-        train(debug=args.debug, use_mps=args.mps, quick=args.quick, medium=args.medium, resume=args.resume, compile=not args.no_compile, position_encoding_type=args.position_encoding, dataset=args.dataset)
+        train(debug=args.debug, use_mps=args.mps, resume=args.resume, compile=not args.no_compile, position_encoding_type=args.position_encoding, dataset=args.dataset)
 
     elif args.command == "download":
-        download_shards(quick=args.quick, medium=args.medium)
+        download_shards(tokens_per_epoch=args.tokens)
         # Explicitly exit to ensure background threads from datasets library are cleaned up
         sys.exit(0)
 

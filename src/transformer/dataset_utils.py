@@ -33,12 +33,10 @@ def calculate_optimal_cache_size(tokens_per_epoch: int) -> int:
     -------------------
     Without optimal caching:
         - Small cache (5 shards): ~105 shards re-downloaded per epoch
-        - Training time: ~2 hours/epoch on M3 Pro
         - Network: Constant re-downloading
 
     With optimal caching:
         - All shards cached after epoch 1
-        - Training time: ~30-60 minutes/epoch on M3 Pro
         - Network: Only used in epoch 1
 
     Speedup: 2-4x faster after epoch 1!

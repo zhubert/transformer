@@ -64,8 +64,7 @@ For power users and automation, all operations are also available via traditiona
 
 ```bash
 # Training
-uv run python main.py train --medium      # Medium mode
-uv run python main.py train --quick       # Quick mode
+uv run python main.py train               # Train with default settings
 uv run python main.py train --resume      # Resume training
 
 # Generation
@@ -78,7 +77,7 @@ uv run python main.py evaluate --checkpoint checkpoints/model_epoch_15.pt
 uv run python main.py interpret logit-lens checkpoints/model_epoch_15.pt
 
 # Download data
-uv run python main.py download --medium
+uv run python main.py download --tokens 50000000  # Download 50M tokens (~5 GB)
 ```
 
 ## What's Inside
@@ -194,23 +193,12 @@ See [`src/transformer/block.py`](src/transformer/block.py) for detailed architec
 ### Quick Start
 
 ```bash
-# Default: 100M tokens/epoch, 6 layers, d_model=256, 16x gradient accumulation
+# Default: 50M tokens/epoch, 4 layers, d_model=256, 16x gradient accumulation
 # Auto-detects best device (CUDA > MPS > CPU)
 uv run python main.py train
 
-# Medium mode: 50M tokens/epoch, 4 layers, d_model=256 (15 epochs)
-# Epoch 1: ~2h on M3 (builds cache), Epochs 2-15: ~30-60min (cached)
-# Best balance of quality and training time
-uv run python main.py train --medium
-
-# Quick mode: 10M tokens/epoch, 4 layers, d_model=128 (10 epochs, ~40-50min/epoch on M1, ~7-8h total)
-# Fast iteration for testing
-uv run python main.py train --quick
-
 # Resume training from latest checkpoint
 uv run python main.py train --resume
-uv run python main.py train --quick --resume    # Resume quick training
-uv run python main.py train --medium --resume   # Resume medium training
 
 # Standard training with cl100k_base tokenizer (100K vocab)
 uv run python main.py train
@@ -249,13 +237,13 @@ You can pre-download all training data before starting training. This is useful 
 - **Uninterrupted training**: No network issues during training runs
 
 ```bash
-# Pre-download for your training mode
-make download-medium    # ~5 GB for medium mode
-make download-quick     # ~1 GB for quick mode
-make download           # ~10 GB for default mode
+# Pre-download training data (default: 50M tokens, ~5 GB)
+make download
 
-# Or use the CLI directly
-uv run python main.py download --medium
+# Or use the CLI directly with custom token count
+uv run python main.py download --tokens 50000000   # 50M tokens (~5 GB)
+uv run python main.py download --tokens 10000000   # 10M tokens (~1 GB)
+uv run python main.py download --tokens 100000000  # 100M tokens (~10 GB)
 ```
 
 After downloading, training will run at full speed from epoch 1 (instead of building the cache during the first epoch).
@@ -302,7 +290,7 @@ Overriding blas backend to hipblas
 
 **This warning can be safely ignored.** It appears once per run and doesn't affect training quality, speed, or stability. The fallback to `hipblas` is automatic and transparent.
 
-To eliminate the warning entirely, you'd need to build PyTorch from source with hipBLASLt support (4-6 hours, complex setup), but this provides no practical benefit for this educational project.
+To eliminate the warning entirely, you'd need to build PyTorch from source with hipBLASLt support (complex setup), but this provides no practical benefit for this educational project.
 
 See [`commands/train.py`](commands/train.py) for complete training documentation.
 

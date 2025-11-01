@@ -17,8 +17,8 @@ from src.transformer.dataset_utils import calculate_optimal_cache_size
 class TestCalculateOptimalCacheSize:
     """Test suite for calculate_optimal_cache_size function."""
 
-    def test_quick_mode_10m_tokens(self):
-        """Test cache size calculation for quick mode (10M tokens)."""
+    def test_10m_tokens(self):
+        """Test cache size calculation for 10M tokens."""
         tokens = 10_000_000
         cache_size = calculate_optimal_cache_size(tokens)
 
@@ -28,8 +28,8 @@ class TestCalculateOptimalCacheSize:
         # total = (20 + 2) * 1.2 = 26.4 → 26
         assert cache_size == 26
 
-    def test_medium_mode_50m_tokens(self):
-        """Test cache size calculation for medium mode (50M tokens)."""
+    def test_50m_tokens(self):
+        """Test cache size calculation for 50M tokens."""
         tokens = 50_000_000
         cache_size = calculate_optimal_cache_size(tokens)
 
@@ -39,8 +39,8 @@ class TestCalculateOptimalCacheSize:
         # total = (100 + 10) * 1.2 = 132
         assert cache_size == 132
 
-    def test_default_mode_100m_tokens(self):
-        """Test cache size calculation for default mode (100M tokens)."""
+    def test_100m_tokens(self):
+        """Test cache size calculation for 100M tokens."""
         tokens = 100_000_000
         cache_size = calculate_optimal_cache_size(tokens)
 
@@ -50,8 +50,8 @@ class TestCalculateOptimalCacheSize:
         # total = (200 + 20) * 1.2 = 264
         assert cache_size == 264
 
-    def test_large_mode_500m_tokens(self):
-        """Test cache size calculation for large mode (500M tokens)."""
+    def test_500m_tokens(self):
+        """Test cache size calculation for 500M tokens."""
         tokens = 500_000_000
         cache_size = calculate_optimal_cache_size(tokens)
 

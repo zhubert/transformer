@@ -102,28 +102,14 @@ Workarounds:
 - ⚠️ Try MPS with --mps flag - 5-10x faster but may crash
 - 🐛 Debug mode: --mps --debug - forces synchronization (more stable, slower)
 
-Training Modes:
----------------
-- Default: Full quality (6 layers, 256 d_model, 100M tokens/epoch × 20 epochs)
-  * Epoch 1: ~4-6h on M3 Pro (builds cache), Epochs 2-20: ~1-2h (cached)
-- --medium: Balanced (4 layers, 256 d_model, 50M tokens/epoch × 15 epochs)
-  * Epoch 1: ~2h on M3 Pro (builds cache), Epochs 2-15: ~30-60min (cached)
-- --quick: Fast iteration (4 layers, 128 d_model, 10M tokens/epoch × 10 epochs)
-  * Epoch 1: ~40-50min on M1 (builds cache), Epochs 2-10: ~15-25min (cached)
-
 What to Expect During Training:
 ---------------------------------
-Training progress (quick mode on M1 MacBook Pro):
+Example training progress:
 
 Epoch 1:  Loss ~8.0, Perplexity ~3000  (random guessing)
 Epoch 3:  Loss ~5.0, Perplexity ~150   (learning patterns)
 Epoch 5:  Loss ~4.0, Perplexity ~55    (getting decent)
 Epoch 10: Loss ~3.0, Perplexity ~20    (pretty good!)
-
-Training time per epoch (estimated with optimized caching):
-- Quick mode: Epoch 1: ~40-50min (M1 MPS), Epochs 2+: ~15-25min (cached)
-- Medium mode: Epoch 1: ~2h (M3 Pro MPS), Epochs 2+: ~30-60min (cached)
-- Normal mode: Epoch 1: ~4-6h (M3 Pro MPS), Epochs 2+: ~1-2h (cached)
 
 Note: Epoch 1 downloads and caches shards. Epochs 2+ use cached data → 2-4x faster!
 
@@ -344,25 +330,41 @@ def generate_sample(model, dataset, prompt_text, max_length=50, device="cpu", au
     return generated_text
 
 
-def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_steps=16, resume=False, compile=True, position_encoding_type='alibi', dataset='fineweb'):
+def train(
+    tokens_per_epoch=None,
+    num_layers=None,
+    d_model=None,
+    num_epochs=None,
+    d_ff=None,
+    debug=False,
+    use_mps=False,
+    accumulation_steps=16,
+    resume=False,
+    compile=True,
+    position_encoding_type='alibi',
+    dataset='fineweb'
+):
     """
     Main training function with gradient accumulation and validation.
 
     Args:
+        tokens_per_epoch: Number of tokens to process per epoch (e.g., 50_000_000)
+        num_layers: Number of transformer layers (e.g., 4 or 6)
+        d_model: Model dimension (e.g., 128, 256, or 512)
+        num_epochs: Total number of training epochs (e.g., 10, 15, or 20)
+        d_ff: Feed-forward hidden dimension (default: d_model * 4)
         debug: If True, print diagnostic information for debugging NaN issues
         use_mps: If True, try MPS (experimental - has known NaN issues)
-        quick: If True, use smaller model and fewer tokens for faster training
-        medium: If True, use medium-sized model with good balance of quality and speed
         accumulation_steps: Number of batches to accumulate before updating weights.
                            Effective batch size = BATCH_SIZE × accumulation_steps
-        dataset: Which dataset to use - 'fineweb' or 'wikitext' (default: 'fineweb')
                            Higher values = more stable training but slower updates
                            Recommended: 16-32 for hobby hardware
         resume: If True, resume training from the latest checkpoint
         compile: If True, use torch.compile() for 20-40% speedup (PyTorch 2.0+).
-                Recommended for AMD/NVIDIA GPUs. Adds ~1-2 min compilation on first epoch.
+                Recommended for AMD/NVIDIA GPUs.
         position_encoding_type: Type of position encoding ('alibi', 'rope', or 'learned').
                                Default: 'alibi' (ALiBi - best extrapolation)
+        dataset: Which dataset to use - 'fineweb' or 'wikitext' (default: 'fineweb')
 
     What is Gradient Accumulation?
     ------------------------------
@@ -391,41 +393,22 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
     SEQ_LENGTH = 128
     BATCH_SIZE = 8              # Reduced from 32 to fit in M1 memory
 
-    # Validate that only one mode is selected
-    if quick and medium:
-        raise ValueError("Cannot use both --quick and --medium flags. Please choose one.")
+    # Use default values if not provided (for backward compatibility and CLI usage)
+    # Default: Intermediate configuration (balanced quality and speed)
+    D_MODEL = d_model if d_model is not None else 256
+    NUM_LAYERS = num_layers if num_layers is not None else 4
+    NUM_EPOCHS = num_epochs if num_epochs is not None else 15
+    TOKENS_PER_EPOCH = tokens_per_epoch if tokens_per_epoch is not None else 50_000_000
 
-    # Training mode configuration
-    if quick:
-        # Quick mode: smaller model, fewer tokens for faster iteration
-        D_MODEL = 128
-        NUM_HEADS = 4
-        NUM_LAYERS = 4
-        D_FF = 512
-        NUM_EPOCHS = 10
-        TOKENS_PER_EPOCH = 10_000_000  # 10M tokens per epoch
-        CHECKPOINT_DIR = Path("checkpoints_quick")
-    elif medium:
-        # Medium mode: balanced quality and speed
-        # Full d_model (crucial for representation quality)
-        # Fewer layers (saves training time)
-        # More training data than quick (7.5x improvement)
-        D_MODEL = 256
-        NUM_HEADS = 4
-        NUM_LAYERS = 4
-        D_FF = 1024
-        NUM_EPOCHS = 15
-        TOKENS_PER_EPOCH = 50_000_000  # 50M tokens per epoch
-        CHECKPOINT_DIR = Path("checkpoints_medium")
+    # Calculate D_FF if not provided (standard transformer practice: d_ff = d_model * 4)
+    if d_ff is not None:
+        D_FF = d_ff
     else:
-        # Normal mode: full model, maximum quality
-        D_MODEL = 256
-        NUM_HEADS = 4
-        NUM_LAYERS = 6
-        D_FF = 1024
-        NUM_EPOCHS = 20
-        TOKENS_PER_EPOCH = 100_000_000  # 100M tokens per epoch
-        CHECKPOINT_DIR = Path("checkpoints")
+        D_FF = D_MODEL * 4
+
+    # Fixed configuration (constant across all modes)
+    NUM_HEADS = 4
+    CHECKPOINT_DIR = Path("checkpoints")
 
     DROPOUT = 0.1
     LEARNING_RATE = 3e-4        # Standard transformer learning rate
@@ -441,12 +424,7 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
     console = Console()
 
     # Display header
-    header_text = "TRANSFORMER TRAINING"
-    if quick:
-        header_text += " [yellow](Quick Mode)[/yellow]"
-    elif medium:
-        header_text += " [cyan](Medium Mode)[/cyan]"
-    console.print(Panel(header_text, style="bold blue", expand=False))
+    console.print(Panel("TRANSFORMER TRAINING", style="bold blue", expand=False))
     console.print()
 
     # Device setup with proper initialization
@@ -664,7 +642,7 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
     # Performance impact:
     # - AMD GPUs (ROCm): 20-40% faster training (measured on RX 6000/7000 series)
     # - NVIDIA GPUs: 15-30% faster (Ampere and newer)
-    # - First epoch: ~1-2 min compilation overhead (one-time cost)
+    # - First epoch: Compilation overhead (one-time cost)
     # - Subsequent epochs: Pure speedup, no overhead
     #
     # How it works:
@@ -683,7 +661,7 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
     # - Modern LLM training (GPT-4, LLaMA, etc.) uses similar compilation techniques
     if compile:
         console.print("[bold yellow]Compiling model with torch.compile()...[/bold yellow]")
-        console.print("[dim]First epoch will have ~1-2 min compilation overhead, then 20-40% faster training[/dim]")
+        console.print("[dim]First epoch will have compilation overhead, then 20-40% faster training[/dim]")
         model = torch.compile(model, backend="inductor", mode="default")
         console.print("[green]✓ Model compiled successfully[/green]")
         console.print()
@@ -882,6 +860,30 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
             start_epoch, loaded_checkpoint = load_checkpoint_for_resume(
                 latest_checkpoint, model, optimizer, scheduler, console
             )
+
+            # Auto-infer training parameters from checkpoint config
+            if 'config' in loaded_checkpoint:
+                config = loaded_checkpoint['config']
+
+                # Override parameters with values from checkpoint (with fallback defaults)
+                D_MODEL = config.get('d_model', D_MODEL)
+                NUM_LAYERS = config.get('num_layers', NUM_LAYERS)
+                D_FF = config.get('d_ff', D_FF)
+                NUM_EPOCHS = config.get('num_epochs', NUM_EPOCHS)
+                TOKENS_PER_EPOCH = config.get('tokens_per_epoch', TOKENS_PER_EPOCH)
+
+                console.print("[dim]Auto-inferred parameters from checkpoint:[/dim]")
+                param_table = Table(show_header=False, box=None, padding=(0, 2))
+                param_table.add_column("Parameter", style="cyan")
+                param_table.add_column("Value", style="white")
+                param_table.add_row("d_model", str(D_MODEL))
+                param_table.add_row("num_layers", str(NUM_LAYERS))
+                param_table.add_row("d_ff", str(D_FF))
+                param_table.add_row("num_epochs", str(NUM_EPOCHS))
+                param_table.add_row("tokens_per_epoch", f"{TOKENS_PER_EPOCH:,}")
+                console.print(param_table)
+                console.print()
+
             console.print(f"[green]✓ Successfully resumed from checkpoint[/green]")
             console.print()
 
@@ -1200,6 +1202,8 @@ def train(debug=False, use_mps=False, quick=False, medium=False, accumulation_st
                 'dataset': dataset,  # Store dataset name for tracking
                 'position_encoding_type': position_encoding_type,  # Store position encoding type
                 'accumulation_steps': accumulation_steps,  # Store for reference
+                'num_epochs': NUM_EPOCHS,  # Store total epochs for resume
+                'tokens_per_epoch': TOKENS_PER_EPOCH,  # Store tokens per epoch for resume
             }
         }, checkpoint_path)
         console.print(f"[dim]Saved checkpoint: {checkpoint_path}[/dim]")
@@ -1266,17 +1270,6 @@ if __name__ == "__main__":
         help="Use MPS (Apple Silicon GPU) - EXPERIMENTAL, has known NaN issues"
     )
     parser.add_argument(
-        "--quick",
-        action="store_true",
-        help="Quick training mode: smaller model (4 layers, d_model=128) and fewer tokens (10M/epoch)"
-    )
-    parser.add_argument(
-        "--medium",
-        action="store_true",
-        help="Medium training mode: balanced quality and speed (4 layers, d_model=256, 50M tokens/epoch × 15 epochs). "
-             "Epoch 1: ~2h (builds cache), Epochs 2+: ~30-60min (cached)"
-    )
-    parser.add_argument(
         "--accumulation-steps",
         type=int,
         default=16,
@@ -1300,8 +1293,6 @@ if __name__ == "__main__":
     train(
         debug=args.debug,
         use_mps=args.mps,
-        quick=args.quick,
-        medium=args.medium,
         accumulation_steps=args.accumulation_steps,
         resume=args.resume,
         dataset=args.dataset

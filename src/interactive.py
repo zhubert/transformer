@@ -47,46 +47,61 @@ custom_style = Style([
 
 
 class CheckpointScanner:
-    """Scans for available model checkpoints across different directories."""
+    """Scans for available model checkpoints in the checkpoints directory."""
 
     def __init__(self):
-        self.checkpoint_dirs = {
-            'default': Path('checkpoints'),
-            'medium': Path('checkpoints_medium'),
-            'quick': Path('checkpoints_quick'),
-        }
-        self.checkpoints: Dict[str, List[Path]] = {}
+        self.checkpoint_dir = Path('checkpoints')
+        self.checkpoints: List[Path] = []
         self.scan()
+        self._check_old_directories()
 
     def scan(self):
-        """Scan all checkpoint directories for model files."""
-        for mode, dir_path in self.checkpoint_dirs.items():
-            if dir_path.exists():
-                # New format: model_epoch_5_fineweb.pt
-                checkpoints = sorted(dir_path.glob('model_epoch_*_*.pt'),
-                                   key=lambda x: int(x.stem.split('_')[2]))
-                if checkpoints:
-                    self.checkpoints[mode] = checkpoints
+        """Scan checkpoint directory for model files."""
+        if self.checkpoint_dir.exists():
+            # New format: model_epoch_5_fineweb.pt
+            self.checkpoints = sorted(
+                self.checkpoint_dir.glob('model_epoch_*_*.pt'),
+                key=lambda x: int(x.stem.split('_')[2])
+            )
+
+    def _check_old_directories(self):
+        """Check for old checkpoint directories and warn user to migrate."""
+        old_dirs = [
+            Path('checkpoints_quick'),
+            Path('checkpoints_medium'),
+        ]
+
+        existing_old_dirs = [d for d in old_dirs if d.exists() and list(d.glob('model_epoch_*_*.pt'))]
+
+        if existing_old_dirs:
+            console.print()
+            console.print(Panel(
+                "[yellow bold]⚠️  Old Checkpoint Directories Detected[/yellow bold]\n\n"
+                "The following old checkpoint directories were found:\n" +
+                "\n".join(f"  • {d}/" for d in existing_old_dirs) +
+                "\n\n[white]Please consolidate to 'checkpoints/' directory:[/white]\n" +
+                "\n".join(f"  mv {d}/* checkpoints/" for d in existing_old_dirs) +
+                "\n\nAfter moving, you can remove the old directories:\n" +
+                "\n".join(f"  rmdir {d}" for d in existing_old_dirs),
+                border_style="yellow",
+                box=box.ROUNDED
+            ))
+            console.print()
 
     def has_checkpoints(self) -> bool:
         """Check if any checkpoints exist."""
         return len(self.checkpoints) > 0
 
-    def get_all_checkpoints(self) -> List[tuple[str, Path]]:
-        """Get all checkpoints with their mode labels."""
-        all_checkpoints = []
-        for mode, checkpoints in self.checkpoints.items():
-            for checkpoint in checkpoints:
-                all_checkpoints.append((mode, checkpoint))
-        return all_checkpoints
+    def get_all_checkpoints(self) -> List[Path]:
+        """Get all checkpoints."""
+        return self.checkpoints
 
-    def get_latest(self) -> Optional[tuple[str, Path]]:
-        """Get the most recent checkpoint across all directories."""
-        all_checkpoints = self.get_all_checkpoints()
-        if not all_checkpoints:
+    def get_latest(self) -> Optional[Path]:
+        """Get the most recent checkpoint."""
+        if not self.checkpoints:
             return None
         # Sort by modification time
-        return max(all_checkpoints, key=lambda x: x[1].stat().st_mtime)
+        return max(self.checkpoints, key=lambda x: x.stat().st_mtime)
 
     def display_summary(self):
         """Display a summary table of available checkpoints."""
@@ -95,22 +110,18 @@ class CheckpointScanner:
             return
 
         table = Table(title="Available Checkpoints", box=box.ROUNDED)
-        table.add_column("Mode", style="cyan", no_wrap=True)
         table.add_column("Checkpoint", style="green")
         table.add_column("Size", justify="right", style="magenta")
 
-        for mode, checkpoints in self.checkpoints.items():
-            for i, checkpoint in enumerate(checkpoints):
-                size_mb = checkpoint.stat().st_size / (1024 * 1024)
-                mode_label = mode.upper() if i == 0 else ""
-                table.add_row(mode_label, checkpoint.name, f"{size_mb:.1f} MB")
+        for checkpoint in self.checkpoints:
+            size_mb = checkpoint.stat().st_size / (1024 * 1024)
+            table.add_row(checkpoint.name, f"{size_mb:.1f} MB")
 
         console.print(table)
 
         latest = self.get_latest()
         if latest:
-            mode, path = latest
-            console.print(f"\n[bold green]Latest:[/bold green] {path.name} ({mode} mode)")
+            console.print(f"\n[bold green]Latest:[/bold green] {latest.name}")
 
 
 def show_welcome():
@@ -174,24 +185,154 @@ def train_menu() -> dict:
 
     dataset = dataset_choice.split(' - ')[0]
 
-    # Select training mode
-    mode = questionary.select(
-        "Select training mode:",
+    # Configuration approach: preset or custom
+    config_approach = questionary.select(
+        "Configuration approach:",
         choices=[
-            "Quick (10M tokens/epoch × 10, 4 layers, ~40min first epoch)",
-            "Medium (50M tokens/epoch × 15, 4 layers, ~2h first epoch)",
-            "Full (100M tokens/epoch × 20, 6 layers, ~4h first epoch)",
+            "Use recommended preset (recommended for beginners)",
+            "Customize parameters (advanced users)",
         ],
+        default="Use recommended preset (recommended for beginners)",
         style=custom_style,
     ).ask()
 
-    # Parse mode
-    if mode.startswith("Quick"):
-        quick, medium = True, False
-    elif mode.startswith("Medium"):
-        quick, medium = False, True
+    # Training parameters
+    if "preset" in config_approach:
+        # Offer presets
+        preset_choice = questionary.select(
+            "Select training preset:",
+            choices=[
+                "Beginner - Fast iteration (10M tokens/epoch, 4 layers, d_model=128, 10 epochs)",
+                "Intermediate - Balanced quality (50M tokens/epoch, 4 layers, d_model=256, 15 epochs)",
+                "Advanced - Full quality (100M tokens/epoch, 6 layers, d_model=256, 20 epochs)",
+            ],
+            default="Intermediate - Balanced quality (50M tokens/epoch, 4 layers, d_model=256, 15 epochs)",
+            style=custom_style,
+        ).ask()
+
+        # Parse preset
+        if "Beginner" in preset_choice:
+            tokens_per_epoch = 10_000_000
+            num_layers = 4
+            d_model = 128
+            num_epochs = 10
+        elif "Intermediate" in preset_choice:
+            tokens_per_epoch = 50_000_000
+            num_layers = 4
+            d_model = 256
+            num_epochs = 15
+        else:  # Advanced
+            tokens_per_epoch = 100_000_000
+            num_layers = 6
+            d_model = 256
+            num_epochs = 20
     else:
-        quick, medium = False, False
+        # Custom configuration - ask for each parameter
+        console.print("\n[dim]Customize training parameters:[/dim]\n")
+
+        # Tokens per epoch
+        tokens_choice = questionary.select(
+            "Tokens per epoch:",
+            choices=[
+                "10M tokens (fast iteration)",
+                "50M tokens (balanced)",
+                "100M tokens (full quality)",
+                "Custom value",
+            ],
+            default="50M tokens (balanced)",
+            style=custom_style,
+        ).ask()
+
+        if "10M" in tokens_choice:
+            tokens_per_epoch = 10_000_000
+        elif "50M" in tokens_choice:
+            tokens_per_epoch = 50_000_000
+        elif "100M" in tokens_choice:
+            tokens_per_epoch = 100_000_000
+        else:
+            tokens_per_epoch = int(questionary.text(
+                "Enter tokens per epoch (e.g., 25000000 for 25M):",
+                default="50000000",
+                style=custom_style,
+            ).ask())
+
+        # Number of layers
+        layers_choice = questionary.select(
+            "Number of transformer layers:",
+            choices=[
+                "4 layers (faster training)",
+                "6 layers (better quality)",
+                "8 layers (high quality)",
+                "Custom value",
+            ],
+            default="4 layers (faster training)",
+            style=custom_style,
+        ).ask()
+
+        if "4 layers" in layers_choice:
+            num_layers = 4
+        elif "6 layers" in layers_choice:
+            num_layers = 6
+        elif "8 layers" in layers_choice:
+            num_layers = 8
+        else:
+            num_layers = int(questionary.text(
+                "Enter number of layers (2-12):",
+                default="4",
+                style=custom_style,
+            ).ask())
+
+        # Model dimension
+        d_model_choice = questionary.select(
+            "Model dimension (d_model):",
+            choices=[
+                "128 (smallest, fastest)",
+                "256 (balanced)",
+                "512 (larger, slower)",
+                "Custom value",
+            ],
+            default="256 (balanced)",
+            style=custom_style,
+        ).ask()
+
+        if "128" in d_model_choice:
+            d_model = 128
+        elif "256" in d_model_choice:
+            d_model = 256
+        elif "512" in d_model_choice:
+            d_model = 512
+        else:
+            d_model = int(questionary.text(
+                "Enter d_model (64-1024, must be divisible by num_heads):",
+                default="256",
+                style=custom_style,
+            ).ask())
+
+        # Number of epochs
+        epochs_choice = questionary.select(
+            "Number of training epochs:",
+            choices=[
+                "10 epochs (quick)",
+                "15 epochs (balanced)",
+                "20 epochs (thorough)",
+                "Custom value",
+            ],
+            default="15 epochs (balanced)",
+            style=custom_style,
+        ).ask()
+
+        if "10 epochs" in epochs_choice:
+            num_epochs = 10
+        elif "15 epochs" in epochs_choice:
+            num_epochs = 15
+        elif "20 epochs" in epochs_choice:
+            num_epochs = 20
+        else:
+            num_epochs = int(questionary.text(
+                "Enter number of epochs (5-50):",
+                default="15",
+                style=custom_style,
+            ).ask())
 
     # Resume option
     resume = questionary.confirm(
@@ -247,8 +388,11 @@ def train_menu() -> dict:
 
     return {
         'dataset': dataset,
-        'quick': quick,
-        'medium': medium,
+        'tokens_per_epoch': tokens_per_epoch,
+        'num_layers': num_layers,
+        'd_model': d_model,
+        'num_epochs': num_epochs,
+        'd_ff': None,  # Will be auto-calculated as d_model * 4
         'resume': resume,
         'debug': debug,
         'use_mps': use_mps,
@@ -258,7 +402,7 @@ def train_menu() -> dict:
 
 
 def continue_training_menu(scanner: CheckpointScanner) -> dict:
-    """Continue training menu - auto-detects mode from checkpoint."""
+    """Continue training menu - loads all parameters from checkpoint."""
     console.print("\n[bold cyan]Continue Training[/bold cyan]\n")
 
     # Get latest checkpoint
@@ -267,9 +411,8 @@ def continue_training_menu(scanner: CheckpointScanner) -> dict:
         console.print("[yellow]No checkpoints found![/yellow]")
         return None
 
-    mode, checkpoint = latest
-
-    console.print(f"Latest checkpoint: [green]{checkpoint.name}[/green] ({mode} mode)")
+    console.print(f"Latest checkpoint: [green]{latest.name}[/green]")
+    console.print("[dim]All training parameters will be loaded from the checkpoint.[/dim]\n")
 
     confirm = questionary.confirm(
         f"Continue training from this checkpoint?",
@@ -280,36 +423,13 @@ def continue_training_menu(scanner: CheckpointScanner) -> dict:
     if not confirm:
         return None
 
-    # Select dataset for continued training
-    dataset_choice = questionary.select(
-        "Select dataset for continued training:",
-        choices=[
-            "fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]",
-            "wikitext - WikiText-103 100M tokens (clean Wikipedia, easier)",
-        ],
-        default="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]",
-        style=custom_style,
-    ).ask()
-
-    dataset = dataset_choice.split(' - ')[0]
-
-    # Auto-detect mode settings
-    if mode == 'quick':
-        quick, medium = True, False
-    elif mode == 'medium':
-        quick, medium = False, True
-    else:
-        quick, medium = False, False
-
+    # All parameters will be auto-inferred from checkpoint in train()
+    # We just return resume=True to signal that we want to continue
     return {
-        'dataset': dataset,
-        'quick': quick,
-        'medium': medium,
         'resume': True,
         'debug': False,
         'use_mps': False,
         'compile': True,
-        'position_encoding_type': 'alibi',  # Default when continuing
     }
 
 
@@ -323,11 +443,8 @@ def generate_menu(scanner: CheckpointScanner) -> Optional[dict]:
         console.print("[yellow]No checkpoints found![/yellow]")
         return None
 
-    # Create choices with mode labels
-    checkpoint_choices = [
-        f"{checkpoint.name} ({mode} mode)"
-        for mode, checkpoint in all_checkpoints
-    ]
+    # Create choices from checkpoint names
+    checkpoint_choices = [checkpoint.name for checkpoint in all_checkpoints]
 
     selected = questionary.select(
         "Select checkpoint:",
@@ -337,7 +454,7 @@ def generate_menu(scanner: CheckpointScanner) -> Optional[dict]:
 
     # Find the selected checkpoint path
     selected_idx = checkpoint_choices.index(selected)
-    mode, checkpoint_path = all_checkpoints[selected_idx]
+    checkpoint_path = all_checkpoints[selected_idx]
 
     # Select preset
     preset = questionary.select(
@@ -407,10 +524,7 @@ def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
     if action.startswith("Evaluate single"):
         # Select checkpoint
         all_checkpoints = scanner.get_all_checkpoints()
-        checkpoint_choices = [
-            f"{checkpoint.name} ({mode} mode)"
-            for mode, checkpoint in all_checkpoints
-        ]
+        checkpoint_choices = [checkpoint.name for checkpoint in all_checkpoints]
 
         selected = questionary.select(
             "Select checkpoint:",
@@ -419,7 +533,7 @@ def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
         ).ask()
 
         selected_idx = checkpoint_choices.index(selected)
-        mode, checkpoint_path = all_checkpoints[selected_idx]
+        checkpoint_path = all_checkpoints[selected_idx]
 
         return {
             'mode': 'single',
@@ -430,18 +544,10 @@ def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
             'tokens_per_epoch': 10_000_000,
         }
     else:
-        # Compare all - ask which directory
-        mode = questionary.select(
-            "Compare checkpoints from which training mode?",
-            choices=list(scanner.checkpoints.keys()),
-            style=custom_style,
-        ).ask()
-
-        checkpoint_dir = scanner.checkpoint_dirs[mode]
-
+        # Compare all checkpoints
         return {
             'mode': 'compare',
-            'checkpoint_dir': str(checkpoint_dir),
+            'checkpoint_dir': 'checkpoints',
             'seq_length': 128,
             'device': None,  # Auto-detect device
             'tokens_per_epoch': 10_000_000,
@@ -458,10 +564,7 @@ def interpret_menu(scanner: CheckpointScanner) -> Optional[dict]:
 
     # Select checkpoint
     all_checkpoints = scanner.get_all_checkpoints()
-    checkpoint_choices = [
-        f"{checkpoint.name} ({mode} mode)"
-        for mode, checkpoint in all_checkpoints
-    ]
+    checkpoint_choices = [checkpoint.name for checkpoint in all_checkpoints]
 
     selected = questionary.select(
         "Select checkpoint:",
@@ -470,7 +573,7 @@ def interpret_menu(scanner: CheckpointScanner) -> Optional[dict]:
     ).ask()
 
     selected_idx = checkpoint_choices.index(selected)
-    mode, checkpoint_path = all_checkpoints[selected_idx]
+    checkpoint_path = all_checkpoints[selected_idx]
 
     # Select analysis type
     analysis = questionary.select(
@@ -530,25 +633,24 @@ def download_menu() -> dict:
         mode = questionary.select(
             "Select dataset size:",
             choices=[
-                "Quick (10M tokens, ~1 GB)",
-                "Medium (50M tokens, ~5 GB)",
-                "Full (100M tokens, ~10 GB)",
+                "10M tokens (~1 GB)",
+                "50M tokens (~5 GB)",
+                "100M tokens (~10 GB)",
             ],
             style=custom_style,
         ).ask()
 
-        # Parse mode
-        if mode.startswith("Quick"):
-            quick, medium = True, False
-        elif mode.startswith("Medium"):
-            quick, medium = False, True
-        else:
-            quick, medium = False, False
+        # Parse tokens_per_epoch from selection
+        if mode.startswith("10M"):
+            tokens = 10_000_000
+        elif mode.startswith("50M"):
+            tokens = 50_000_000
+        else:  # 100M
+            tokens = 100_000_000
 
         return {
             'dataset': 'fineweb',
-            'quick': quick,
-            'medium': medium,
+            'tokens': tokens,
         }
     else:
         # WikiText - no size selection needed (always downloads full dataset)
@@ -564,10 +666,13 @@ def run_train(config: dict):
     print()  # Spacing for train output
 
     train(
+        tokens_per_epoch=config.get('tokens_per_epoch'),
+        num_layers=config.get('num_layers'),
+        d_model=config.get('d_model'),
+        num_epochs=config.get('num_epochs'),
+        d_ff=config.get('d_ff'),
         debug=config['debug'],
         use_mps=config['use_mps'],
-        quick=config['quick'],
-        medium=config['medium'],
         resume=config['resume'],
         compile=config['compile'],
         position_encoding_type=config.get('position_encoding_type', 'alibi'),
@@ -683,9 +788,9 @@ def run_download(config: dict):
     dataset = config.get('dataset', 'fineweb')
 
     if dataset == 'fineweb':
+        tokens_per_epoch = config.get('tokens', 50_000_000)  # Default to 50M
         download_shards(
-            quick=config.get('quick', False),
-            medium=config.get('medium', False),
+            tokens_per_epoch=tokens_per_epoch,
         )
     elif dataset == 'wikitext':
         download_wikitext()

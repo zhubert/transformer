@@ -167,9 +167,7 @@ def download_wikitext():
 
     # Next steps
     console.print("[bold cyan]Next steps:[/bold cyan]")
-    console.print("  [white]python main.py train --dataset wikitext --quick[/white]")
-    console.print("  [dim]or[/dim]")
-    console.print("  [white]make train-quick DATASET=wikitext[/white]")
+    console.print("  [white]python main.py train --dataset wikitext[/white]")
     console.print()
     console.print("[dim]Note: WikiText is automatically cached by HuggingFace.[/dim]")
     console.print("[dim]No re-download needed for future training runs![/dim]")

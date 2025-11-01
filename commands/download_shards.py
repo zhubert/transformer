@@ -22,9 +22,10 @@ After downloading, training will run at full speed from epoch 1!
 
 Cache Sizes:
 ------------
-- Quick mode: ~1 GB (26 shards)
-- Medium mode: ~5 GB (132 shards)
-- Default mode: ~10 GB (264 shards)
+Varies based on tokens_per_epoch parameter:
+- 10M tokens: ~1 GB (26 shards)
+- 50M tokens: ~5 GB (132 shards)
+- 100M tokens: ~10 GB (264 shards)
 """
 
 import sys
@@ -42,28 +43,16 @@ from src.transformer.fineweb_dataset import FineWebDataset
 from src.transformer.dataset_utils import calculate_optimal_cache_size
 
 
-def download_shards(quick=False, medium=False):
+def download_shards(tokens_per_epoch=50_000_000):
     """
     Download all shards needed for training.
 
     Args:
-        quick: If True, download shards for quick mode (10M tokens)
-        medium: If True, download shards for medium mode (50M tokens)
+        tokens_per_epoch: Number of tokens to download per epoch (default: 50M)
+                         Examples: 10M (~1 GB), 50M (~5 GB), 100M (~10 GB)
     """
     encoding = "cl100k_base"
-    # Configuration based on mode
-    if quick and medium:
-        raise ValueError("Cannot use both --quick and --medium flags. Please choose one.")
-
-    if quick:
-        TOKENS_PER_EPOCH = 10_000_000
-        mode_name = "Quick"
-    elif medium:
-        TOKENS_PER_EPOCH = 50_000_000
-        mode_name = "Medium"
-    else:
-        TOKENS_PER_EPOCH = 100_000_000
-        mode_name = "Default"
+    TOKENS_PER_EPOCH = tokens_per_epoch
 
     SEQ_LENGTH = 128
     MAX_CACHED_SHARDS = calculate_optimal_cache_size(TOKENS_PER_EPOCH)
@@ -72,8 +61,7 @@ def download_shards(quick=False, medium=False):
 
     # Display header
     console.print(Panel(
-        f"[bold blue]FINEWEB SHARD DOWNLOADER[/bold blue]\n"
-        f"[cyan]{mode_name} Mode[/cyan]",
+        f"[bold blue]FINEWEB SHARD DOWNLOADER[/bold blue]",
         style="bold blue",
         expand=False
     ))
@@ -85,7 +73,6 @@ def download_shards(quick=False, medium=False):
     config_table.add_column("Value", style="white")
 
     cache_size_gb = (MAX_CACHED_SHARDS * 40) / 1024
-    config_table.add_row("Training mode", mode_name)
     config_table.add_row("Tokenizer", encoding)
     config_table.add_row("Tokens per epoch", f"{TOKENS_PER_EPOCH:,}")
     config_table.add_row("Shards to download", f"{MAX_CACHED_SHARDS} (~{cache_size_gb:.1f} GB)")
@@ -201,30 +188,21 @@ def download_shards(quick=False, medium=False):
 
     # Next steps
     console.print("[bold cyan]Next steps:[/bold cyan]")
-    if quick:
-        console.print("  [white]make train-quick[/white]      # Train in quick mode")
-    elif medium:
-        console.print("  [white]make train-medium[/white]     # Train in medium mode")
-    else:
-        console.print("  [white]make train[/white]            # Train in default mode")
+    console.print("  [white]python main.py train[/white]     # Train with these downloaded shards")
     console.print()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pre-download FineWeb shards for offline training")
     parser.add_argument(
-        "--quick",
-        action="store_true",
-        help="Download shards for quick mode (10M tokens, ~1 GB)"
-    )
-    parser.add_argument(
-        "--medium",
-        action="store_true",
-        help="Download shards for medium mode (50M tokens, ~5 GB)"
+        "--tokens",
+        type=int,
+        default=50_000_000,
+        help="Number of tokens to download (default: 50M tokens, ~5 GB). "
+             "Examples: 10M (~1 GB), 50M (~5 GB), 100M (~10 GB)"
     )
     args = parser.parse_args()
 
     download_shards(
-        quick=args.quick,
-        medium=args.medium
+        tokens_per_epoch=args.tokens
     )

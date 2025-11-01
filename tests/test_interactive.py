@@ -50,47 +50,33 @@ def temp_checkpoint_dir(tmp_path):
     """
     Create a temporary directory structure with mock checkpoints.
 
-    This simulates a real project structure with multiple checkpoint directories
-    and various checkpoint files at different epochs.
+    This simulates a real project structure with a single checkpoint directory
+    containing various checkpoint files at different epochs.
 
     Structure:
         tmp_path/
-        ├── checkpoints/
-        │   ├── model_epoch_1_fineweb.pt
-        │   ├── model_epoch_2_fineweb.pt
-        │   └── model_epoch_5_fineweb.pt
-        ├── checkpoints_medium/
-        │   ├── model_epoch_1_fineweb.pt
-        │   └── model_epoch_3_fineweb.pt
-        └── checkpoints_quick/
+        └── checkpoints/
+            ├── model_epoch_1_fineweb.pt
+            ├── model_epoch_2_fineweb.pt
+            ├── model_epoch_3_fineweb.pt
+            ├── model_epoch_5_fineweb.pt
             └── model_epoch_10_fineweb.pt
     """
-    # Create checkpoint directories
-    default_dir = tmp_path / "checkpoints"
-    medium_dir = tmp_path / "checkpoints_medium"
-    quick_dir = tmp_path / "checkpoints_quick"
-
-    default_dir.mkdir()
-    medium_dir.mkdir()
-    quick_dir.mkdir()
+    # Create single checkpoint directory
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
 
     # Create mock checkpoint files with different sizes and timestamps
-    # Default mode checkpoints (new format: model_epoch_{number}_{dataset}.pt)
-    (default_dir / "model_epoch_1_fineweb.pt").write_bytes(b"x" * 1024 * 1024)  # 1 MB
+    # (new format: model_epoch_{number}_{dataset}.pt)
+    (checkpoint_dir / "model_epoch_1_fineweb.pt").write_bytes(b"x" * 1024 * 1024)  # 1 MB
     time.sleep(0.01)  # Ensure different timestamps
-    (default_dir / "model_epoch_2_fineweb.pt").write_bytes(b"x" * 2 * 1024 * 1024)  # 2 MB
+    (checkpoint_dir / "model_epoch_2_fineweb.pt").write_bytes(b"x" * 2 * 1024 * 1024)  # 2 MB
     time.sleep(0.01)
-    (default_dir / "model_epoch_5_fineweb.pt").write_bytes(b"x" * 3 * 1024 * 1024)  # 3 MB
-
-    # Medium mode checkpoints
+    (checkpoint_dir / "model_epoch_3_fineweb.pt").write_bytes(b"x" * 3 * 1024 * 1024)  # 3 MB
     time.sleep(0.01)
-    (medium_dir / "model_epoch_1_fineweb.pt").write_bytes(b"x" * 4 * 1024 * 1024)  # 4 MB
+    (checkpoint_dir / "model_epoch_5_fineweb.pt").write_bytes(b"x" * 4 * 1024 * 1024)  # 4 MB
     time.sleep(0.01)
-    (medium_dir / "model_epoch_3_fineweb.pt").write_bytes(b"x" * 5 * 1024 * 1024)  # 5 MB
-
-    # Quick mode checkpoint (most recent)
-    time.sleep(0.01)
-    (quick_dir / "model_epoch_10_fineweb.pt").write_bytes(b"x" * 6 * 1024 * 1024)  # 6 MB
+    (checkpoint_dir / "model_epoch_10_fineweb.pt").write_bytes(b"x" * 5 * 1024 * 1024)  # 5 MB
 
     return tmp_path
 
@@ -99,8 +85,6 @@ def temp_checkpoint_dir(tmp_path):
 def empty_checkpoint_dir(tmp_path):
     """Create a directory structure with no checkpoint files."""
     (tmp_path / "checkpoints").mkdir()
-    (tmp_path / "checkpoints_medium").mkdir()
-    (tmp_path / "checkpoints_quick").mkdir()
     return tmp_path
 
 
@@ -127,27 +111,25 @@ class TestCheckpointScanner:
 
     def test_scan_finds_all_checkpoints(self, temp_checkpoint_dir, monkeypatch):
         """
-        Test that scan() finds all checkpoint files across all directories.
+        Test that scan() finds all checkpoint files in checkpoints directory.
 
         Expected behavior:
-        - Finds 3 checkpoints in default mode
-        - Finds 2 checkpoints in medium mode
-        - Finds 1 checkpoint in quick mode
+        - Finds 5 checkpoints total
         """
         monkeypatch.chdir(temp_checkpoint_dir)
 
         scanner = CheckpointScanner()
 
-        # Verify correct number of checkpoints found per mode
-        assert len(scanner.checkpoints['default']) == 3
-        assert len(scanner.checkpoints['medium']) == 2
-        assert len(scanner.checkpoints['quick']) == 1
+        # Verify correct number of checkpoints found
+        assert len(scanner.checkpoints) == 5
 
         # Verify checkpoint filenames are correct
-        default_names = [p.name for p in scanner.checkpoints['default']]
-        assert 'model_epoch_1_fineweb.pt' in default_names
-        assert 'model_epoch_2_fineweb.pt' in default_names
-        assert 'model_epoch_5_fineweb.pt' in default_names
+        checkpoint_names = [p.name for p in scanner.checkpoints]
+        assert 'model_epoch_1_fineweb.pt' in checkpoint_names
+        assert 'model_epoch_2_fineweb.pt' in checkpoint_names
+        assert 'model_epoch_3_fineweb.pt' in checkpoint_names
+        assert 'model_epoch_5_fineweb.pt' in checkpoint_names
+        assert 'model_epoch_10_fineweb.pt' in checkpoint_names
 
     def test_has_checkpoints_returns_true_when_present(self, temp_checkpoint_dir, monkeypatch):
         """Test has_checkpoints() returns True when checkpoints exist."""
@@ -163,33 +145,29 @@ class TestCheckpointScanner:
         scanner = CheckpointScanner()
         assert scanner.has_checkpoints() is False
 
-    def test_get_all_checkpoints_returns_tuples(self, temp_checkpoint_dir, monkeypatch):
+    def test_get_all_checkpoints_returns_paths(self, temp_checkpoint_dir, monkeypatch):
         """
-        Test get_all_checkpoints() returns (mode, path) tuples.
-
-        Each checkpoint should be paired with its mode label for display.
+        Test get_all_checkpoints() returns a list of Path objects.
         """
         monkeypatch.chdir(temp_checkpoint_dir)
 
         scanner = CheckpointScanner()
         all_checkpoints = scanner.get_all_checkpoints()
 
-        # Should have 6 total checkpoints (3 + 2 + 1)
-        assert len(all_checkpoints) == 6
+        # Should have 5 total checkpoints
+        assert len(all_checkpoints) == 5
 
-        # Each item should be a (mode, path) tuple
-        for mode, path in all_checkpoints:
-            assert isinstance(mode, str)
+        # Each item should be a Path object
+        for path in all_checkpoints:
             assert isinstance(path, Path)
-            assert mode in ['default', 'medium', 'quick']
             assert path.name.startswith('model_epoch_')
 
     def test_get_latest_returns_most_recent(self, temp_checkpoint_dir, monkeypatch):
         """
         Test get_latest() returns the most recently modified checkpoint.
 
-        Since we created checkpoints with sleep() between them, the quick mode
-        checkpoint (created last) should be the latest.
+        Since we created checkpoints with sleep() between them,
+        the last checkpoint (epoch 10) should be the latest.
         """
         monkeypatch.chdir(temp_checkpoint_dir)
 
@@ -197,11 +175,9 @@ class TestCheckpointScanner:
         latest = scanner.get_latest()
 
         assert latest is not None
-        mode, path = latest
-
-        # The quick mode checkpoint was created last
-        assert mode == 'quick'
-        assert path.name == 'model_epoch_10_fineweb.pt'
+        assert isinstance(latest, Path)
+        # The epoch 10 checkpoint was created last
+        assert latest.name == 'model_epoch_10_fineweb.pt'
 
     def test_get_latest_returns_none_when_empty(self, empty_checkpoint_dir, monkeypatch):
         """Test get_latest() returns None when no checkpoints exist."""
@@ -238,8 +214,8 @@ class TestCheckpointScanner:
         scanner = CheckpointScanner()
 
         # Should only find the one valid checkpoint
-        assert len(scanner.checkpoints['default']) == 1
-        assert scanner.checkpoints['default'][0].name == 'model_epoch_1_fineweb.pt'
+        assert len(scanner.checkpoints) == 1
+        assert scanner.checkpoints[0].name == 'model_epoch_1_fineweb.pt'
 
     def test_scan_handles_missing_directories(self, tmp_path, monkeypatch):
         """
@@ -301,7 +277,7 @@ class TestCheckpointScanner:
         scanner = CheckpointScanner()
 
         # Should be sorted: epoch_1, epoch_2, epoch_5, epoch_10
-        names = [p.name for p in scanner.checkpoints['default']]
+        names = [p.name for p in scanner.checkpoints]
         assert names == ['model_epoch_1_fineweb.pt', 'model_epoch_2_fineweb.pt',
                         'model_epoch_5_fineweb.pt', 'model_epoch_10_fineweb.pt']
 
@@ -313,51 +289,70 @@ class TestCheckpointScanner:
 class TestTrainMenu:
     """Test the train_menu() configuration builder."""
 
-    def test_quick_mode_configuration(self, mock_questionary, mock_console):
-        """Test that selecting Quick mode builds correct config."""
-        # Mock user selections
-        mock_questionary.select.return_value.ask.return_value = \
-            "Quick (10M tokens/epoch × 10, 4 layers, ~40min first epoch)"
+    def test_beginner_preset_configuration(self, mock_questionary, mock_console):
+        """Test that selecting Beginner preset builds correct config."""
+        # Mock user selections: dataset, config approach, preset, resume, advanced
+        mock_questionary.select.side_effect = [
+            Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]")),
+            Mock(ask=Mock(return_value="Use recommended preset (recommended for beginners)")),
+            Mock(ask=Mock(return_value="Beginner - Fast iteration (10M tokens/epoch, 4 layers, d_model=128, 10 epochs)")),
+        ]
         mock_questionary.confirm.return_value.ask.side_effect = [False, False]  # resume, advanced
 
         config = train_menu()
 
-        assert config['quick'] is True
-        assert config['medium'] is False
+        assert config['dataset'] == 'fineweb'
+        assert config['tokens_per_epoch'] == 10_000_000
+        assert config['num_layers'] == 4
+        assert config['d_model'] == 128
+        assert config['num_epochs'] == 10
         assert config['resume'] is False
         assert config['debug'] is False
         assert config['use_mps'] is False
         assert config['compile'] is True
         assert config['position_encoding_type'] == 'alibi'
 
-    def test_medium_mode_configuration(self, mock_questionary, mock_console):
-        """Test that selecting Medium mode builds correct config."""
-        mock_questionary.select.return_value.ask.return_value = \
-            "Medium (50M tokens/epoch × 15, 4 layers, ~2h first epoch)"
+    def test_intermediate_preset_configuration(self, mock_questionary, mock_console):
+        """Test that selecting Intermediate preset builds correct config."""
+        mock_questionary.select.side_effect = [
+            Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]")),
+            Mock(ask=Mock(return_value="Use recommended preset (recommended for beginners)")),
+            Mock(ask=Mock(return_value="Intermediate - Balanced quality (50M tokens/epoch, 4 layers, d_model=256, 15 epochs)")),
+        ]
         mock_questionary.confirm.return_value.ask.side_effect = [True, False]  # resume=True, advanced=False
 
         config = train_menu()
 
-        assert config['quick'] is False
-        assert config['medium'] is True
+        assert config['dataset'] == 'fineweb'
+        assert config['tokens_per_epoch'] == 50_000_000
+        assert config['num_layers'] == 4
+        assert config['d_model'] == 256
+        assert config['num_epochs'] == 15
         assert config['resume'] is True
 
-    def test_full_mode_configuration(self, mock_questionary, mock_console):
-        """Test that selecting Full mode builds correct config."""
-        mock_questionary.select.return_value.ask.return_value = \
-            "Full (100M tokens/epoch × 20, 6 layers, ~4h first epoch)"
+    def test_advanced_preset_configuration(self, mock_questionary, mock_console):
+        """Test that selecting Advanced preset builds correct config."""
+        mock_questionary.select.side_effect = [
+            Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]")),
+            Mock(ask=Mock(return_value="Use recommended preset (recommended for beginners)")),
+            Mock(ask=Mock(return_value="Advanced - Full quality (100M tokens/epoch, 6 layers, d_model=256, 20 epochs)")),
+        ]
         mock_questionary.confirm.return_value.ask.side_effect = [False, False]
 
         config = train_menu()
 
-        assert config['quick'] is False
-        assert config['medium'] is False
+        assert config['dataset'] == 'fineweb'
+        assert config['tokens_per_epoch'] == 100_000_000
+        assert config['num_layers'] == 6
+        assert config['d_model'] == 256
+        assert config['num_epochs'] == 20
 
     def test_advanced_options_configuration(self, mock_questionary, mock_console):
         """Test that advanced options are included when requested."""
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]")),
-            Mock(ask=Mock(return_value="Quick (10M tokens/epoch × 10, 4 layers, ~40min first epoch)")),
+            Mock(ask=Mock(return_value="Use recommended preset (recommended for beginners)")),
+            Mock(ask=Mock(return_value="Beginner - Fast iteration (10M tokens/epoch, 4 layers, d_model=128, 10 epochs)")),
             Mock(ask=Mock(return_value="rope - RoPE (Rotary Position Embeddings) - Also excellent")),
         ]
         # resume=False, advanced=True, debug=True, mps=True, compile=False
@@ -375,10 +370,11 @@ class TestTrainMenu:
         """Test selecting ALiBi position encoding."""
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]")),
-            Mock(ask=Mock(return_value="Quick (10M tokens/epoch × 10, 4 layers, ~40min first epoch)")),
+            Mock(ask=Mock(return_value="Use recommended preset (recommended for beginners)")),
+            Mock(ask=Mock(return_value="Beginner - Fast iteration (10M tokens/epoch, 4 layers, d_model=128, 10 epochs)")),
             Mock(ask=Mock(return_value="alibi - ALiBi (Attention with Linear Biases) - RECOMMENDED")),
         ]
-        mock_questionary.confirm.return_value.ask.side_effect = [False, True, False, False, True]  # advanced=True
+        mock_questionary.confirm.return_value.ask.side_effect = [False, True, False, False, True]  # resume=False, advanced=True, then options
 
         config = train_menu()
 
@@ -389,7 +385,8 @@ class TestTrainMenu:
         """Test selecting learned position embeddings."""
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]")),
-            Mock(ask=Mock(return_value="Quick (10M tokens/epoch × 10, 4 layers, ~40min first epoch)")),
+            Mock(ask=Mock(return_value="Use recommended preset (recommended for beginners)")),
+            Mock(ask=Mock(return_value="Beginner - Fast iteration (10M tokens/epoch, 4 layers, d_model=128, 10 epochs)")),
             Mock(ask=Mock(return_value="learned - Learned embeddings (GPT-2/GPT-3 style)")),
         ]
         mock_questionary.confirm.return_value.ask.side_effect = [False, True, False, False, True]
@@ -402,8 +399,8 @@ class TestTrainMenu:
 class TestContinueTrainingMenu:
     """Test the continue_training_menu() configuration builder."""
 
-    def test_continue_with_quick_checkpoint(self, temp_checkpoint_dir, monkeypatch, mock_questionary):
-        """Test continuing from a quick mode checkpoint."""
+    def test_continue_from_checkpoint_confirms(self, temp_checkpoint_dir, monkeypatch, mock_questionary):
+        """Test continuing from a checkpoint when user confirms."""
         monkeypatch.chdir(temp_checkpoint_dir)
 
         scanner = CheckpointScanner()
@@ -412,45 +409,10 @@ class TestContinueTrainingMenu:
         config = continue_training_menu(scanner)
 
         assert config is not None
-        assert config['quick'] is True
-        assert config['medium'] is False
         assert config['resume'] is True
-
-    def test_continue_with_medium_checkpoint(self, tmp_path, monkeypatch, mock_questionary):
-        """Test continuing from a medium mode checkpoint."""
-        monkeypatch.chdir(tmp_path)
-
-        # Create only medium checkpoint
-        medium_dir = tmp_path / "checkpoints_medium"
-        medium_dir.mkdir()
-        (medium_dir / "model_epoch_1_fineweb.pt").write_bytes(b"checkpoint")
-
-        scanner = CheckpointScanner()
-        mock_questionary.confirm.return_value.ask.return_value = True
-
-        config = continue_training_menu(scanner)
-
-        assert config['quick'] is False
-        assert config['medium'] is True
-        assert config['resume'] is True
-
-    def test_continue_with_default_checkpoint(self, tmp_path, monkeypatch, mock_questionary):
-        """Test continuing from a default (full) mode checkpoint."""
-        monkeypatch.chdir(tmp_path)
-
-        # Create only default checkpoint
-        default_dir = tmp_path / "checkpoints"
-        default_dir.mkdir()
-        (default_dir / "model_epoch_1_fineweb.pt").write_bytes(b"checkpoint")
-
-        scanner = CheckpointScanner()
-        mock_questionary.confirm.return_value.ask.return_value = True
-
-        config = continue_training_menu(scanner)
-
-        assert config['quick'] is False
-        assert config['medium'] is False
-        assert config['resume'] is True
+        assert config['debug'] is False
+        assert config['use_mps'] is False
+        assert config['compile'] is True
 
     def test_decline_to_continue(self, temp_checkpoint_dir, monkeypatch, mock_questionary):
         """Test that declining returns None."""
@@ -484,7 +446,7 @@ class TestGenerateMenu:
 
         # Mock user selections
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_10_fineweb.pt (quick mode)")),
+            Mock(ask=Mock(return_value="model_epoch_10_fineweb.pt")),
             Mock(ask=Mock(return_value="balanced - Moderate creativity (temp=0.8, top-k=50, top-p=0.9) [DEFAULT]")),
             Mock(ask=Mock(return_value="Interactive - Multiple prompts in a loop")),
         ]
@@ -493,7 +455,7 @@ class TestGenerateMenu:
         config = generate_menu(scanner)
 
         assert config is not None
-        assert 'model_epoch_10_fineweb.pt' in config['checkpoint']
+        assert 'model_epoch_10_fineweb.pt' in str(config['checkpoint'])
         assert config['preset'] == 'balanced'
         assert config['prompt'] is None  # Interactive mode
         assert config['max_length'] == 100
@@ -505,7 +467,7 @@ class TestGenerateMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt (default mode)")),
+            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt")),
             Mock(ask=Mock(return_value="greedy - Deterministic, picks most likely tokens")),
             Mock(ask=Mock(return_value="Single prompt - Generate once and exit")),
         ]
@@ -527,7 +489,7 @@ class TestGenerateMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt (default mode)")),
+            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt")),
             Mock(ask=Mock(return_value="very-creative - Maximum creativity (temp=1.2, top-k=100, top-p=0.95)")),
             Mock(ask=Mock(return_value="Interactive - Multiple prompts in a loop")),
         ]
@@ -559,14 +521,14 @@ class TestEvaluateMenu:
 
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="Evaluate single checkpoint (perplexity)")),
-            Mock(ask=Mock(return_value="model_epoch_5_fineweb.pt (default mode)")),
+            Mock(ask=Mock(return_value="model_epoch_5_fineweb.pt")),
         ]
 
         config = evaluate_menu(scanner)
 
         assert config is not None
         assert config['mode'] == 'single'
-        assert 'model_epoch_5_fineweb.pt' in config['checkpoint']
+        assert 'model_epoch_5_fineweb.pt' in str(config['checkpoint'])
         assert config['seq_length'] == 128
         assert config['batch_size'] == 8
         assert config['tokens_per_epoch'] == 10_000_000
@@ -579,14 +541,13 @@ class TestEvaluateMenu:
 
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="Compare all checkpoints")),
-            Mock(ask=Mock(return_value="default")),
         ]
 
         config = evaluate_menu(scanner)
 
         assert config is not None
         assert config['mode'] == 'compare'
-        assert 'checkpoints' in config['checkpoint_dir']
+        assert 'checkpoints' in str(config['checkpoint_dir'])
         assert config['seq_length'] == 128
 
     def test_no_checkpoints_returns_none(self, empty_checkpoint_dir, monkeypatch, mock_questionary):
@@ -609,7 +570,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt (default mode)")),
+            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt")),
             Mock(ask=Mock(return_value="attention - Visualize attention patterns")),
         ]
         mock_questionary.text.return_value.ask.return_value = "Hello world"
@@ -628,7 +589,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_2_fineweb.pt (default mode)")),
+            Mock(ask=Mock(return_value="model_epoch_2_fineweb.pt")),
             Mock(ask=Mock(return_value="logit-lens - See how predictions evolve through layers")),
         ]
         mock_questionary.text.return_value.ask.return_value = "Test prompt"
@@ -645,7 +606,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_3_fineweb.pt (medium mode)")),
+            Mock(ask=Mock(return_value="model_epoch_3_fineweb.pt")),
             Mock(ask=Mock(return_value="induction-heads - Detect pattern-matching circuits")),
         ]
 
@@ -661,7 +622,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt (default mode)")),
+            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt")),
             Mock(ask=Mock(return_value="patch - Causal intervention experiments")),
         ]
 
@@ -677,7 +638,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_5_fineweb.pt (default mode)")),
+            Mock(ask=Mock(return_value="model_epoch_5_fineweb.pt")),
             Mock(ask=Mock(return_value="all - Run all analyses")),
         ]
         mock_questionary.text.return_value.ask.return_value = "The quick brown fox"
@@ -700,47 +661,44 @@ class TestInterpretMenu:
 class TestDownloadMenu:
     """Test the download_menu() configuration builder."""
 
-    def test_quick_dataset_selection(self, mock_questionary):
-        """Test selecting Quick dataset size."""
+    def test_10m_tokens_selection(self, mock_questionary):
+        """Test selecting 10M tokens dataset size."""
         # Mock both questionary calls: dataset selection, then size selection
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text) [DEFAULT]")),
-            Mock(ask=Mock(return_value="Quick (10M tokens, ~1 GB)")),
+            Mock(ask=Mock(return_value="10M tokens (~1 GB)")),
         ]
 
         config = download_menu()
 
         assert config['dataset'] == 'fineweb'
-        assert config['quick'] is True
-        assert config['medium'] is False
+        assert config['tokens'] == 10_000_000
 
-    def test_medium_dataset_selection(self, mock_questionary):
-        """Test selecting Medium dataset size."""
+    def test_50m_tokens_selection(self, mock_questionary):
+        """Test selecting 50M tokens dataset size."""
         # Mock both questionary calls: dataset selection, then size selection
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text) [DEFAULT]")),
-            Mock(ask=Mock(return_value="Medium (50M tokens, ~5 GB)")),
+            Mock(ask=Mock(return_value="50M tokens (~5 GB)")),
         ]
 
         config = download_menu()
 
         assert config['dataset'] == 'fineweb'
-        assert config['quick'] is False
-        assert config['medium'] is True
+        assert config['tokens'] == 50_000_000
 
-    def test_full_dataset_selection(self, mock_questionary):
-        """Test selecting Full dataset size."""
+    def test_100m_tokens_selection(self, mock_questionary):
+        """Test selecting 100M tokens dataset size."""
         # Mock both questionary calls: dataset selection, then size selection
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="fineweb - FineWeb 10B tokens (realistic web text) [DEFAULT]")),
-            Mock(ask=Mock(return_value="Full (100M tokens, ~10 GB)")),
+            Mock(ask=Mock(return_value="100M tokens (~10 GB)")),
         ]
 
         config = download_menu()
 
         assert config['dataset'] == 'fineweb'
-        assert config['quick'] is False
-        assert config['medium'] is False
+        assert config['tokens'] == 100_000_000
 
     def test_wikitext_dataset_selection(self, mock_questionary):
         """Test selecting WikiText dataset."""
@@ -751,9 +709,8 @@ class TestDownloadMenu:
         config = download_menu()
 
         assert config['dataset'] == 'wikitext'
-        # WikiText config doesn't include 'quick' and 'medium' keys
-        assert 'quick' not in config
-        assert 'medium' not in config
+        # WikiText config doesn't include 'tokens' key
+        assert 'tokens' not in config
 
 
 class TestMainMenu:
@@ -818,8 +775,11 @@ class TestRunTrain:
         """Test that run_train() calls train() with all config parameters."""
         config = {
             'dataset': 'wikitext',
-            'quick': True,
-            'medium': False,
+            'tokens_per_epoch': 50_000_000,
+            'num_layers': 4,
+            'd_model': 256,
+            'num_epochs': 15,
+            'd_ff': None,
             'resume': True,
             'debug': True,
             'use_mps': False,
@@ -832,10 +792,13 @@ class TestRunTrain:
         mock_train.assert_called_once_with(
             debug=True,
             use_mps=False,
-            quick=True,
-            medium=False,
             resume=True,
             compile=True,
+            tokens_per_epoch=50_000_000,
+            num_layers=4,
+            d_model=256,
+            num_epochs=15,
+            d_ff=None,
             position_encoding_type='rope',
             dataset='wikitext',
         )
@@ -844,8 +807,11 @@ class TestRunTrain:
     def test_calls_train_with_default_position_encoding(self, mock_train, mock_console):
         """Test that run_train() defaults to alibi when position_encoding_type is missing."""
         config = {
-            'quick': False,
-            'medium': True,
+            'tokens_per_epoch': 10_000_000,
+            'num_layers': 4,
+            'd_model': 128,
+            'num_epochs': 10,
+            'd_ff': None,
             'resume': False,
             'debug': False,
             'use_mps': False,
@@ -1084,40 +1050,40 @@ class TestRunDownload:
     """Test the run_download() command integration."""
 
     @patch('src.interactive.download_shards')
-    def test_calls_download_with_quick_mode(self, mock_download, mock_console):
-        """Test that run_download() calls download_shards() with quick=True."""
+    def test_calls_download_with_10m_tokens(self, mock_download, mock_console):
+        """Test that run_download() calls download_shards() with tokens_per_epoch=10M."""
         config = {
-            'quick': True,
-            'medium': False,
+            'dataset': 'fineweb',
+            'tokens': 10_000_000,
         }
 
         run_download(config)
 
-        mock_download.assert_called_once_with(quick=True, medium=False)
+        mock_download.assert_called_once_with(tokens_per_epoch=10_000_000)
 
     @patch('src.interactive.download_shards')
-    def test_calls_download_with_medium_mode(self, mock_download, mock_console):
-        """Test that run_download() calls download_shards() with medium=True."""
+    def test_calls_download_with_50m_tokens(self, mock_download, mock_console):
+        """Test that run_download() calls download_shards() with tokens_per_epoch=50M."""
         config = {
-            'quick': False,
-            'medium': True,
+            'dataset': 'fineweb',
+            'tokens': 50_000_000,
         }
 
         run_download(config)
 
-        mock_download.assert_called_once_with(quick=False, medium=True)
+        mock_download.assert_called_once_with(tokens_per_epoch=50_000_000)
 
     @patch('src.interactive.download_shards')
-    def test_calls_download_with_full_mode(self, mock_download, mock_console):
-        """Test that run_download() calls download_shards() with both False."""
+    def test_calls_download_with_default_tokens(self, mock_download, mock_console):
+        """Test that run_download() uses default 50M tokens when not specified."""
         config = {
-            'quick': False,
-            'medium': False,
+            'dataset': 'fineweb',
+            # No tokens specified, should default to 50M
         }
 
         run_download(config)
 
-        mock_download.assert_called_once_with(quick=False, medium=False)
+        mock_download.assert_called_once_with(tokens_per_epoch=50_000_000)
 
 
 # =============================================================================
@@ -1160,9 +1126,19 @@ class TestInteractiveMain:
         mock_main_menu.side_effect = ["🎓 Train new model", "❌ Exit"]
 
         # Train config
-        mock_train_menu.return_value = {'quick': True, 'medium': False, 'resume': False,
-                                        'debug': False, 'use_mps': False, 'compile': True,
-                                        'position_encoding_type': 'alibi'}
+        mock_train_menu.return_value = {
+            'dataset': 'fineweb',
+            'tokens_per_epoch': 10_000_000,
+            'num_layers': 4,
+            'd_model': 128,
+            'num_epochs': 10,
+            'd_ff': None,
+            'resume': False,
+            'debug': False,
+            'use_mps': False,
+            'compile': True,
+            'position_encoding_type': 'alibi'
+        }
 
         # Don't continue after training
         mock_questionary.confirm.return_value.ask.return_value = False
@@ -1219,7 +1195,7 @@ class TestInteractiveMain:
 
         with patch('src.interactive.download_menu') as mock_dl_menu, \
              patch('src.interactive.run_download'):
-            mock_dl_menu.return_value = {'quick': True, 'medium': False}
+            mock_dl_menu.return_value = {'dataset': 'fineweb', 'tokens': 10_000_000}
 
             interactive_main()
 
@@ -1308,7 +1284,7 @@ class TestEdgeCases:
         scanner = CheckpointScanner()
 
         # Should find all 100 checkpoints
-        assert len(scanner.checkpoints['default']) == 100
+        assert len(scanner.checkpoints) == 100
 
         # get_latest should still work
         latest = scanner.get_latest()
@@ -1325,8 +1301,8 @@ class TestEdgeCases:
         scanner = CheckpointScanner()
 
         # Should find epoch 0 checkpoint
-        assert len(scanner.checkpoints['default']) == 1
-        assert scanner.checkpoints['default'][0].name == 'model_epoch_0_fineweb.pt'
+        assert len(scanner.checkpoints) == 1
+        assert scanner.checkpoints[0].name == 'model_epoch_0_fineweb.pt'
 
     def test_checkpoint_with_extension_variations(self, tmp_path, monkeypatch):
         """Test that only .pt files are found, not .PT or .pth."""
@@ -1342,8 +1318,8 @@ class TestEdgeCases:
         scanner = CheckpointScanner()
 
         # Should only find .pt file (glob is case-sensitive on most systems)
-        assert len(scanner.checkpoints['default']) == 1
-        assert scanner.checkpoints['default'][0].name == 'model_epoch_1_fineweb.pt'
+        assert len(scanner.checkpoints) == 1
+        assert scanner.checkpoints[0].name == 'model_epoch_1_fineweb.pt'
 
     @patch('src.interactive.questionary')
     def test_menu_returns_none_on_cancellation(self, mock_questionary):
@@ -1374,7 +1350,7 @@ class TestEdgeCases:
         scanner = CheckpointScanner()
 
         # Scanner should still find it (glob doesn't check size)
-        assert len(scanner.checkpoints['default']) == 1
+        assert len(scanner.checkpoints) == 1
 
         # display_summary should handle 0-byte file
         scanner.display_summary()  # Should not crash
