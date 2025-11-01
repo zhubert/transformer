@@ -13,15 +13,15 @@ for all transformer functionality:
 
 Usage:
     # Interactive mode (recommended for beginners)
-    uv run python main.py
+    python main.py
 
     # Direct command-line mode (for advanced users)
-    uv run python main.py train [OPTIONS]
-    uv run python main.py generate CHECKPOINT [OPTIONS]
-    uv run python main.py evaluate [OPTIONS]
-    uv run python main.py compare [OPTIONS]
-    uv run python main.py demo-sampling
-    uv run python main.py interpret [OPTIONS]
+    python main.py train [OPTIONS]
+    python main.py generate CHECKPOINT [OPTIONS]
+    python main.py evaluate [OPTIONS]
+    python main.py compare [OPTIONS]
+    python main.py demo-sampling
+    python main.py interpret [OPTIONS]
 """
 
 import sys

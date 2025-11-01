@@ -21,24 +21,24 @@ Anthropic, OpenAI, and academic labs.
 Usage Examples:
 ---------------
     # Logit lens: See how predictions evolve through layers
-    uv run python main.py interpret logit-lens checkpoints/model.pt \
+    python main.py interpret logit-lens checkpoints/model.pt \
         --text "The capital of France is"
 
     # Logit lens with demo mode (educational examples)
-    uv run python main.py interpret logit-lens checkpoints/model.pt --demo
+    python main.py interpret logit-lens checkpoints/model.pt --demo
 
     # Interactive mode
-    uv run python main.py interpret logit-lens checkpoints/model.pt --interactive
+    python main.py interpret logit-lens checkpoints/model.pt --interactive
 
     # Attention analysis (coming in Phase 2)
-    uv run python main.py interpret attention checkpoints/model.pt \
+    python main.py interpret attention checkpoints/model.pt \
         --text "Hello world" --layer 3 --head 2
 
     # Induction head detection (coming in Phase 3)
-    uv run python main.py interpret induction-heads checkpoints/model.pt
+    python main.py interpret induction-heads checkpoints/model.pt
 
     # Activation patching (coming in Phase 4)
-    uv run python main.py interpret patch checkpoints/model.pt \
+    python main.py interpret patch checkpoints/model.pt \
         --clean "Paris is in France" \
         --corrupted "Paris is in Germany" \
         --component "layer.4.head.2"
@@ -595,7 +595,7 @@ def cmd_patch(args):
     if not args.clean or not args.corrupted or not args.target:
         console.print("[red]Error:[/red] Activation patching requires --clean, --corrupted, and --target arguments")
         console.print("\n[yellow]Example:[/yellow]")
-        console.print('  uv run python main.py interpret patch checkpoints/model.pt \\')
+        console.print('  python main.py interpret patch checkpoints/model.pt \\')
         console.print('    --clean "The Eiffel Tower is in" \\')
         console.print('    --corrupted "The Empire State Building is in" \\')
         console.print('    --target "Paris"')

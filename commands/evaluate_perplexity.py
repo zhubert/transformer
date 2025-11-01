@@ -303,7 +303,7 @@ def compare_checkpoints(checkpoint_dir, seq_length=128, device='cpu', encoding='
             print(f"         but you're trying to evaluate with {encoding}")
             print()
             print(f"  Please use the same encoding as the checkpoints:")
-            print(f"    uv run python commands/evaluate_perplexity.py --compare --encoding {detected_encoding}")
+            print(f"    python commands/evaluate_perplexity.py --compare --encoding {detected_encoding}")
             print()
             sys.exit(1)
 
@@ -469,7 +469,7 @@ def main():
 
         if not checkpoint_files:
             print(f"No checkpoints found in {checkpoint_dir}")
-            print("Please train a model first using: uv run python main.py train")
+            print("Please train a model first using: python main.py train")
             return
 
         latest_checkpoint = checkpoint_files[-1]

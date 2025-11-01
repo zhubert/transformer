@@ -227,7 +227,7 @@ def demonstrate_with_model():
     print()
 
     print("NOTE: This demonstration requires a trained model.")
-    print("      If you don't have one yet, train using: uv run python main.py train")
+    print("      If you don't have one yet, train using: python main.py train")
     print()
 
     # Check if a trained model exists

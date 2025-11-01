@@ -15,7 +15,7 @@ help:
 	@echo ""
 	@echo "Using the Transformer:"
 	@echo "  make run                  - Launch interactive CLI (recommended!)"
-	@echo "  uv run python main.py --help - Show advanced command-line options"
+	@echo "  python main.py --help     - Show advanced command-line options"
 
 # Install dependencies (default: NVIDIA CUDA or CPU)
 install:
@@ -28,15 +28,15 @@ install-rocm:
 
 # Run tests
 test:
-	uv run pytest tests/ -v
+	pytest tests/ -v
 
 # Run tests with coverage
 test-cov:
-	uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
+	pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
 
 # Run the interactive CLI
 run:
-	uv run python main.py
+	python main.py
 
 # Clean up cache files (preserves data/fineweb_cache shards)
 clean:

@@ -36,13 +36,57 @@ make install-rocm         # For AMD GPUs with ROCm (Linux only)
 make test
 ```
 
+**Automatic Virtual Environment Activation (Recommended):**
+
+This project includes a `.envrc` file for automatic virtual environment activation using [direnv](https://direnv.net/). Once set up, you can use `python` and `pytest` commands directly without the `uv run` prefix.
+
+```bash
+# Install direnv (one-time setup)
+# macOS
+brew install direnv
+
+# Linux (Ubuntu/Debian)
+sudo apt install direnv
+
+# Linux (Arch)
+sudo pacman -S direnv
+
+# Add direnv hook to your shell (one-time setup)
+# For bash, add to ~/.bashrc:
+eval "$(direnv hook bash)"
+
+# For zsh, add to ~/.zshrc:
+eval "$(direnv hook zsh)"
+
+# For fish, add to ~/.config/fish/config.fish:
+direnv hook fish | source
+
+# Allow direnv in this directory (one-time per project)
+direnv allow
+
+# Now the virtual environment activates automatically when you cd into the project!
+# You can use python/pytest directly instead of 'uv run python'/'uv run pytest'
+```
+
+**Without direnv:**
+If you prefer not to use direnv, you can still manually activate the virtual environment:
+```bash
+source .venv/bin/activate
+```
+
+Or continue using the `uv run` prefix for commands:
+```bash
+uv run python main.py
+uv run pytest tests/
+```
+
 ### Interactive CLI (Recommended!)
 
 The easiest way to use this project is through the interactive CLI:
 
 ```bash
 # Launch interactive mode - no flags to memorize!
-uv run python main.py
+python main.py
 ```
 
 The interactive CLI provides a beautiful, arrow-key navigated menu system that lets you:
@@ -64,20 +108,20 @@ For power users and automation, all operations are also available via traditiona
 
 ```bash
 # Training
-uv run python main.py train               # Train with default settings
-uv run python main.py train --resume      # Resume training
+python main.py train               # Train with default settings
+python main.py train --resume      # Resume training
 
 # Generation
-uv run python main.py generate checkpoints/model_epoch_15.pt --preset balanced
+python main.py generate checkpoints/model_epoch_15.pt --preset balanced
 
 # Evaluation
-uv run python main.py evaluate --checkpoint checkpoints/model_epoch_15.pt
+python main.py evaluate --checkpoint checkpoints/model_epoch_15.pt
 
 # Interpretability
-uv run python main.py interpret logit-lens checkpoints/model_epoch_15.pt
+python main.py interpret logit-lens checkpoints/model_epoch_15.pt
 
 # Download data
-uv run python main.py download --tokens 50000000  # Download 50M tokens (~5 GB)
+python main.py download --tokens 50000000  # Download 50M tokens (~5 GB)
 ```
 
 ## What's Inside
@@ -195,19 +239,19 @@ See [`src/transformer/block.py`](src/transformer/block.py) for detailed architec
 ```bash
 # Default: 50M tokens/epoch, 4 layers, d_model=256, 16x gradient accumulation
 # Auto-detects best device (CUDA > MPS > CPU)
-uv run python main.py train
+python main.py train
 
 # Resume training from latest checkpoint
-uv run python main.py train --resume
+python main.py train --resume
 
 # Standard training with cl100k_base tokenizer (100K vocab)
-uv run python main.py train
+python main.py train
 
 # Custom gradient accumulation (higher = more stable training)
-uv run python main.py train --accumulation-steps 32
+python main.py train --accumulation-steps 32
 
 # Force specific device (optional - auto-detect is recommended)
-uv run python main.py train --mps    # Apple Silicon GPU
+python main.py train --mps    # Apple Silicon GPU
 ```
 
 ### Training Features
@@ -241,9 +285,9 @@ You can pre-download all training data before starting training. This is useful 
 make download
 
 # Or use the CLI directly with custom token count
-uv run python main.py download --tokens 50000000   # 50M tokens (~5 GB)
-uv run python main.py download --tokens 10000000   # 10M tokens (~1 GB)
-uv run python main.py download --tokens 100000000  # 100M tokens (~10 GB)
+python main.py download --tokens 50000000   # 50M tokens (~5 GB)
+python main.py download --tokens 10000000   # 10M tokens (~1 GB)
+python main.py download --tokens 100000000  # 100M tokens (~10 GB)
 ```
 
 After downloading, training will run at full speed from epoch 1 (instead of building the cache during the first epoch).
@@ -300,11 +344,11 @@ See [`commands/train.py`](commands/train.py) for complete training documentation
 
 ```bash
 # Use preset strategies
-uv run python main.py generate --checkpoint checkpoints/model_epoch_10_cl100k.pt --preset creative
-uv run python main.py generate --checkpoint checkpoints/model_epoch_10_cl100k.pt --preset precise
+python main.py generate --checkpoint checkpoints/model_epoch_10_cl100k.pt --preset creative
+python main.py generate --checkpoint checkpoints/model_epoch_10_cl100k.pt --preset precise
 
 # Custom parameters
-uv run python main.py generate \
+python main.py generate \
     --checkpoint checkpoints/model_epoch_10_cl100k.pt \
     --strategy top_k_top_p \
     --top-k 50 --top-p 0.9 --temperature 0.8
@@ -322,14 +366,14 @@ Visualize how predictions evolve through layers:
 
 ```bash
 # Demo mode with educational examples
-uv run python main.py interpret logit-lens checkpoints/model.pt --demo
+python main.py interpret logit-lens checkpoints/model.pt --demo
 
 # Analyze specific text
-uv run python main.py interpret logit-lens checkpoints/model.pt \
+python main.py interpret logit-lens checkpoints/model.pt \
     --text "The capital of France is"
 
 # Interactive mode
-uv run python main.py interpret logit-lens checkpoints/model.pt --interactive
+python main.py interpret logit-lens checkpoints/model.pt --interactive
 ```
 
 **What it shows:** How the model's predictions change at each layer, revealing when the "correct answer" emerges.
@@ -345,17 +389,17 @@ Understand what tokens each attention head focuses on:
 
 ```bash
 # Demo mode - find common patterns
-uv run python main.py interpret attention checkpoints/model.pt --demo
+python main.py interpret attention checkpoints/model.pt --demo
 
 # Analyze specific layer and head
-uv run python main.py interpret attention checkpoints/model.pt \
+python main.py interpret attention checkpoints/model.pt \
     --text "The cat sat on the mat" --layer 2 --head 3
 
 # Interactive mode
-uv run python main.py interpret attention checkpoints/model.pt --interactive
+python main.py interpret attention checkpoints/model.pt --interactive
 
 # Find all heads matching a pattern
-uv run python main.py interpret attention checkpoints/model.pt \
+python main.py interpret attention checkpoints/model.pt \
     --text "Hello world"  # Shows pattern summary
 ```
 
@@ -376,10 +420,10 @@ Find and analyze induction heads - circuits that implement pattern matching and 
 
 ```bash
 # Detect induction heads across all layers
-uv run python main.py interpret induction-heads checkpoints/model.pt
+python main.py interpret induction-heads checkpoints/model.pt
 
 # Custom detection parameters
-uv run python main.py interpret induction-heads checkpoints/model.pt \
+python main.py interpret induction-heads checkpoints/model.pt \
     --num-sequences 50 --seq-length 30 --top-k 5
 ```
 
@@ -401,7 +445,7 @@ Test which components are **causally responsible** for specific behaviors throug
 
 ```bash
 # Test which layers are critical for a prediction
-uv run python main.py interpret patch checkpoints/model.pt \
+python main.py interpret patch checkpoints/model.pt \
     --clean "The Eiffel Tower is in" \
     --corrupted "The Empire State Building is in" \
     --target "Paris"
@@ -430,15 +474,15 @@ See [`src/transformer/interpretability/`](src/transformer/interpretability/) for
 
 ```bash
 # All tests
-uv run pytest
+pytest
 
 # Specific components
-uv run pytest tests/test_attention.py -v
-uv run pytest tests/test_sampling.py -v
-uv run pytest tests/test_perplexity.py -v
+pytest tests/test_attention.py -v
+pytest tests/test_sampling.py -v
+pytest tests/test_perplexity.py -v
 
 # With coverage
-uv run pytest --cov=src/transformer
+pytest --cov=src/transformer
 ```
 
 ## Learning Resources
