@@ -192,10 +192,13 @@ class TestCheckpointScanner:
 
     def test_scan_ignores_non_checkpoint_files(self, tmp_path, monkeypatch):
         """
-        Test that scan() only finds files matching the checkpoint pattern.
+        Test that scan() finds all .pt files (training checkpoints and pretrained models).
+
+        Should find:
+        - Training checkpoints (model_epoch_*)
+        - Pretrained models (any other .pt files)
 
         Should ignore:
-        - Other .pt files not matching pattern
         - Non-.pt files
         - Directories
         """
@@ -204,20 +207,28 @@ class TestCheckpointScanner:
         checkpoint_dir = tmp_path / "checkpoints"
         checkpoint_dir.mkdir()
 
-        # Create valid checkpoint
+        # Create valid training checkpoint
         (checkpoint_dir / "model_epoch_1_fineweb.pt").write_bytes(b"valid")
 
+        # Create pretrained model files (should be found)
+        (checkpoint_dir / "phi2_pretrained_cl100k.pt").write_bytes(b"pretrained")
+        (checkpoint_dir / "custom_model.pt").write_bytes(b"custom")
+
         # Create files that should be ignored
-        (checkpoint_dir / "other_file.pt").write_bytes(b"ignore")
-        (checkpoint_dir / "model_weights.pt").write_bytes(b"ignore")
         (checkpoint_dir / "readme.txt").write_bytes(b"ignore")
         (checkpoint_dir / "subdir").mkdir()
 
         scanner = CheckpointScanner()
 
-        # Should only find the one valid checkpoint
-        assert len(scanner.checkpoints) == 1
-        assert scanner.checkpoints[0].name == 'model_epoch_1_fineweb.pt'
+        # Should find all 3 .pt files
+        assert len(scanner.checkpoints) == 3
+        checkpoint_names = [cp.name for cp in scanner.checkpoints]
+        assert 'model_epoch_1_fineweb.pt' in checkpoint_names
+        assert 'phi2_pretrained_cl100k.pt' in checkpoint_names
+        assert 'custom_model.pt' in checkpoint_names
+
+        # Non-.pt files should not be found
+        assert 'readme.txt' not in checkpoint_names
 
     def test_scan_handles_missing_directories(self, tmp_path, monkeypatch):
         """
