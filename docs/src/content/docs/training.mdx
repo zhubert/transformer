@@ -28,7 +28,7 @@ Why can't we just use bigger batches? Each example in a batch requires storing a
 3. **Repeat** for N batches (e.g., 16 times)
 4. **Update weights:** Use the accumulated (averaged) gradients
 
-![Gradient accumulation comparison](/assets/gradient-accumulation.svg)
+![Gradient accumulation comparison](../../assets/gradient-accumulation.svg)
 
 **Why this works mathematically:** Gradients are linear, so averaging gradients from N separate batches gives the same result as computing the gradient on one large batch containing all N×batch_size examples. The key formula:
 
@@ -75,7 +75,7 @@ The same happens with neural networks. As training progresses, the model might s
 
 We set aside 10% of our data that the model _never_ sees during training. After each epoch, we evaluate the model on this "validation" data. If the model is truly learning patterns (not memorizing), it should perform well on both training and validation data.
 
-![Training vs validation loss curves](/assets/training-validation.svg)
+![Training vs validation loss curves](../../assets/training-validation.svg)
 
 ### How to Interpret the Curves
 

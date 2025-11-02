@@ -27,7 +27,7 @@ Attention(Q, K, V) = softmax(Q·Kᵀ / √d_k) · V
 
 The division by √d_k is a scaling factor that prevents very large dot products in high dimensions, which would cause the softmax to produce near-zero gradients and make training difficult.
 
-![Attention mechanism flow diagram](/assets/attention-flow.svg)
+![Attention mechanism flow diagram](../../assets/attention-flow.svg)
 
 ## Implementation
 

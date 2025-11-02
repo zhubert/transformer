@@ -20,7 +20,7 @@ Through training, different heads naturally specialize in different types of rel
 
 We split the d_model dimensions across heads. With d_model=512 and 8 heads, each head operates on 64 dimensions (512/8). All heads process the input in parallel, then we concatenate their outputs and apply a final linear transformation.
 
-![Multi-head attention architecture](/assets/multi-head-attention.svg)
+![Multi-head attention architecture](../../assets/multi-head-attention.svg)
 
 ## Implementation
 

@@ -35,7 +35,7 @@ For generating n tokens, we process 1 + 2 + 3 + ... + n = O(n²) tokens total. V
 
 **Key Insight:** In attention, K (Key) and V (Value) for past tokens never change! Only the new token's query matters. We can cache K and V from previous steps and reuse them.
 
-![KV-cache speedup comparison](/assets/kv-cache-speedup.svg)
+![KV-cache speedup comparison](../../assets/kv-cache-speedup.svg)
 
 ## How It Works
 
