@@ -57,6 +57,6 @@ def forward(self, query, key, value, mask=None):
 In decoder-only transformers (like GPT), we add a mask to prevent tokens from attending to future positions. This is essential for autoregressive generation—when predicting the next word, the model shouldn't "cheat" by looking ahead! The mask sets future attention scores to -∞ before softmax, making those positions receive zero attention weight.
 </Aside>
 
-## Implementation
+## Full Code
 
 See the full implementation: [src/transformer/attention.py](https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py)

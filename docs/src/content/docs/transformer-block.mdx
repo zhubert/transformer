@@ -47,6 +47,6 @@ def forward(self, x, mask=None):
 They create gradient "highways" that allow gradients to flow directly from the output back to early layers. Without them, deep networks struggle to learn: ∂(x + f(x))/∂x = 1 + ∂f(x)/∂x—the "1" ensures gradients always flow!
 </Aside>
 
-## Implementation
+## Full Code
 
 See the full implementation: [src/transformer/block.py](https://github.com/zhubert/transformer/blob/main/src/transformer/block.py)
