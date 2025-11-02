@@ -432,14 +432,13 @@ make install-rocm         # AMD ROCm (Linux only)
 # Run tests
 make test
 
-# Train model (100M tokens/epoch)
-make train
+# Launch interactive CLI (recommended)
+make run
 
-# Quick training (10M tokens/epoch, smaller model)
-make train-quick
-
-# Generate text
-make generate
+# Or use the CLI directly
+python main.py --help     # Show all available commands
+python main.py train      # Train a model
+python main.py generate   # Generate text
 ```
 
 ## Documentation Sync
