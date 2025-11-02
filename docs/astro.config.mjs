@@ -4,7 +4,8 @@ import starlight from "@astrojs/starlight";
 // https://astro.build/config
 export default defineConfig({
   site: "https://www.zhubert.com",
-  base: "/transformer",
+  base: import.meta.env.PROD ? "/transformer" : "/",
+  trailingSlash: "always",
   integrations: [
     starlight({
       title: "Building a Transformer",
