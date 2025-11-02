@@ -49,5 +49,3 @@ clean:
 	rm -rf .coverage
 	rm -rf build dist *.egg-info
 	rm -rf checkpoints
-	rm -rf checkpoints_medium
-	rm -rf checkpoints_quick

@@ -53,7 +53,6 @@ class CheckpointScanner:
         self.checkpoint_dir = Path('checkpoints')
         self.checkpoints: List[Path] = []
         self.scan()
-        self._check_old_directories()
 
     def scan(self):
         """Scan checkpoint directory for model files."""
@@ -63,30 +62,6 @@ class CheckpointScanner:
                 self.checkpoint_dir.glob('model_epoch_*_*.pt'),
                 key=lambda x: int(x.stem.split('_')[2])
             )
-
-    def _check_old_directories(self):
-        """Check for old checkpoint directories and warn user to migrate."""
-        old_dirs = [
-            Path('checkpoints_quick'),
-            Path('checkpoints_medium'),
-        ]
-
-        existing_old_dirs = [d for d in old_dirs if d.exists() and list(d.glob('model_epoch_*_*.pt'))]
-
-        if existing_old_dirs:
-            console.print()
-            console.print(Panel(
-                "[yellow bold]⚠️  Old Checkpoint Directories Detected[/yellow bold]\n\n"
-                "The following old checkpoint directories were found:\n" +
-                "\n".join(f"  • {d}/" for d in existing_old_dirs) +
-                "\n\n[white]Please consolidate to 'checkpoints/' directory:[/white]\n" +
-                "\n".join(f"  mv {d}/* checkpoints/" for d in existing_old_dirs) +
-                "\n\nAfter moving, you can remove the old directories:\n" +
-                "\n".join(f"  rmdir {d}" for d in existing_old_dirs),
-                border_style="yellow",
-                box=box.ROUNDED
-            ))
-            console.print()
 
     def has_checkpoints(self) -> bool:
         """Check if any checkpoints exist."""
