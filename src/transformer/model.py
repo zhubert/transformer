@@ -177,7 +177,6 @@ class DecoderOnlyTransformer(nn.Module):
         dropout=0.1,
         tie_weights=True,
         position_encoding_type='alibi',
-        partial_rotary_factor=1.0,
     ):
         """
         Initialize decoder-only transformer.
@@ -210,12 +209,6 @@ class DecoderOnlyTransformer(nn.Module):
                                - Encodes absolute positions through addition
                                - Used in GPT-2, GPT-3, BERT (2018-2020)
                                - Older approach, still works but has limitations
-            partial_rotary_factor: Fraction of head dimensions to rotate with RoPE (default: 1.0)
-                        Only used when position_encoding_type='rope'
-                        - 1.0 = full rotation (all dimensions, standard RoPE)
-                        - 0.4 = partial rotation (40% of dimensions, used in Phi-2)
-                        Remaining dimensions pass through unchanged
-                        Used to reduce computation in some models (Phi-2, CodeGen)
         """
         super().__init__()
 
@@ -242,11 +235,7 @@ class DecoderOnlyTransformer(nn.Module):
             # RoPE: Applied in attention, not added to embeddings
             # Create RoPE instance that will be shared across all attention layers
             head_dim = d_model // num_heads
-            self.rope = RotaryPositionalEmbedding(
-                head_dim,
-                max_seq_len,
-                partial_rotary_factor=partial_rotary_factor
-            )
+            self.rope = RotaryPositionalEmbedding(head_dim, max_seq_len)
             self.alibi = None  # No ALiBi
             self.pos_encoding = None  # No additive position encoding needed
         else:  # 'learned'
