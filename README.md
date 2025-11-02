@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/mascot.png" alt="Transformer Mascot" width="300">
+  <img src="docs/src/assets/mascot.png" alt="Transformer Mascot" width="300">
 </div>
 
 # Transformer - Built with AI
