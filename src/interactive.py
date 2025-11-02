@@ -59,11 +59,33 @@ class CheckpointScanner:
     def scan(self):
         """Scan checkpoint directory for model files."""
         if self.checkpoint_dir.exists():
-            # New format: model_epoch_5_fineweb.pt
-            self.checkpoints = sorted(
-                self.checkpoint_dir.glob('model_epoch_*_*.pt'),
-                key=lambda x: int(x.stem.split('_')[2])
-            )
+            # Match all .pt files in checkpoints directory
+            # This includes:
+            # - Training checkpoints: model_epoch_5_fineweb.pt
+            # - Pretrained models: phi2_pretrained_cl100k.pt
+            all_pt_files = list(self.checkpoint_dir.glob('*.pt'))
+
+            # Separate into training checkpoints and pretrained models
+            training_checkpoints = []
+            pretrained_models = []
+
+            for pt_file in all_pt_files:
+                if pt_file.stem.startswith('model_epoch_'):
+                    # Training checkpoint format: model_epoch_5_fineweb.pt
+                    training_checkpoints.append(pt_file)
+                else:
+                    # Pretrained or other checkpoint
+                    pretrained_models.append(pt_file)
+
+            # Sort training checkpoints by epoch number
+            training_checkpoints.sort(key=lambda x: int(x.stem.split('_')[2]))
+
+            # Sort pretrained models by modification time (most recent first)
+            pretrained_models.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+            # Combine: pretrained models first, then training checkpoints
+            # This makes pretrained models easy to find at the top
+            self.checkpoints = pretrained_models + training_checkpoints
 
     def _check_old_directories(self):
         """Check for old checkpoint directories and warn user to migrate."""
