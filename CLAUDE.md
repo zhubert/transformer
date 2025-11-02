@@ -64,10 +64,24 @@ src/transformer/
 └── device_utils.py     # Device initialization and management
 
 commands/               # CLI scripts for training, generation, evaluation
+├── download_phi2.py    # Download pretrained Phi-2 model (2.7B params)
 tests/                  # Test suite for core components
 main.py                 # Main CLI entry point (python main.py train/generate/etc)
-index.html              # Educational documentation with diagrams
+docs/                   # Starlight documentation site
 ```
+
+## Pretrained Models
+
+The project supports downloading and using pretrained models:
+
+**Phi-2 (2.7B parameters)**: Microsoft's state-of-the-art small model
+- Download via: `python commands/download_phi2.py` or interactive CLI
+- Fully compatible with our architecture (supports partial RoPE rotation)
+- Use for fine-tuning, generation, evaluation, and interpretability
+- Requires: ~6GB GPU for generation, ~11GB for fine-tuning (mixed precision)
+- See `docs/src/content/docs/pretrained-models.mdx` for full documentation
+
+All pretrained models are converted to our standard checkpoint format and work seamlessly with training, generation, and interpretability tools.
 
 ## Implementation Patterns
 
@@ -407,7 +421,7 @@ optimizer = torch.optim.AdamW([
 - Educational focus and comprehensive documentation
 - Code clarity over performance optimizations
 - Detailed explanations in comments and docstrings
-- Visual diagrams in index.html
+- Starlight documentation site (docs/)
 - Test coverage for core components
 
 ### Feel Free to Modify
@@ -419,7 +433,7 @@ optimizer = torch.optim.AdamW([
 
 ### Requires Careful Consideration
 - Core architecture changes (affects educational content)
-- Documentation structure (index.html, README.md, CLAUDE.md must stay aligned)
+- Documentation structure (docs/, README.md, CLAUDE.md must stay aligned)
 - Test suite modifications (maintain coverage)
 
 ## Quick Start for Development
@@ -444,9 +458,9 @@ make generate
 
 ## Documentation Sync
 
-Three docs must stay consistent:
+Documentation must stay consistent across:
 - **README.md**: User-facing, quick start, API reference
-- **index.html**: Educational tutorial with diagrams
-- **CLAUDE.md**: AI context (this file) - architecture and patterns
+- **docs/** (Starlight): Main educational documentation with interactive tutorials
+- **CLAUDE.md**: AI context (this file) - architecture and patterns for development
 
-When changing architecture or features, update all three.
+When changing architecture or features, update all relevant docs.

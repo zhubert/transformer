@@ -47,7 +47,10 @@ export default defineConfig({
         },
         {
           label: "Getting Started",
-          items: [{ label: "Try It Yourself", link: "/try-it/" }],
+          items: [
+            { label: "Try It Yourself", link: "/try-it/" },
+            { label: "Pretrained Models", link: "/pretrained-models/" },
+          ],
         },
       ],
       customCss: ["./src/styles/custom.css"],
