@@ -18,6 +18,9 @@ rocm = [
     "torch>=2.5.0; sys_platform == 'linux'",
     "pytorch-triton-rocm; sys_platform == 'linux'",
 ]
+pretrained = [
+    "transformers>=4.30.0",
+]
 
 [dependency-groups]
 dev = [

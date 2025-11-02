@@ -24,6 +24,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from commands.train import train
 from commands.download_shards import download_shards
 from commands.download_wikitext import download_wikitext
+from commands.download_phi2 import download_and_convert_phi2
 from commands.generate import main as generate_main
 from commands.evaluate_perplexity import evaluate_checkpoint, compare_checkpoints
 from commands.sampling_comparison import demonstrate_sampling_strategies, demonstrate_with_model
@@ -158,6 +159,7 @@ def main_menu(scanner: CheckpointScanner) -> str:
 
     choices.extend([
         "⬇️  Download training data",
+        "🤖 Download pretrained models",
         "❌ Exit",
     ])
 
@@ -611,11 +613,11 @@ def interpret_menu(scanner: CheckpointScanner) -> Optional[dict]:
     }
 
 
-def download_menu() -> dict:
-    """Data download menu."""
+def download_data_menu() -> dict:
+    """Training data download menu."""
     console.print("\n[bold cyan]Download Training Data[/bold cyan]\n")
 
-    # Select dataset type
+    # Select dataset
     dataset_choice = questionary.select(
         "Select dataset to download:",
         choices=[
@@ -649,14 +651,38 @@ def download_menu() -> dict:
             tokens = 100_000_000
 
         return {
+            'type': 'dataset',
             'dataset': 'fineweb',
             'tokens': tokens,
         }
     else:
         # WikiText - no size selection needed (always downloads full dataset)
         return {
+            'type': 'dataset',
             'dataset': 'wikitext',
         }
+
+
+def download_model_menu() -> dict:
+    """Pretrained model download menu."""
+    console.print("\n[bold cyan]Download Pretrained Models[/bold cyan]\n")
+
+    # Select model
+    model_choice = questionary.select(
+        "Select model to download:",
+        choices=[
+            "phi-2 - Microsoft Phi-2 (2.7B params, state-of-the-art small model)",
+        ],
+        default="phi-2 - Microsoft Phi-2 (2.7B params, state-of-the-art small model)",
+        style=custom_style,
+    ).ask()
+
+    model_name = model_choice.split(' - ')[0]
+
+    return {
+        'type': 'model',
+        'model': model_name,
+    }
 
 
 def run_train(config: dict):
@@ -779,7 +805,7 @@ def run_interpret(config: dict):
     interpret.main(args)
 
 
-def run_download(config: dict):
+def run_download_data(config: dict):
     """Execute data download with given configuration."""
     console.print("\n[bold green]Starting download...[/bold green]\n")
     console.print("=" * 80)
@@ -794,6 +820,20 @@ def run_download(config: dict):
         )
     elif dataset == 'wikitext':
         download_wikitext()
+
+
+def run_download_model(config: dict):
+    """Execute model download with given configuration."""
+    console.print("\n[bold green]Starting download...[/bold green]\n")
+    console.print("=" * 80)
+    print()
+
+    model_name = config.get('model', 'phi-2')
+
+    if model_name == 'phi-2':
+        download_and_convert_phi2()
+    else:
+        console.print(f"[red]Unknown model: {model_name}[/red]")
 
 
 def interactive_main():
@@ -838,10 +878,15 @@ def interactive_main():
             if config:
                 run_interpret(config)
 
-        elif choice.startswith("⬇️"):  # Download
-            config = download_menu()
+        elif choice.startswith("⬇️"):  # Download training data
+            config = download_data_menu()
             if config:
-                run_download(config)
+                run_download_data(config)
+
+        elif choice.startswith("🤖"):  # Download pretrained models
+            config = download_model_menu()
+            if config:
+                run_download_model(config)
 
         # Ask if user wants to do something else
         console.print()

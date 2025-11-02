@@ -30,13 +30,15 @@ from src.interactive import (
     generate_menu,
     evaluate_menu,
     interpret_menu,
-    download_menu,
+    download_data_menu,
+    download_model_menu,
     main_menu,
     run_train,
     run_generate,
     run_evaluate,
     run_interpret,
-    run_download,
+    run_download_data,
+    run_download_model,
     interactive_main,
 )
 
@@ -658,8 +660,8 @@ class TestInterpretMenu:
         assert config is None
 
 
-class TestDownloadMenu:
-    """Test the download_menu() configuration builder."""
+class TestDownloadDataMenu:
+    """Test the download_data_menu() configuration builder."""
 
     def test_10m_tokens_selection(self, mock_questionary):
         """Test selecting 10M tokens dataset size."""
@@ -669,8 +671,9 @@ class TestDownloadMenu:
             Mock(ask=Mock(return_value="10M tokens (~1 GB)")),
         ]
 
-        config = download_menu()
+        config = download_data_menu()
 
+        assert config['type'] == 'dataset'
         assert config['dataset'] == 'fineweb'
         assert config['tokens'] == 10_000_000
 
@@ -682,8 +685,9 @@ class TestDownloadMenu:
             Mock(ask=Mock(return_value="50M tokens (~5 GB)")),
         ]
 
-        config = download_menu()
+        config = download_data_menu()
 
+        assert config['type'] == 'dataset'
         assert config['dataset'] == 'fineweb'
         assert config['tokens'] == 50_000_000
 
@@ -695,8 +699,9 @@ class TestDownloadMenu:
             Mock(ask=Mock(return_value="100M tokens (~10 GB)")),
         ]
 
-        config = download_menu()
+        config = download_data_menu()
 
+        assert config['type'] == 'dataset'
         assert config['dataset'] == 'fineweb'
         assert config['tokens'] == 100_000_000
 
@@ -706,11 +711,26 @@ class TestDownloadMenu:
         mock_questionary.select.return_value.ask.return_value = \
             "wikitext - WikiText-103 100M tokens (clean Wikipedia)"
 
-        config = download_menu()
+        config = download_data_menu()
 
+        assert config['type'] == 'dataset'
         assert config['dataset'] == 'wikitext'
         # WikiText config doesn't include 'tokens' key
         assert 'tokens' not in config
+
+
+class TestDownloadModelMenu:
+    """Test the download_model_menu() configuration builder."""
+
+    def test_phi2_selection(self, mock_questionary):
+        """Test selecting Phi-2 model."""
+        mock_questionary.select.return_value.ask.return_value = \
+            "phi-2 - Microsoft Phi-2 (2.7B params, state-of-the-art small model)"
+
+        config = download_model_menu()
+
+        assert config['type'] == 'model'
+        assert config['model'] == 'phi-2'
 
 
 class TestMainMenu:
@@ -735,6 +755,7 @@ class TestMainMenu:
         assert "📊 Evaluate models" in choices
         assert "🔍 Interpretability analysis" in choices
         assert "⬇️  Download training data" in choices
+        assert "🤖 Download pretrained models" in choices
         assert "❌ Exit" in choices
 
         assert result == "✨ Generate text"
@@ -754,6 +775,7 @@ class TestMainMenu:
 
         assert "🎓 Train new model" in choices
         assert "⬇️  Download training data" in choices
+        assert "🤖 Download pretrained models" in choices
         assert "❌ Exit" in choices
 
         # These should NOT be present without checkpoints
@@ -1046,44 +1068,75 @@ class TestRunInterpret:
         assert args.target is None
 
 
-class TestRunDownload:
-    """Test the run_download() command integration."""
+class TestRunDownloadData:
+    """Test the run_download_data() command integration."""
 
     @patch('src.interactive.download_shards')
     def test_calls_download_with_10m_tokens(self, mock_download, mock_console):
-        """Test that run_download() calls download_shards() with tokens_per_epoch=10M."""
+        """Test that run_download_data() calls download_shards() with tokens_per_epoch=10M."""
         config = {
+            'type': 'dataset',
             'dataset': 'fineweb',
             'tokens': 10_000_000,
         }
 
-        run_download(config)
+        run_download_data(config)
 
         mock_download.assert_called_once_with(tokens_per_epoch=10_000_000)
 
     @patch('src.interactive.download_shards')
     def test_calls_download_with_50m_tokens(self, mock_download, mock_console):
-        """Test that run_download() calls download_shards() with tokens_per_epoch=50M."""
+        """Test that run_download_data() calls download_shards() with tokens_per_epoch=50M."""
         config = {
+            'type': 'dataset',
             'dataset': 'fineweb',
             'tokens': 50_000_000,
         }
 
-        run_download(config)
+        run_download_data(config)
 
         mock_download.assert_called_once_with(tokens_per_epoch=50_000_000)
 
     @patch('src.interactive.download_shards')
     def test_calls_download_with_default_tokens(self, mock_download, mock_console):
-        """Test that run_download() uses default 50M tokens when not specified."""
+        """Test that run_download_data() uses default 50M tokens when not specified."""
         config = {
+            'type': 'dataset',
             'dataset': 'fineweb',
             # No tokens specified, should default to 50M
         }
 
-        run_download(config)
+        run_download_data(config)
 
         mock_download.assert_called_once_with(tokens_per_epoch=50_000_000)
+
+    @patch('src.interactive.download_wikitext')
+    def test_calls_download_wikitext(self, mock_download, mock_console):
+        """Test that run_download_data() calls download_wikitext() for WikiText."""
+        config = {
+            'type': 'dataset',
+            'dataset': 'wikitext',
+        }
+
+        run_download_data(config)
+
+        mock_download.assert_called_once()
+
+
+class TestRunDownloadModel:
+    """Test the run_download_model() command integration."""
+
+    @patch('src.interactive.download_and_convert_phi2')
+    def test_calls_download_phi2(self, mock_download, mock_console):
+        """Test that run_download_model() calls download_and_convert_phi2() for Phi-2."""
+        config = {
+            'type': 'model',
+            'model': 'phi-2',
+        }
+
+        run_download_model(config)
+
+        mock_download.assert_called_once()
 
 
 # =============================================================================
@@ -1193,9 +1246,9 @@ class TestInteractiveMain:
         # First continue=True (but menu returns download), then continue=False
         mock_questionary.confirm.return_value.ask.return_value = False
 
-        with patch('src.interactive.download_menu') as mock_dl_menu, \
-             patch('src.interactive.run_download'):
-            mock_dl_menu.return_value = {'dataset': 'fineweb', 'tokens': 10_000_000}
+        with patch('src.interactive.download_data_menu') as mock_dl_menu, \
+             patch('src.interactive.run_download_data'):
+            mock_dl_menu.return_value = {'type': 'dataset', 'dataset': 'fineweb', 'tokens': 10_000_000}
 
             interactive_main()
 
@@ -1335,7 +1388,7 @@ class TestEdgeCases:
         # Current behavior: AttributeError when trying to call .startswith() on None
         # This is acceptable since cancellation is handled at a higher level
         with pytest.raises(AttributeError):
-            download_menu()
+            download_data_menu()
 
     def test_empty_checkpoint_file(self, tmp_path, monkeypatch):
         """Test handling checkpoint files with 0 bytes."""
