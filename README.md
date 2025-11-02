@@ -95,6 +95,7 @@ The interactive CLI provides a beautiful, arrow-key navigated menu system that l
 - 📊 **Evaluate models** - Compare checkpoints or calculate perplexity
 - 🔍 **Analyze internals** - Explore attention patterns, logit lens, induction heads
 - ⬇️ **Download data** - Pre-download training shards for offline use
+- 🤖 **Download pretrained models** - Get Phi-2 (2.7B) and other models
 
 **Features:**
 - Auto-detects available checkpoints and shows status
@@ -123,6 +124,70 @@ python main.py interpret logit-lens checkpoints/model_epoch_15.pt
 # Download data
 python main.py download --tokens 50000000  # Download 50M tokens (~5 GB)
 ```
+
+## Pretrained Models
+
+### Phi-2 (2.7B Parameter Model)
+
+You can download and use Microsoft's Phi-2 model - a state-of-the-art 2.7B parameter transformer that's competitive with much larger models. This is perfect for:
+
+- **Fine-tuning** on custom datasets
+- **Learning** from a production-quality architecture
+- **Experimentation** with a powerful but manageable model size
+- **Comparison** with your trained models
+
+**Download Phi-2:**
+
+```bash
+# Interactive mode (recommended)
+python main.py
+# → Select "🤖 Download pretrained models" → "phi-2"
+
+# Or directly via command line
+python commands/download_phi2.py
+```
+
+**Download size:** ~5.5 GB (model weights in fp32)
+**Checkpoint size:** ~10.8 GB (includes optimizer state)
+**Output:** `checkpoints/phi2_pretrained_cl100k.pt`
+
+**Memory Requirements:**
+- **Generation:** ~6GB GPU memory (or CPU, but slower)
+- **Training/Fine-tuning:** ~11GB GPU memory (mixed precision) or ~22GB (fp32)
+- **Recommendation:** At least 8GB VRAM for comfortable generation, 12GB+ for fine-tuning
+
+**Phi-2 Architecture Highlights:**
+- **2.7 billion parameters** - Large enough to be powerful, small enough to be practical
+- **32 layers, 2560 model dimension** - Deep architecture with rich representations
+- **RoPE with partial rotation** (40% of dimensions) - Modern position encoding
+- **CodeGen tokenizer** - Optimized for code and technical content (auto-converted to cl100k_base)
+- **2048 token context** - Substantial context window
+
+**After downloading, you can:**
+
+```bash
+# Fine-tune on your data
+python main.py train --resume
+
+# Generate text
+python main.py generate checkpoints/phi2_pretrained_cl100k.pt --preset creative
+
+# Evaluate perplexity
+python main.py evaluate --checkpoint checkpoints/phi2_pretrained_cl100k.pt
+
+# Analyze interpretability
+python main.py interpret logit-lens checkpoints/phi2_pretrained_cl100k.pt
+```
+
+**Requirements:**
+The download requires the `transformers` library (automatically added to dependencies).
+
+**Architecture Compatibility:**
+Our implementation fully supports Phi-2's architecture including:
+- ✅ Partial RoPE rotation (`partial_rotary_factor=0.4`)
+- ✅ Weight tying between embeddings and output
+- ✅ All 32 layers with proper weight mapping
+- ✅ Compatible with all our generation and interpretability tools
 
 ## What's Inside
 
