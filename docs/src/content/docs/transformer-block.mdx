@@ -1,0 +1,52 @@
+---
+title: Transformer Block
+description: Combining all components into one repeatable unit
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**Bringing it all together:** A transformer block combines all our components into one repeatable unit. The full transformer model is just many of these blocks stacked on top of each other (GPT-3 has 96 blocks!).
+
+## What's in a Block?
+
+Each block contains four key components:
+
+- **Multi-head attention:** Communication layer—tokens gather information from other tokens
+- **Feed-forward network:** Computation layer—each token processes its gathered information
+- **Layer normalization:** Stabilizes training by normalizing activations (prevents them from growing too large or small)
+- **Residual connections:** "Skip connections" that create gradient highways for training deep networks
+
+## Pre-LN Architecture
+
+We use the Pre-LN (Pre-Layer Normalization) approach used in modern models like GPT-2 and GPT-3. This means we apply layer normalization _before_ each sub-layer (attention or FFN) rather than after. This makes training more stable, especially for very deep networks.
+
+![Transformer block architecture](/assets/transformer-block.svg)
+
+## Implementation
+
+```python
+def forward(self, x, mask=None):
+    # First sub-layer: Multi-head attention with residual
+    residual = x
+    x = self.norm1(x)                    # Pre-LN
+    x = self.attention(x, mask=mask)
+    x = self.dropout1(x)
+    x = x + residual                     # Residual connection
+
+    # Second sub-layer: Feed-forward with residual
+    residual = x
+    x = self.norm2(x)                    # Pre-LN
+    x = self.ffn(x)
+    x = self.dropout2(x)
+    x = x + residual                     # Residual connection
+
+    return x
+```
+
+<Aside type="tip" title="Why residual connections?">
+They create gradient "highways" that allow gradients to flow directly from the output back to early layers. Without them, deep networks struggle to learn: ∂(x + f(x))/∂x = 1 + ∂f(x)/∂x—the "1" ensures gradients always flow!
+</Aside>
+
+## Implementation
+
+See the full implementation: [src/transformer/block.py](https://github.com/zhubert/transformer/blob/main/src/transformer/block.py)

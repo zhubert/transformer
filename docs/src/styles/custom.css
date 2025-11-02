@@ -1,0 +1,57 @@
+/* Custom styles for Transformer documentation */
+
+/* Code blocks with better spacing */
+.expressive-code {
+  margin: 1.5rem 0;
+}
+
+/* Highlight boxes */
+.highlight-box {
+  background: var(--sl-color-bg-sidebar);
+  border-left: 4px solid var(--sl-color-accent);
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  border-radius: 0.5rem;
+}
+
+/* Formula blocks */
+.formula {
+  text-align: center;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+  background: var(--sl-color-bg-sidebar);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin: 1.5rem 0;
+  font-size: 1.1em;
+}
+
+/* Grid layouts for comparison boxes */
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.comparison-item {
+  background: var(--sl-color-bg-sidebar);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--sl-color-gray-5);
+}
+
+.comparison-item h4 {
+  margin-top: 0;
+}
+
+/* Diagrams with proper spacing */
+img[alt*="diagram"],
+img[alt*="flow"],
+img[alt*="architecture"] {
+  max-width: 100%;
+  height: auto;
+  margin: 2rem auto;
+  display: block;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
