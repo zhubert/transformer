@@ -431,9 +431,9 @@ def load_checkpoint(
     if verbose:
         print(f"  Epoch: {checkpoint['epoch']}")
         print(f"  Encoding: {encoding}")
-        if 'loss' in checkpoint:
+        if 'loss' in checkpoint and checkpoint['loss'] is not None:
             print(f"  Training loss: {checkpoint['loss']:.4f}")
-        if 'perplexity' in checkpoint:
+        if 'perplexity' in checkpoint and checkpoint['perplexity'] is not None:
             print(f"  Training perplexity: {checkpoint['perplexity']:.2f}")
         print()
 
