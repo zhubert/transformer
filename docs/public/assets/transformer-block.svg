@@ -1,0 +1,63 @@
+<svg viewBox="0 0 500 600" xmlns="http://www.w3.org/2000/svg">
+    <!-- Input -->
+    <rect x="150" y="30" width="200" height="50" fill="#007AFF" opacity="0.2" rx="8"/>
+    <text x="250" y="60" text-anchor="middle" font-family="SF Pro Display" font-size="16" fill="#007AFF">Input</text>
+
+    <!-- First residual block -->
+    <rect x="50" y="100" width="400" height="180" fill="#f5f5f7" stroke="#007AFF" stroke-width="2" stroke-dasharray="5,5" rx="12"/>
+
+    <!-- Layer Norm 1 -->
+    <path d="M 250 80 L 250 120" stroke="#007AFF" stroke-width="2" marker-end="url(#arrowblue)"/>
+    <rect x="170" y="120" width="160" height="40" fill="#5856D6" opacity="0.2" rx="8"/>
+    <text x="250" y="145" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#5856D6">LayerNorm</text>
+
+    <!-- Multi-Head Attention -->
+    <path d="M 250 160 L 250 190" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+    <rect x="150" y="190" width="200" height="40" fill="#FF9500" opacity="0.2" rx="8"/>
+    <text x="250" y="215" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#FF9500">Multi-Head Attention</text>
+
+    <!-- Residual connection 1 -->
+    <path d="M 100 55 L 100 245 L 180 245" stroke="#32D74B" stroke-width="3" fill="none" marker-end="url(#arrowgreen)"/>
+    <text x="75" y="150" font-family="SF Pro Display" font-size="12" fill="#32D74B">+</text>
+
+    <circle cx="250" cy="245" r="20" fill="#32D74B" opacity="0.2"/>
+    <text x="250" y="252" text-anchor="middle" font-family="SF Pro Display" font-size="20" fill="#32D74B">+</text>
+
+    <!-- Second residual block -->
+    <rect x="50" y="300" width="400" height="180" fill="#f5f5f7" stroke="#007AFF" stroke-width="2" stroke-dasharray="5,5" rx="12"/>
+
+    <!-- Layer Norm 2 -->
+    <path d="M 250 265 L 250 320" stroke="#32D74B" stroke-width="2" marker-end="url(#arrowgreen)"/>
+    <rect x="170" y="320" width="160" height="40" fill="#5856D6" opacity="0.2" rx="8"/>
+    <text x="250" y="345" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#5856D6">LayerNorm</text>
+
+    <!-- Feed-Forward -->
+    <path d="M 250 360 L 250 390" stroke="#5856D6" stroke-width="2" marker-end="url(#arrowpurple)"/>
+    <rect x="170" y="390" width="160" height="40" fill="#FF9500" opacity="0.2" rx="8"/>
+    <text x="250" y="415" text-anchor="middle" font-family="SF Pro Display" font-size="14" fill="#FF9500">Feed-Forward</text>
+
+    <!-- Residual connection 2 -->
+    <path d="M 400 245 L 400 445 L 320 445" stroke="#32D74B" stroke-width="3" fill="none" marker-end="url(#arrowgreen)"/>
+    <text x="415" y="350" font-family="SF Pro Display" font-size="12" fill="#32D74B">+</text>
+
+    <circle cx="250" cy="445" r="20" fill="#32D74B" opacity="0.2"/>
+    <text x="250" y="452" text-anchor="middle" font-family="SF Pro Display" font-size="20" fill="#32D74B">+</text>
+
+    <!-- Output -->
+    <path d="M 250 465 L 250 520" stroke="#32D74B" stroke-width="2" marker-end="url(#arrowgreen)"/>
+    <rect x="150" y="520" width="200" height="50" fill="#555555" opacity="0.15" rx="8"/>
+    <text x="250" y="550" text-anchor="middle" font-family="SF Pro Display" font-size="16" fill="#555555">Output</text>
+
+    <!-- Arrow definitions -->
+    <defs>
+        <marker id="arrowblue" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#007AFF" />
+        </marker>
+        <marker id="arrowpurple" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#5856D6" />
+        </marker>
+        <marker id="arrowgreen" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#32D74B" />
+        </marker>
+    </defs>
+</svg>

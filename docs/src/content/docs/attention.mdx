@@ -1,0 +1,62 @@
+---
+title: Scaled Dot-Product Attention
+description: The core innovation that makes transformers powerful
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**The core innovation of transformers:** Attention is the mechanism that allows each word to "look at" and gather information from all other words in the sentence. This is what makes transformers so powerful.
+
+**A concrete example:** Consider the sentence "The animal didn't cross the street because it was too tired." What does "it" refer to? A human knows "it" refers to "the animal" (not "the street"). Attention allows the model to learn this—when processing "it", the model can attend strongly to "animal" and incorporate that information.
+
+## How Attention Works
+
+The mechanism uses three components for each token, derived from the input embeddings through learned linear transformations:
+
+- **Query (Q):** "What am I looking for?" - represents what the current token wants to know
+- **Key (K):** "What do I contain?" - represents what information each token offers
+- **Value (V):** "What information do I have?" - the actual content that gets passed along
+
+**The process:** For each token, we compare its Query against all Keys (using dot products) to compute attention scores—how much should we pay attention to each other token? We normalize these scores with softmax to get probabilities (weights that sum to 1), then use these weights to take a weighted average of all Values.
+
+The formula is elegant:
+
+<div class="formula">
+Attention(Q, K, V) = softmax(Q·Kᵀ / √d_k) · V
+</div>
+
+The division by √d_k is a scaling factor that prevents very large dot products in high dimensions, which would cause the softmax to produce near-zero gradients and make training difficult.
+
+![Attention mechanism flow diagram](/assets/attention-flow.svg)
+
+## Implementation
+
+```python
+def forward(self, query, key, value, mask=None):
+    # Get dimension for scaling
+    d_k = query.size(-1)
+
+    # Compute attention scores: Q·Kᵀ / √d_k
+    scores = torch.matmul(query, key.transpose(-2, -1))
+    scores = scores / torch.sqrt(torch.tensor(d_k, dtype=torch.float32))
+
+    # Apply causal mask if provided (prevent looking at future)
+    if mask is not None:
+        scores = scores.masked_fill(mask == 1, float('-inf'))
+
+    # Apply softmax to get attention weights (probabilities)
+    attention_weights = torch.softmax(scores, dim=-1)
+
+    # Apply attention weights to values
+    output = torch.matmul(attention_weights, value)
+
+    return output, attention_weights
+```
+
+<Aside type="caution" title="Causal Masking for Language Models">
+In decoder-only transformers (like GPT), we add a mask to prevent tokens from attending to future positions. This is essential for autoregressive generation—when predicting the next word, the model shouldn't "cheat" by looking ahead! The mask sets future attention scores to -∞ before softmax, making those positions receive zero attention weight.
+</Aside>
+
+## Implementation
+
+See the full implementation: [src/transformer/attention.py](https://github.com/zhubert/transformer/blob/main/src/transformer/attention.py)

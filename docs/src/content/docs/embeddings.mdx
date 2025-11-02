@@ -1,0 +1,185 @@
+---
+title: Token Embeddings & Positional Encoding
+description: Converting text to vectors and adding position information
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Token Embeddings
+
+**What are tokens?** Before we can process text with a neural network, we need to break it into pieces called tokens. A token might be a word ("hello"), a subword ("ing"), or even a single character. For example, the sentence "The cat sat" might be tokenized as ["The", "cat", "sat"], and each token gets assigned a unique number (ID) from a vocabulary—perhaps "The"=5, "cat"=142, "sat"=89.
+
+**Why do we need embeddings?** Computers can't directly understand these token IDs—they're just arbitrary numbers. We need to convert them into meaningful representations that capture semantic relationships. That's where embeddings come in.
+
+**What is an embedding?** An embedding is a learned vector representation (a list of numbers) for each token. Instead of representing "cat" as the ID 142, we represent it as a dense vector like [0.2, -0.5, 0.8, ...] with `d_model` dimensions (typically 512 or 768). These vectors are learned during training so that similar words end up with similar vectors.
+
+Think of this as giving each word a unique coordinate in a high-dimensional space. Words with similar meanings (like "cat" and "kitten") end up close together, while unrelated words (like "cat" and "democracy") are far apart.
+
+```python
+class TokenEmbedding(nn.Module):
+    """Convert token indices to dense vectors."""
+
+    def __init__(self, vocab_size, d_model):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.d_model = d_model
+
+    def forward(self, x):
+        # x: (batch, seq_len) - token indices
+        # returns: (batch, seq_len, d_model) - embeddings
+        return self.embedding(x)
+```
+
+## Positional Encoding: Three Modern Approaches
+
+**Why do we need positional information?** Consider the sentences "The cat ate the mouse" vs "The mouse ate the cat"—same words, completely different meanings! The order matters. Traditional recurrent neural networks (RNNs) process words one at a time in sequence, so they naturally know the order. But transformers process all tokens simultaneously in parallel (which is faster), so they have no inherent notion of position.
+
+**The solution: Position encoding.** We need to give the model information about where each token appears in the sequence. Modern transformers use three main approaches, in order from simplest to most complex:
+
+### Approach 1: ALiBi (Attention with Linear Biases) — Our Default! 🎯
+
+**The simplest and most effective!** Instead of modifying embeddings or rotating vectors, ALiBi just adds distance-based penalties directly to attention scores. Brilliantly simple:
+
+<div class="formula">
+attention_score[i,j] = Q·K / √d_k - slope × |i - j|
+</div>
+
+**What this means:** When position i attends to position j, we subtract a penalty based on their distance. The further apart they are, the more negative the penalty → lower attention!
+
+**Example:** Position 5 looking at the sequence:
+
+- Position 5 (current): distance = 0 → penalty = 0 → full attention
+- Position 4 (1 away): distance = 1 → penalty = -0.25 → slight reduction
+- Position 3 (2 away): distance = 2 → penalty = -0.50 → moderate reduction
+- Position 0 (5 away): distance = 5 → penalty = -1.25 → strong reduction
+
+**Multiple heads with different "zoom levels":** Each attention head gets a different slope value, creating heads that focus at different ranges:
+
+- Head 0 (slope = 0.25): Strong penalties → focuses on nearby tokens
+- Head 1 (slope = 0.0625): Moderate penalties → medium-range focus
+- Head 2 (slope = 0.016): Gentle penalties → long-range focus
+- Head 3 (slope = 0.004): Very gentle → very long-range relationships
+
+```python
+class ALiBiPositionalBias(nn.Module):
+    """ALiBi: The simplest modern position encoding."""
+
+    def forward(self, seq_len):
+        # Compute pairwise distances: |i - j|
+        distances = torch.abs(positions.T - positions)
+
+        # Apply slope to get biases: -slope × distance
+        biases = -slopes * distances
+
+        # Added to attention scores before softmax!
+        return biases  # (num_heads, seq_len, seq_len)
+```
+
+### Approach 2: Learned Positional Embeddings (GPT-2, BERT)
+
+**How it works:** We create special "position vectors" that are added to token embeddings. Each position gets its own learnable embedding—position 0 has one vector, position 1 has another, and so on. These are learned during training, just like token embeddings.
+
+We _add_ (not concatenate) these position embeddings to the token embeddings, so each token now carries information about both _what_ it is and _where_ it is in the sequence.
+
+```python
+class PositionalEncoding(nn.Module):
+    """Learned positional embeddings (GPT-2 style)."""
+
+    def __init__(self, d_model, max_seq_len=5000):
+        super().__init__()
+        self.pos_embedding = nn.Embedding(max_seq_len, d_model)
+
+    def forward(self, x):
+        # x: (batch, seq_len, d_model)
+        batch_size, seq_len, d_model = x.shape
+
+        # Create position indices: [0, 1, 2, ..., seq_len-1]
+        positions = torch.arange(seq_len, device=x.device)
+
+        # Get position embeddings and ADD to input
+        pos_emb = self.pos_embedding(positions)
+        return x + pos_emb  # Encodes absolute position
+```
+
+### Approach 3: RoPE (Rotary Position Embeddings) — Also Excellent
+
+**The breakthrough idea:** Instead of _adding_ position information to embeddings, we _rotate_ the query and key vectors by an angle proportional to their position. This is now the standard approach in 2024!
+
+**The clock analogy:** Imagine each token as a hand on a clock. Position 0 points at 12 o'clock. Position 1 rotates to 1 o'clock. Position 2 rotates to 2 o'clock. When two tokens "meet" in attention, the angle between them automatically tells you their relative distance!
+
+```python
+class RotaryPositionalEmbedding(nn.Module):
+    """RoPE: Rotary Position Embeddings (modern standard)."""
+
+    def forward(self, q, k, position):
+        # Instead of adding, we ROTATE q and k by position angle
+        # q, k: (batch, num_heads, seq_len, head_dim)
+
+        # Split dimensions into pairs and rotate each pair
+        # Rotation encodes position through geometry!
+        q_rotated = apply_rotation(q, position)
+        k_rotated = apply_rotation(k, position)
+
+        # When q_rotated @ k_rotated, relative position emerges!
+        return q_rotated, k_rotated  # Encodes relative position
+```
+
+**The Math (Simplified):** For vectors at positions m and n:
+
+- Rotate query q at position m by angle m×θ
+- Rotate key k at position n by angle n×θ
+- When computing q·k, the result depends on (m-n), the relative distance!
+- This is the "angle difference" property of rotations
+
+Different frequency bands allow the model to capture both fine-grained local patterns (adjacent words like "the cat") and long-range dependencies (distant references like "the cat ... it").
+
+## Comparison
+
+<div class="comparison-grid">
+  <div class="comparison-item">
+    ### 🎯 ALiBi (Our Default!)
+
+    **Parameters:** 0 (pure math!)
+    **Position Type:** Relative
+    **Extrapolation:** ✅✅ BEST!
+    **Simplicity:** Easiest
+    **Used in:** BLOOM, MPT (2022-2024)
+  </div>
+
+  <div class="comparison-item">
+    ### ⭐ RoPE
+
+    **Parameters:** 0 (pure math!)
+    **Position Type:** Relative
+    **Extrapolation:** ✅ Excellent
+    **Simplicity:** Moderate
+    **Used in:** LLaMA, Mistral (2023-2024)
+  </div>
+
+  <div class="comparison-item">
+    ### 📊 Learned
+
+    **Parameters:** 1.28M+
+    **Position Type:** Absolute
+    **Extrapolation:** ❌ Limited
+    **Simplicity:** Simple
+    **Used in:** GPT-2, GPT-3 (2018-2020)
+  </div>
+</div>
+
+<Aside type="tip" title="Why ALiBi is our default">
+- **Simplest to understand:** Just subtract distance! No complex rotation math or embedding layers.
+- **BEST extrapolation:** Benchmarks show ALiBi handles extreme length changes better than RoPE or learned. Train on 512, test on 10,000+ tokens!
+- **Zero parameters:** Like RoPE, purely mathematical. No weights to learn = faster training, better generalization.
+- **Different heads, different ranges:** Geometric slope sequence gives heads natural "zoom levels" from local to long-range.
+- **Proven in production:** Powers BLOOM (176B params), MPT, and Falcon models.
+</Aside>
+
+<Aside type="note" title="When to use alternatives">
+- **RoPE:** Also excellent! Use for LLaMA-style models or if you prefer rotation-based encoding.
+- **Learned:** Only for GPT-2/GPT-3 reproduction or educational comparison of historical approaches.
+</Aside>
+
+## Implementation
+
+See the full implementation: [src/transformer/embeddings.py](https://github.com/zhubert/transformer/blob/main/src/transformer/embeddings.py)

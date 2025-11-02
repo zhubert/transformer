@@ -1,0 +1,142 @@
+---
+title: Try It Yourself
+description: Get started with training and experimenting
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Ready to train and experiment with your own transformer? The complete implementation is available on GitHub with everything you need to get started.
+
+## Quick Start
+
+```bash
+git clone https://github.com/zhubert/transformer.git
+cd transformer
+
+# Install dependencies with uv
+make install
+
+# Launch interactive CLI - easiest way to get started!
+python main.py
+```
+
+![Interactive CLI menu](/assets/interactive-cli.png)
+
+<Aside type="tip" title="Interactive Mode">
+The CLI provides a beautiful, arrow-key navigated menu system. No flags to memorize! Just run `python main.py` and the interface guides you through:
+
+- Training models with configurable presets
+- Generating text with various sampling strategies
+- Evaluating and comparing checkpoints
+- Analyzing model internals (attention, logit lens, etc.)
+- Downloading training data for offline use
+
+For advanced users, all operations are also available via traditional command-line flags - see the [README](https://github.com/zhubert/transformer/blob/main/README.md) for details.
+</Aside>
+
+## What You Can Do
+
+### Train a Model
+
+Train on realistic data (FineWeb 10BT) with modern techniques:
+
+```bash
+# Full training (100M tokens/epoch)
+make train
+
+# Quick training (10M tokens/epoch, smaller model)
+make train-quick
+```
+
+Features:
+- Gradient accumulation for stable training
+- Train/val split for overfitting detection
+- Auto-detect CUDA/MPS/CPU
+- Checkpointing and resume
+- Real-time metrics
+
+### Generate Text
+
+Generate creative text with various sampling strategies:
+
+```bash
+make generate
+```
+
+Options:
+- Greedy (deterministic)
+- Top-k sampling
+- Top-p (nucleus) sampling
+- Temperature control
+- KV-cache optimization (2-50x faster)
+
+### Explore Interpretability
+
+Understand what your model learned:
+
+```bash
+# Logit lens - see predictions evolve by layer
+python main.py interpret logit-lens checkpoints/model.pt --demo
+
+# Attention analysis - discover specialized heads
+python main.py interpret attention checkpoints/model.pt
+
+# Induction heads - find in-context learning circuits
+python main.py interpret induction-heads checkpoints/model.pt
+
+# Activation patching - causal experiments
+python main.py interpret patch checkpoints/model.pt \
+  --clean "The Eiffel Tower is in" \
+  --corrupted "The Empire State is in" \
+  --target "Paris"
+```
+
+### Evaluate Models
+
+Compare perplexity across checkpoints:
+
+```bash
+python main.py evaluate checkpoints/model.pt
+```
+
+## Learn the Code
+
+The codebase is designed for learning:
+
+- **Comprehensive documentation** in every file
+- **Inline comments** explaining the "why"
+- **Mathematical formulas** and complexity analysis
+- **No magic** - everything implemented from scratch
+- **Modern best practices** (Pre-LN, ALiBi, GELU)
+
+Key files to explore:
+
+- `src/transformer/attention.py` - Attention mechanism with KV-cache
+- `src/transformer/embeddings.py` - ALiBi, RoPE, and learned embeddings
+- `src/transformer/model.py` - Complete decoder-only transformer
+- `src/transformer/training_utils.py` - Gradient accumulation
+- `src/transformer/interpretability/` - All interpretability tools
+
+<Aside type="note" title="Want something more production-ready?">
+Check out [Andrej Karpathy's nanochat](https://github.com/karpathy/nanochat) - a polished, optimized GPT implementation that's ready to use for real applications.
+</Aside>
+
+## Next Steps
+
+1. **Train your first model** with `make train-quick` (~30 minutes on M1 Mac)
+2. **Generate text** and see what it learns
+3. **Explore interpretability** tools to understand the internals
+4. **Read the code** - every file is documented for learning
+5. **Experiment** - try different architectures, datasets, hyperparameters
+
+## Resources
+
+- [GitHub Repository](https://github.com/zhubert/transformer)
+- [Full Documentation](https://github.com/zhubert/transformer/blob/main/README.md)
+- [Implementation Guide](https://github.com/zhubert/transformer/blob/main/CLAUDE.md)
+- [Test Suite](https://github.com/zhubert/transformer/tree/main/tests)
+- [Original Paper: "Attention is All You Need"](https://arxiv.org/abs/1706.03762)
+
+---
+
+_Open source project under MIT License for educational purposes. Built with PyTorch to understand the architecture that powers modern AI._

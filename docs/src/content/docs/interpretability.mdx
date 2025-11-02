@@ -1,0 +1,216 @@
+---
+title: Model Interpretability
+description: Understanding what transformers learn through mechanistic analysis
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Now that we've built and trained a transformer, how do we understand **what it has learned**? Mechanistic interpretability provides tools to peek inside the "black box" and discover the circuits and patterns the model uses.
+
+This section covers four powerful techniques: Logit Lens, Attention Analysis, Induction Heads, and Activation Patching.
+
+## What is Mechanistic Interpretability?
+
+Instead of just asking "does the model work?", we ask:
+
+- **When** does the model "know" the answer? (which layer?)
+- **How** does information flow through the network?
+- **Which** components are responsible for specific behaviors?
+- **What** patterns or circuits has the model learned?
+
+This connects to cutting-edge research from Anthropic, OpenAI, and academic labs exploring how LLMs actually work under the hood.
+
+## Logit Lens: Seeing Predictions Evolve
+
+The **logit lens** technique lets us visualize what the model would predict if we stopped at each layer.
+
+### How It Works
+
+Normally, we only see the final output:
+
+```
+Input → Layer 1 → Layer 2 → ... → Layer N → Unembed → Logits
+```
+
+With logit lens, we apply unembedding _at each layer_:
+
+```
+Input → Layer 1 → [Unembed] → "What now?"
+       → Layer 2 → [Unembed] → "What now?"
+       → Layer 3 → [Unembed] → "What now?"
+```
+
+### Example Insight
+
+Input: `"The capital of France is"`
+
+- **Layer 0:** "the" (15%), "a" (12%) → _Generic, common words_
+- **Layer 2:** "located" (18%), "Paris" (15%) → _Starting to understand context_
+- **Layer 4:** "Paris" (65%), "French" (10%) → _Confident, correct answer!_
+- **Layer 6:** "Paris" (72%), "France" (8%) → _Final refinement_
+
+**Key Insight:** The model "knows" Paris by Layer 4. Later layers just refine the distribution.
+
+### Try It Yourself
+
+```bash
+# Demo mode - educational examples
+python main.py interpret logit-lens checkpoints/model.pt --demo
+
+# Analyze specific text
+python main.py interpret logit-lens checkpoints/model.pt \
+  --text "The Eiffel Tower is in"
+
+# Interactive mode
+python main.py interpret logit-lens checkpoints/model.pt --interactive
+```
+
+<Aside type="tip" title="Beautiful Terminal Output">
+Uses the Rich library to display color-coded predictions in tables. High-probability predictions are highlighted in green, making it easy to see when the model converges on the right answer.
+</Aside>
+
+## Attention Analysis: What Do Heads Focus On?
+
+The **attention analysis** tool reveals what each attention head is looking at when processing text.
+
+### What We Discover
+
+Attention weights show which tokens each position "attends to". By analyzing these patterns across heads, we discover specialized behaviors:
+
+- **Previous token heads:** Always look at position i-1
+- **Uniform heads:** Spread attention evenly (averaging information)
+- **Start token heads:** Focus on the beginning of the sequence
+- **Sparse heads:** Concentrate on very few key tokens
+
+### Example Discovery
+
+Input: `"The cat sat on the mat"`
+
+**Head 2.3 (Previous Token):**
+- "cat" attends to "The" (100%)
+- "sat" attends to "cat" (100%)
+- _→ Implements a previous-token circuit!_
+
+**Head 4.1 (Uniform):**
+- Each token: 16.7% to all positions
+- _→ Averages information uniformly_
+
+### Try It Yourself
+
+```bash
+# Analyze a specific head
+python main.py interpret attention checkpoints/model.pt \
+  --text "Hello world" --layer 2 --head 3
+
+# Find all previous-token heads
+python main.py interpret attention checkpoints/model.pt \
+  --text "Hello world"  # Shows pattern summary
+```
+
+## Induction Heads: Pattern Matching Circuits
+
+The **induction head detector** finds circuits that implement in-context learning - the ability to copy from earlier patterns.
+
+### What Are Induction Heads?
+
+Given a repeated pattern like:
+
+```
+Input: "A B C ... A B [?]"
+Prediction: "C"
+```
+
+Induction heads learn to **predict C** by recognizing the repeated "A B" pattern and copying what came after the first occurrence.
+
+### The Circuit
+
+Induction typically involves **two heads working together**:
+
+1. **Previous Token Head (Layer L):**
+   - At position i, attends to i-1
+   - Creates representation of "what came before"
+
+2. **Induction Head (Layer L+1):**
+   - Queries for matches to previous token
+   - Attends to what came AFTER those matches
+   - Predicts the next token
+
+### Try It Yourself
+
+```bash
+# Detect induction heads across all layers
+python main.py interpret induction-heads checkpoints/model.pt
+
+# Custom parameters: fewer tests, longer sequences
+python main.py interpret induction-heads checkpoints/model.pt \
+  --num-sequences 50 --seq-length 40 --top-k 10
+```
+
+<Aside type="tip" title="Why It Matters">
+Induction heads are the first clearly-identified circuit in transformers. They're crucial for few-shot learning and emerge suddenly during training ("grokking"). Almost all transformer language models develop induction heads!
+</Aside>
+
+## Activation Patching: Causal Interventions
+
+The **activation patching** tool performs causal experiments to identify which components are truly responsible for specific behaviors.
+
+### The Question
+
+We can _observe_ what the model does, but which parts are actually **causing** the behavior?
+
+**Activation patching answers this through intervention experiments:**
+
+1. Run model on "clean" input (correct behavior)
+2. Run model on "corrupted" input (incorrect behavior)
+3. For each component, swap clean activations into corrupted run
+4. Measure how much this restores correct behavior
+
+High recovery = that component is **causally important**!
+
+### Example Experiment
+
+```
+Clean:     "The Eiffel Tower is in"
+           → Predicts: "Paris" (85%)
+
+Corrupted: "The Empire State is in"
+           → Predicts: "New York" (78%)
+
+Test: Patch Layer 4 activations
+      from clean → corrupted
+           → Predicts: "Paris" (82%)
+
+Result: Layer 4 recovery = 90%
+        Layer 4 is CRITICAL!
+```
+
+### Try It Yourself
+
+```bash
+# Test which layers are causally important
+python main.py interpret patch checkpoints/model.pt \
+  --clean "The Eiffel Tower is in" \
+  --corrupted "The Empire State Building is in" \
+  --target "Paris"
+```
+
+<Aside type="caution" title="Why It's Powerful">
+This is **causal** evidence, not just correlation. If patching a layer recovers the behavior, that layer is provably necessary for that specific computation. This technique has been used to locate where factual knowledge is stored in large language models!
+</Aside>
+
+## Learn More
+
+Explore the implementation files - each includes comprehensive documentation explaining the theory and methods:
+
+- [src/transformer/interpretability/logit_lens.py](https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/logit_lens.py)
+- [src/transformer/interpretability/attention_analysis.py](https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/attention_analysis.py)
+- [src/transformer/interpretability/induction_heads.py](https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/induction_heads.py)
+- [src/transformer/interpretability/activation_patching.py](https://github.com/zhubert/transformer/blob/main/src/transformer/interpretability/activation_patching.py)
+- [commands/interpret.py](https://github.com/zhubert/transformer/blob/main/commands/interpret.py)
+
+### Research References
+
+- [Logit Lens - nostalgebraist (LessWrong)](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/)
+- [A Mathematical Framework for Transformer Circuits - Anthropic](https://transformer-circuits.pub/2021/framework/)
+- [In-context Learning and Induction Heads - Anthropic](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/)
+- [How to use and interpret activation patching - Neel Nanda & Stefan Heimersheim](https://www.lesswrong.com/posts/FhryNAFknqKAdDcYy/how-to-use-and-interpret-activation-patching)

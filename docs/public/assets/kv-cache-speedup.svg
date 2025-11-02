@@ -1,0 +1,45 @@
+<svg viewBox="0 0 700 500" xmlns="http://www.w3.org/2000/svg">
+    <!-- Title -->
+    <text x="350" y="30" text-anchor="middle" font-family="SF Pro Display" font-size="20" font-weight="600" fill="#555555">KV-Cache: Reuse Past Computations</text>
+
+    <!-- Without Cache (left side) -->
+    <text x="150" y="70" text-anchor="middle" font-family="SF Pro Display" font-size="16" font-weight="600" fill="#FF2D55">Without Cache: O(n²)</text>
+
+    <!-- Step boxes -->
+    <rect x="50" y="90" width="200" height="60" fill="#FF2D55" opacity="0.2" rx="8" stroke="#FF2D55" stroke-width="2"/>
+    <text x="150" y="115" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#555555">Step 1: Process [tok1, tok2]</text>
+    <text x="150" y="135" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 2 tokens</text>
+
+    <rect x="50" y="160" width="200" height="60" fill="#FF2D55" opacity="0.2" rx="8" stroke="#FF2D55" stroke-width="2"/>
+    <text x="150" y="185" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#555555">Step 2: Process [tok1, tok2, tok3]</text>
+    <text x="150" y="205" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 3 tokens ❌</text>
+
+    <rect x="50" y="230" width="200" height="60" fill="#FF2D55" opacity="0.2" rx="8" stroke="#FF2D55" stroke-width="2"/>
+    <text x="150" y="255" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#555555">Step 3: Process all 4 tokens</text>
+    <text x="150" y="275" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 4 tokens ❌</text>
+
+    <text x="150" y="310" text-anchor="middle" font-family="SF Pro Display" font-size="13" fill="#FF2D55">Total: 2+3+4 = 9 token computations</text>
+
+    <!-- With Cache (right side) -->
+    <text x="525" y="70" text-anchor="middle" font-family="SF Pro Display" font-size="16" font-weight="600" fill="#32D74B">With Cache: O(n)</text>
+
+    <rect x="425" y="90" width="200" height="60" fill="#32D74B" opacity="0.2" rx="8" stroke="#32D74B" stroke-width="2"/>
+    <text x="525" y="115" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#555555">Step 1: Process [tok1, tok2]</text>
+    <text x="525" y="135" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute &amp; cache K,V for 2</text>
+
+    <rect x="425" y="160" width="200" height="60" fill="#32D74B" opacity="0.2" rx="8" stroke="#32D74B" stroke-width="2"/>
+    <text x="525" y="185" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#555555">Step 2: Process [tok3] only!</text>
+    <text x="525" y="205" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 1, reuse cache ✓</text>
+
+    <rect x="425" y="230" width="200" height="60" fill="#32D74B" opacity="0.2" rx="8" stroke="#32D74B" stroke-width="2"/>
+    <text x="525" y="255" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#555555">Step 3: Process [tok4] only!</text>
+    <text x="525" y="275" text-anchor="middle" font-family="SF Mono" font-size="11" fill="#666">Compute K,V for 1, reuse cache ✓</text>
+
+    <text x="525" y="310" text-anchor="middle" font-family="SF Pro Display" font-size="13" fill="#32D74B">Total: 2+1+1 = 4 token computations</text>
+
+    <!-- Speedup annotation -->
+    <rect x="200" y="340" width="300" height="100" fill="#007AFF" opacity="0.1" rx="8"/>
+    <text x="350" y="370" text-anchor="middle" font-family="SF Pro Display" font-size="18" font-weight="600" fill="#007AFF">2.25x Speedup!</text>
+    <text x="350" y="395" text-anchor="middle" font-family="SF Mono" font-size="13" fill="#666">9 computations → 4 computations</text>
+    <text x="350" y="420" text-anchor="middle" font-family="SF Mono" font-size="12" fill="#666">For 200 tokens: ~50x speedup!</text>
+</svg>
