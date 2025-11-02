@@ -30,7 +30,9 @@ Phi-2 Architecture:
 - Attention heads: 32
 - FFN dimension (d_ff): 10240
 - Vocabulary: 51200 tokens (CodeGen tokenizer)
-- Position encoding: RoPE (Rotary Position Embeddings)
+- Position encoding: RoPE (Rotary Position Embeddings) with partial rotation
+  * partial_rotary_factor: 0.4 (only 40% of dimensions rotated)
+  * Head dim: 80, Rotary dim: 32, Pass-through dim: 48
 - Context length: 2048 tokens
 - Weight tying: Yes (embedding and output weights shared)
 
@@ -39,25 +41,26 @@ Weight Conversion Mapping:
 Phi-2 uses a different naming convention. We map:
 
 Token Embeddings:
-    transformer.embd.wte.weight → token_embedding.embedding.weight
+    model.embed_tokens.weight → token_embedding.embedding.weight
 
 Transformer Blocks (for each layer i):
-    transformer.h[i].ln.weight/bias → blocks[i].ln1.weight/bias (pre-attention norm)
-    (Note: Phi-2 uses parallel attention/FFN architecture with shared LayerNorm)
+    model.layers[i].input_layernorm.weight/bias → blocks[i].norm1.weight/bias (pre-attention norm)
+    (Note: We duplicate the same norm for norm2 since Phi-2 uses a single norm per block)
 
-    Attention (fused QKV projection):
-        transformer.h[i].mixer.Wqkv.weight → Split into q_proj, k_proj, v_proj
-        transformer.h[i].mixer.Wqkv.bias → Split into q_proj, k_proj, v_proj biases
-        transformer.h[i].mixer.out_proj.weight/bias → blocks[i].attention.o_proj
+    Attention (separate Q, K, V projections):
+        model.layers[i].self_attn.q_proj.weight/bias → blocks[i].attention.W_q
+        model.layers[i].self_attn.k_proj.weight/bias → blocks[i].attention.W_k
+        model.layers[i].self_attn.v_proj.weight/bias → blocks[i].attention.W_v
+        model.layers[i].self_attn.dense.weight/bias → blocks[i].attention.W_o
 
     Feed-Forward Network:
-        transformer.h[i].mlp.fc1.weight/bias → blocks[i].ffn.linear1
-        transformer.h[i].mlp.fc2.weight/bias → blocks[i].ffn.linear2
+        model.layers[i].mlp.fc1.weight/bias → blocks[i].ffn.linear1
+        model.layers[i].mlp.fc2.weight/bias → blocks[i].ffn.linear2
 
 Output (LM Head):
-    lm_head.ln.weight/bias → ln_f.weight/bias (final layer norm)
-    lm_head.linear.weight → output_proj.weight
-    (Note: Phi-2 has output bias, but we skip it for weight tying)
+    model.final_layernorm.weight/bias → ln_f.weight/bias (final layer norm)
+    lm_head.weight → output_proj.weight
+    (Note: Phi-2 has lm_head.bias, but we skip it for weight tying)
 
 RoPE Parameters:
     Computed and cached (not learned, so no weights to convert)
@@ -225,6 +228,7 @@ def download_and_convert_phi2():
                 dropout=0.0,  # Phi-2 uses dropout=0.0 (or 0.1 during training)
                 tie_weights=True,  # Phi-2 uses weight tying
                 position_encoding_type='rope',  # Phi-2 uses RoPE
+                partial_rotary_factor=0.4,  # Phi-2 rotates only 40% of dimensions
             )
 
             # Get Phi-2 state dict
@@ -236,44 +240,33 @@ def download_and_convert_phi2():
 
             # 1. Token embeddings
             console.print("[dim]  Mapping token embeddings...[/dim]")
-            converted_state['token_embedding.embedding.weight'] = phi2_state['transformer.embd.wte.weight']
+            converted_state['token_embedding.embedding.weight'] = phi2_state['model.embed_tokens.weight']
 
             # 2. Transformer blocks
             console.print("[dim]  Mapping 32 transformer blocks...[/dim]")
             for i in range(32):
-                phi2_prefix = f'transformer.h.{i}'
+                phi2_prefix = f'model.layers.{i}'
                 our_prefix = f'blocks.{i}'
 
-                # Layer norm (Phi-2 uses one norm for both attention and FFN in parallel architecture)
+                # Layer norm (Phi-2 uses one norm per block)
                 # Our architecture uses norm1 (before attention) and norm2 (before FFN)
-                converted_state[f'{our_prefix}.norm1.weight'] = phi2_state[f'{phi2_prefix}.ln.weight']
-                converted_state[f'{our_prefix}.norm1.bias'] = phi2_state[f'{phi2_prefix}.ln.bias']
+                # We duplicate the same norm for both since Phi-2 uses a single norm
+                converted_state[f'{our_prefix}.norm1.weight'] = phi2_state[f'{phi2_prefix}.input_layernorm.weight']
+                converted_state[f'{our_prefix}.norm1.bias'] = phi2_state[f'{phi2_prefix}.input_layernorm.bias']
+                converted_state[f'{our_prefix}.norm2.weight'] = phi2_state[f'{phi2_prefix}.input_layernorm.weight']
+                converted_state[f'{our_prefix}.norm2.bias'] = phi2_state[f'{phi2_prefix}.input_layernorm.bias']
 
-                # For norm2, we'll reuse the same norm (Phi-2 has parallel architecture with shared norm)
-                # Our architecture expects separate norms, so we duplicate
-                converted_state[f'{our_prefix}.norm2.weight'] = phi2_state[f'{phi2_prefix}.ln.weight']
-                converted_state[f'{our_prefix}.norm2.bias'] = phi2_state[f'{phi2_prefix}.ln.bias']
-
-                # Attention: Phi-2 uses fused QKV projection (Wqkv)
-                # We need to split it into separate W_q, W_k, W_v
-                wqkv_weight = phi2_state[f'{phi2_prefix}.mixer.Wqkv.weight']  # Shape: (3*2560, 2560)
-                wqkv_bias = phi2_state[f'{phi2_prefix}.mixer.Wqkv.bias']      # Shape: (3*2560,)
-
-                # Split into Q, K, V (each is d_model x d_model)
-                d_model = 2560
-                q_weight, k_weight, v_weight = wqkv_weight.chunk(3, dim=0)
-                q_bias, k_bias, v_bias = wqkv_bias.chunk(3, dim=0)
-
-                converted_state[f'{our_prefix}.attention.W_q.weight'] = q_weight
-                converted_state[f'{our_prefix}.attention.W_q.bias'] = q_bias
-                converted_state[f'{our_prefix}.attention.W_k.weight'] = k_weight
-                converted_state[f'{our_prefix}.attention.W_k.bias'] = k_bias
-                converted_state[f'{our_prefix}.attention.W_v.weight'] = v_weight
-                converted_state[f'{our_prefix}.attention.W_v.bias'] = v_bias
+                # Attention: Phi-2 already has separate Q, K, V projections
+                converted_state[f'{our_prefix}.attention.W_q.weight'] = phi2_state[f'{phi2_prefix}.self_attn.q_proj.weight']
+                converted_state[f'{our_prefix}.attention.W_q.bias'] = phi2_state[f'{phi2_prefix}.self_attn.q_proj.bias']
+                converted_state[f'{our_prefix}.attention.W_k.weight'] = phi2_state[f'{phi2_prefix}.self_attn.k_proj.weight']
+                converted_state[f'{our_prefix}.attention.W_k.bias'] = phi2_state[f'{phi2_prefix}.self_attn.k_proj.bias']
+                converted_state[f'{our_prefix}.attention.W_v.weight'] = phi2_state[f'{phi2_prefix}.self_attn.v_proj.weight']
+                converted_state[f'{our_prefix}.attention.W_v.bias'] = phi2_state[f'{phi2_prefix}.self_attn.v_proj.bias']
 
                 # Output projection (W_o in our architecture)
-                converted_state[f'{our_prefix}.attention.W_o.weight'] = phi2_state[f'{phi2_prefix}.mixer.out_proj.weight']
-                converted_state[f'{our_prefix}.attention.W_o.bias'] = phi2_state[f'{phi2_prefix}.mixer.out_proj.bias']
+                converted_state[f'{our_prefix}.attention.W_o.weight'] = phi2_state[f'{phi2_prefix}.self_attn.dense.weight']
+                converted_state[f'{our_prefix}.attention.W_o.bias'] = phi2_state[f'{phi2_prefix}.self_attn.dense.bias']
 
                 # Feed-forward network
                 converted_state[f'{our_prefix}.ffn.linear1.weight'] = phi2_state[f'{phi2_prefix}.mlp.fc1.weight']
@@ -283,14 +276,14 @@ def download_and_convert_phi2():
 
             # 3. Final layer norm
             console.print("[dim]  Mapping final layer norm...[/dim]")
-            converted_state['ln_f.weight'] = phi2_state['lm_head.ln.weight']
-            converted_state['ln_f.bias'] = phi2_state['lm_head.ln.bias']
+            converted_state['ln_f.weight'] = phi2_state['model.final_layernorm.weight']
+            converted_state['ln_f.bias'] = phi2_state['model.final_layernorm.bias']
 
             # 4. Output projection (LM head)
-            # Phi-2 uses weight tying, so lm_head.linear.weight should equal transformer.embd.wte.weight
+            # Phi-2 uses weight tying, so lm_head.weight should equal model.embed_tokens.weight
             # We'll use the embedding weight (already set by weight tying in __init__)
             console.print("[dim]  Using weight tying for output projection...[/dim]")
-            converted_state['output_proj.weight'] = phi2_state['lm_head.linear.weight']
+            converted_state['output_proj.weight'] = phi2_state['lm_head.weight']
             # Note: We don't copy bias because our output_proj has bias=False when weight tying
 
             # Load converted weights into our model
@@ -332,6 +325,7 @@ def download_and_convert_phi2():
                     'max_seq_len': 2048,
                     'tie_weights': True,
                     'position_encoding_type': 'rope',
+                    'partial_rotary_factor': 0.4,  # Phi-2 uses partial rotation
                     'encoding': 'cl100k_base',  # We'll use our standard tokenizer
                 },
                 'loss': None,  # No training loss (pretrained)
