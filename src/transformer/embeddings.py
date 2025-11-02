@@ -280,11 +280,6 @@ class RotaryPositionalEmbedding(nn.Module):
     - Precomputed and cached: sin/cos values computed once, reused
     - Efficient: Only ~5-10% computational overhead vs learned embeddings
     - Compatible with everything: Works with KV-cache, torch.compile(), etc.
-    - **Partial rotation support**: Can rotate only a fraction of dimensions
-      * partial_rotary_factor=1.0 (default): rotate all dimensions (standard RoPE)
-      * partial_rotary_factor=0.4: rotate first 40% of dimensions (Phi-2 style)
-      * Remaining dimensions pass through unchanged
-      * Used in Phi-2, CodeGen, and some recent models to reduce computation
 
     Shape Flow Example (head_dim=64, seq_len=10)
     --------------------------------------------
@@ -322,7 +317,7 @@ class RotaryPositionalEmbedding(nn.Module):
     mechanism naturally computes relative positions through the dot product!
     """
 
-    def __init__(self, head_dim, max_seq_len=5000, base=10000.0, partial_rotary_factor=1.0):
+    def __init__(self, head_dim, max_seq_len=5000, base=10000.0):
         """
         Initialize RoPE with precomputed frequencies.
 
@@ -334,12 +329,6 @@ class RotaryPositionalEmbedding(nn.Module):
             base: Base for computing frequencies (10000 in original paper)
                   Higher base = slower rotation = longer-range position encoding
                   Can be tuned for different context lengths
-            partial_rotary_factor: Fraction of head_dim to apply RoPE to (default: 1.0)
-                                  - 1.0 = full rotation (all dimensions, standard RoPE)
-                                  - 0.4 = partial rotation (40% of dimensions, used in Phi-2)
-                                  - Must be in range (0.0, 1.0]
-                                  The first (head_dim * factor) dimensions get rotated,
-                                  the rest remain unchanged
 
         Precomputation:
             We precompute sin/cos values for all positions up to max_seq_len
@@ -347,42 +336,28 @@ class RotaryPositionalEmbedding(nn.Module):
             forward passes fast.
 
         Memory cost:
-            2 × max_seq_len × (rotary_dim / 2) × 4 bytes
-            For head_dim=64, max_seq_len=5000, partial=1.0: ~1.2 MB
-            For head_dim=80, max_seq_len=5000, partial=0.4: ~0.6 MB
+            2 × max_seq_len × (head_dim / 2) × 4 bytes
+            For head_dim=64, max_seq_len=5000: ~1.2 MB
             Negligible compared to model weights!
         """
         super().__init__()
 
         assert head_dim % 2 == 0, f"head_dim must be even for RoPE, got {head_dim}"
-        assert 0.0 < partial_rotary_factor <= 1.0, \
-            f"partial_rotary_factor must be in (0.0, 1.0], got {partial_rotary_factor}"
 
         self.head_dim = head_dim
         self.max_seq_len = max_seq_len
         self.base = base
-        self.partial_rotary_factor = partial_rotary_factor
 
-        # Calculate rotary dimension (how many dimensions to rotate)
-        # Must be even for pairing
-        rotary_dim = int(head_dim * partial_rotary_factor)
-        if rotary_dim % 2 != 0:
-            rotary_dim -= 1  # Make it even
-        self.rotary_dim = rotary_dim
-
-        # Compute frequency for each pair of dimensions in the rotary subspace
-        # θᵢ = base^(-2i/rotary_dim) for i = 0, 1, 2, ..., rotary_dim/2 - 1
+        # Compute frequency for each pair of dimensions
+        # θᵢ = base^(-2i/head_dim) for i = 0, 1, 2, ..., head_dim/2 - 1
         #
-        # NOTE: We use rotary_dim here, not head_dim, so frequencies are computed
-        # relative to the rotary subspace size
-        #
-        # Example for head_dim=80, partial=0.4 → rotary_dim=32:
-        # i=0:  θ = 10000^(0/32)    = 1.0       → fast rotation (fine-grained)
-        # i=8:  θ = 10000^(-16/32)  = 0.01      → medium rotation
-        # i=15: θ = 10000^(-30/32)  = 0.0001    → slow rotation (long-range)
-        inv_freq = 1.0 / (base ** (torch.arange(0, rotary_dim, 2).float() / rotary_dim))
-        # Shape: (rotary_dim / 2,)
-        # Example for rotary_dim=32: 16 frequencies
+        # Example for head_dim=64:
+        # i=0:  θ = 10000^(0/64)    = 1.0       → fast rotation (fine-grained)
+        # i=16: θ = 10000^(-32/64)  = 0.01      → medium rotation
+        # i=31: θ = 10000^(-62/64)  = 0.0001    → slow rotation (long-range)
+        inv_freq = 1.0 / (base ** (torch.arange(0, head_dim, 2).float() / head_dim))
+        # Shape: (head_dim / 2,)
+        # Example for head_dim=64: 32 frequencies
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
         # Precompute sin/cos values for all positions
@@ -439,8 +414,8 @@ class RotaryPositionalEmbedding(nn.Module):
         Args:
             x: Input tensor (Q or K) of shape (..., seq_len, head_dim)
                Typically: (batch, num_heads, seq_len, head_dim)
-            cos: Cosine values of shape (seq_len, rotary_dim / 2)
-            sin: Sine values of shape (seq_len, rotary_dim / 2)
+            cos: Cosine values of shape (seq_len, head_dim / 2)
+            sin: Sine values of shape (seq_len, head_dim / 2)
 
         Returns:
             rotated_x: Rotated tensor of shape (..., seq_len, head_dim)
@@ -449,37 +424,26 @@ class RotaryPositionalEmbedding(nn.Module):
             [x₀']   [cos θ  -sin θ] [x₀]     [x₀ cos θ - x₁ sin θ]
             [x₁'] = [sin θ   cos θ] [x₁]  =  [x₀ sin θ + x₁ cos θ]
 
-        We apply this rotation to the first rotary_dim dimensions.
-        If partial_rotary_factor < 1.0, the remaining dimensions are left unchanged.
+        We apply this rotation to each of the (head_dim / 2) pairs.
         """
         # Get shape
         *batch_dims, seq_len, head_dim = x.shape
 
-        # For partial rotation: split x into rotary and non-rotary parts
-        if self.rotary_dim < head_dim:
-            # Split: x_rotary gets rotated, x_pass_through stays unchanged
-            x_rotary = x[..., :self.rotary_dim]      # (..., seq_len, rotary_dim)
-            x_pass_through = x[..., self.rotary_dim:] # (..., seq_len, head_dim - rotary_dim)
-        else:
-            # Full rotation: rotate all dimensions
-            x_rotary = x
-            x_pass_through = None
-
-        # Reshape rotary part to expose pairs: (..., seq_len, rotary_dim/2, 2)
+        # Reshape x to expose pairs: (..., seq_len, head_dim/2, 2)
         # This groups each pair of dimensions together
-        x_rotary = x_rotary.reshape(*batch_dims, seq_len, self.rotary_dim // 2, 2)
+        x = x.reshape(*batch_dims, seq_len, head_dim // 2, 2)
 
         # Split into first and second element of each pair
         # x[..., 0]: first element  (q₀ or k₀)
         # x[..., 1]: second element (q₁ or k₁)
-        x0 = x_rotary[..., 0]  # (..., seq_len, rotary_dim / 2)
-        x1 = x_rotary[..., 1]  # (..., seq_len, rotary_dim / 2)
+        x0 = x[..., 0]  # (..., seq_len, head_dim / 2)
+        x1 = x[..., 1]  # (..., seq_len, head_dim / 2)
 
         # Expand cos/sin to match batch dimensions
-        # cos, sin: (seq_len, rotary_dim / 2)
-        # Need: (..., seq_len, rotary_dim / 2) to broadcast with x0, x1
-        cos = cos.reshape(*([1] * len(batch_dims)), seq_len, self.rotary_dim // 2)
-        sin = sin.reshape(*([1] * len(batch_dims)), seq_len, self.rotary_dim // 2)
+        # cos, sin: (seq_len, head_dim / 2)
+        # Need: (..., seq_len, head_dim / 2) to broadcast with x0, x1
+        cos = cos.reshape(*([1] * len(batch_dims)), seq_len, head_dim // 2)
+        sin = sin.reshape(*([1] * len(batch_dims)), seq_len, head_dim // 2)
 
         # Apply rotation formula:
         #   x₀' = x₀ cos θ - x₁ sin θ
@@ -487,22 +451,13 @@ class RotaryPositionalEmbedding(nn.Module):
         x0_rotated = x0 * cos - x1 * sin
         x1_rotated = x0 * sin + x1 * cos
 
-        # Stack back together: (..., seq_len, rotary_dim/2, 2)
+        # Stack back together: (..., seq_len, head_dim/2, 2)
         x_rotated = torch.stack([x0_rotated, x1_rotated], dim=-1)
 
-        # Reshape back: (..., seq_len, rotary_dim)
-        x_rotated = x_rotated.reshape(*batch_dims, seq_len, self.rotary_dim)
+        # Reshape back to original: (..., seq_len, head_dim)
+        x_rotated = x_rotated.reshape(*batch_dims, seq_len, head_dim)
 
-        # For partial rotation: concatenate rotated and pass-through parts
-        if x_pass_through is not None:
-            # Concatenate: [rotated_dims, unrotated_dims]
-            x_out = torch.cat([x_rotated, x_pass_through], dim=-1)
-            # Shape: (..., seq_len, head_dim)
-        else:
-            # Full rotation: just return rotated tensor
-            x_out = x_rotated
-
-        return x_out
+        return x_rotated
 
     def forward(self, q, k, start_pos=0):
         """

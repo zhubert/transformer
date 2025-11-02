@@ -64,24 +64,10 @@ src/transformer/
 └── device_utils.py     # Device initialization and management
 
 commands/               # CLI scripts for training, generation, evaluation
-├── download_phi2.py    # Download pretrained Phi-2 model (2.7B params)
 tests/                  # Test suite for core components
 main.py                 # Main CLI entry point (python main.py train/generate/etc)
 docs/                   # Starlight documentation site
 ```
-
-## Pretrained Models
-
-The project supports downloading and using pretrained models:
-
-**Phi-2 (2.7B parameters)**: Microsoft's state-of-the-art small model
-- Download via: `python commands/download_phi2.py` or interactive CLI
-- Fully compatible with our architecture (supports partial RoPE rotation)
-- Use for fine-tuning, generation, evaluation, and interpretability
-- Requires: ~6GB GPU for generation, ~11GB for fine-tuning (mixed precision)
-- See `docs/src/content/docs/pretrained-models.mdx` for full documentation
-
-All pretrained models are converted to our standard checkpoint format and work seamlessly with training, generation, and interpretability tools.
 
 ## Implementation Patterns
 

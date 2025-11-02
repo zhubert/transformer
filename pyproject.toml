@@ -11,16 +11,12 @@ dependencies = [
     "datasets>=4.3.0",
     "rich>=14.2.0",
     "questionary>=2.1.0",
-    "transformers>=4.57.1",
 ]
 
 [project.optional-dependencies]
 rocm = [
     "torch>=2.5.0; sys_platform == 'linux'",
     "pytorch-triton-rocm; sys_platform == 'linux'",
-]
-pretrained = [
-    "transformers>=4.30.0",
 ]
 
 [dependency-groups]
