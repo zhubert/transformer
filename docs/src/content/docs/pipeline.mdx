@@ -1,0 +1,476 @@
+---
+title: Training Pipeline
+description: The three-stage approach used by modern LLMs
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+Modern large language models like GPT-4, Claude, and Llama 3 aren't trained in a single step. Instead, they use a **three-stage training pipeline** that progressively refines the model from general language understanding to task-specific behavior.
+
+This educational implementation reflects the same approach, teaching you how production LLMs are built.
+
+## The Three-Stage Pipeline
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ PRE-TRAINING │ ──▶ │ MID-TRAINING │ ──▶ │ FINE-TUNING  │
+└──────────────┘     └──────────────┘     └──────────────┘
+ Base Model          Domain Expert        Task Specialist
+```
+
+Each stage has a specific purpose, uses different data, and requires different techniques. Let's explore each stage in detail.
+
+## Stage 1: Pre-Training ✅
+
+<Card title="Purpose" icon="rocket">
+Build a foundation model with general language understanding—grammar, facts, reasoning patterns.
+</Card>
+
+### What Happens During Pre-Training
+
+Pre-training is where the model learns the **fundamentals of language** from massive amounts of diverse text. Think of it like a child learning to read by consuming millions of books, articles, and websites.
+
+**Objective:** Next-token prediction on all tokens
+```python
+# Example: "The cat sat on the"
+# Model learns to predict: "mat"
+loss = cross_entropy(predicted_logits, actual_next_token)
+```
+
+### Data Requirements
+
+<CardGrid>
+  <Card title="Dataset" icon="document">
+    FineWeb (10B tokens) or WikiText-103 (100M tokens)
+  </Card>
+  <Card title="Scale" icon="seti:config">
+    Billions of tokens from diverse sources
+  </Card>
+  <Card title="Quality" icon="approve-check">
+    Broad coverage matters more than perfection
+  </Card>
+</CardGrid>
+
+**Why billions of tokens?** The model needs to see language patterns in many different contexts:
+- Grammar rules across writing styles
+- Facts from multiple perspectives
+- Common sense reasoning patterns
+- Diverse vocabulary and expressions
+
+### Training Configuration
+
+```python
+# Pre-training hyperparameters
+learning_rate = 3e-4        # Relatively high for initial learning
+batch_size = 128            # Via gradient accumulation (8 × 16 steps)
+num_epochs = 15             # Multiple passes over data
+optimizer = AdamW           # With selective weight decay
+
+# Time estimate
+# - CPU: ~1 week for 50M tokens
+# - GPU (consumer): ~1-2 days for 50M tokens
+# - GPU (data center): ~hours for billions of tokens
+```
+
+### What You Get
+
+After pre-training, your model can:
+- ✓ Complete sentences with grammatically correct text
+- ✓ Demonstrate broad factual knowledge
+- ✓ Follow basic language patterns
+- ✓ Ready for domain specialization
+
+<Aside type="tip" title="Implementation Status">
+Pre-training is **fully implemented** in this project. Run `python main.py` and select "Start pre-training" to train your own base model!
+</Aside>
+
+### Code Reference
+
+- **Training script:** [commands/train.py](https://github.com/zhubert/transformer/blob/main/commands/train.py)
+- **Dataset:** [src/transformer/fineweb_dataset.py](https://github.com/zhubert/transformer/blob/main/src/transformer/fineweb_dataset.py)
+
+---
+
+## Stage 2: Mid-Training 🚧
+
+<Card title="Purpose" icon="star">
+Specialize your base model for specific domains—code, math, or science expertise.
+</Card>
+
+### What Happens During Mid-Training
+
+Mid-training (also called "continued pre-training") takes your general-purpose base model and makes it an **expert in a specific domain**. This is where GPT-4 becomes great at coding, or where specialized models like Codex emerge.
+
+**Objective:** Next-token prediction (same as pre-training, but focused data)
+
+**The key insight:** Use the same architecture and training method, but with **curated, domain-specific data** and a **lower learning rate** to preserve general capabilities while adding expertise.
+
+### Data Requirements
+
+<CardGrid>
+  <Card title="Code Domain" icon="seti:python">
+    Python, JavaScript, documentation, Stack Overflow, GitHub
+  </Card>
+  <Card title="Math Domain" icon="seti:tex">
+    Proofs, textbooks, problem-solution pairs, mathematical reasoning
+  </Card>
+  <Card title="Science Domain" icon="seti:notebook">
+    Papers, textbooks, encyclopedias, scientific literature
+  </Card>
+</CardGrid>
+
+**Scale:** Millions to low billions of tokens (much less than pre-training!)
+
+**Quality over quantity:** Curated, high-quality domain-specific data is crucial. A few million tokens of excellent code are better than billions of tokens of random GitHub repositories.
+
+### Training Configuration
+
+```python
+# Mid-training hyperparameters
+learning_rate = 1e-5        # 30× lower than pre-training!
+batch_size = 128            # Same as pre-training
+num_epochs = 5-10           # Fewer epochs (focused data)
+base_model = "pretrained_checkpoint.pt"  # Start from pre-training
+
+# Important: Mix domain data with general data
+domain_data_ratio = 0.9     # 90% domain, 10% general
+# This prevents catastrophic forgetting!
+```
+
+### The Catastrophic Forgetting Problem
+
+<Aside type="caution" title="Critical Challenge">
+When you train on domain-specific data, the model can **forget** its general capabilities. For example, a model specialized on code might lose its ability to write coherent prose!
+</Aside>
+
+**Solution: Dual Evaluation**
+
+Track both domain performance AND general performance:
+
+```python
+# After each epoch, evaluate on BOTH:
+domain_perplexity = evaluate(model, code_dataset)    # Should decrease
+general_perplexity = evaluate(model, fineweb_dataset) # Should stay stable
+
+if general_perplexity > baseline * 1.1:
+    print("Warning: Catastrophic forgetting detected!")
+    # Adjust: increase general data ratio or lower learning rate
+```
+
+### Special Techniques
+
+1. **Curriculum Learning:** Start with easy examples, gradually increase difficulty
+2. **Data Mixing:** Blend domain data (90%) with general data (10%)
+3. **Learning Rate Scheduling:** Carefully warm up and cool down
+
+### What You Get
+
+After mid-training, your model can:
+- ✓ Excel at domain-specific tasks (e.g., write better code)
+- ✓ Retain general language understanding
+- ✓ Ready for instruction fine-tuning
+
+<Aside type="note" title="Implementation Status">
+Mid-training infrastructure is **coming soon**. The interactive CLI already has menu placeholders—implementation will follow in future updates.
+</Aside>
+
+---
+
+## Stage 3: Fine-Tuning 🚧
+
+<Card title="Purpose" icon="puzzle">
+Teach specific behaviors and response formats—make the model follow instructions.
+</Card>
+
+### What Happens During Fine-Tuning
+
+Fine-tuning (specifically "Supervised Fine-Tuning" or SFT) is where we teach the model to be a **helpful assistant**. Instead of just predicting text, the model learns to:
+- Follow instructions accurately
+- Generate properly formatted responses
+- Behave like a conversational agent
+
+This is the difference between a base model (completes text) and ChatGPT (follows instructions).
+
+### Data Format: Instruction-Response Pairs
+
+Unlike pre-training (raw text), fine-tuning uses **structured examples**:
+
+```json
+{
+  "instruction": "Translate to French: Hello, how are you?",
+  "response": "Bonjour, comment allez-vous?"
+}
+
+{
+  "instruction": "Write a Python function to reverse a list",
+  "response": "def reverse_list(lst):\n    return lst[::-1]"
+}
+
+{
+  "instruction": "Summarize: [long article text]",
+  "response": "[concise 2-3 sentence summary]"
+}
+```
+
+### The Critical Difference: Loss on Response Only!
+
+<Aside type="caution" title="Key Implementation Detail">
+During fine-tuning, we **only compute loss on the response tokens**, not the instruction tokens. This teaches the model to generate good responses, not predict instructions.
+</Aside>
+
+```python
+# Pre-training: Compute loss on ALL tokens
+loss = cross_entropy(logits, all_tokens)
+
+# Fine-tuning: Compute loss on RESPONSE tokens only
+loss_mask = [0, 0, 0, 1, 1, 1]  # 0 = instruction, 1 = response
+masked_loss = loss * loss_mask
+final_loss = masked_loss.sum() / loss_mask.sum()
+```
+
+**Why this matters:** If we computed loss on instruction tokens, the model would learn to predict instructions instead of follow them!
+
+### Training Configuration
+
+```python
+# Fine-tuning hyperparameters
+learning_rate = 1e-6        # 300× lower than pre-training!
+batch_size = 4-16           # Smaller batches often work well
+num_epochs = 2-5            # Very few epochs needed
+base_model = "midtrained_checkpoint.pt"  # Or pretrained
+
+# Time estimate
+# - 1K examples: ~10 minutes on GPU
+# - 10K examples: ~1-2 hours on GPU
+# - 50K examples: ~half day on GPU
+```
+
+### Parameter-Efficient Fine-Tuning: LoRA
+
+<Card title="LoRA: Low-Rank Adaptation" icon="rocket">
+Train only 6% of parameters with nearly the same quality as full fine-tuning!
+</Card>
+
+**The problem:** Fine-tuning all parameters is expensive and creates separate copies for each task.
+
+**The solution:** LoRA adds small "adapter" matrices that are trained while the base model stays frozen.
+
+```python
+# Instead of updating W (d_model × d_model = 65,536 params)
+# Add trainable A and B matrices
+A: (d_model × rank) = 256 × 8 = 2,048 params
+B: (rank × d_model) = 8 × 256 = 2,048 params
+Total: 4,096 params vs 65,536 (94% reduction!)
+
+# Forward pass
+output = frozen_W @ x + (B @ A @ x) * scaling
+```
+
+**Benefits:**
+- ✓ 94% fewer parameters to train
+- ✓ Faster training and less memory
+- ✓ Can swap adapters for different tasks
+- ✓ Nearly same quality as full fine-tuning
+
+### Tasks You Can Fine-Tune For
+
+<CardGrid>
+  <Card title="Instruction Following" icon="approve-check">
+    Alpaca-style Q&A, general helpfulness
+  </Card>
+  <Card title="Conversational Chat" icon="comment">
+    Multi-turn dialogue, personality traits
+  </Card>
+  <Card title="Code Completion" icon="seti:python">
+    GitHub Copilot-style code generation
+  </Card>
+  <Card title="Summarization" icon="document">
+    Article → concise summary
+  </Card>
+</CardGrid>
+
+### What You Get
+
+After fine-tuning, your model can:
+- ✓ Follow user instructions accurately
+- ✓ Generate well-formatted responses
+- ✓ Maintain domain expertise from mid-training
+- ✓ Production-ready assistant behavior
+
+<Aside type="note" title="Implementation Status">
+Fine-tuning infrastructure is **coming soon**. The interactive CLI already has menu placeholders—implementation will follow in future updates.
+</Aside>
+
+---
+
+## Key Insights
+
+### Same Architecture, Different Training
+
+**Critical insight:** All three stages use the **exact same transformer architecture**. We don't change the model—only the data, learning rate, and (for fine-tuning) loss computation.
+
+### Progressive Learning Rate Decay
+
+```
+Pre-training:  3e-4  ██████████████████████████████  (learn fundamentals)
+Mid-training:  1e-5  █████                           (adapt without forgetting)
+Fine-tuning:   1e-6  ███                             (teach specific behaviors)
+```
+
+**Why decrease learning rate?** Each stage builds on the previous one. We want to **add** new capabilities without **destroying** existing ones. Lower learning rates = gentler updates.
+
+### Data Quality vs. Quantity
+
+<div class="comparison-grid">
+  <div class="comparison-item">
+    **Pre-training**
+
+    Quantity matters
+    - Billions of tokens
+    - Broad coverage
+    - Some noise OK
+  </div>
+
+  <div class="comparison-item">
+    **Mid-training**
+
+    Quality matters
+    - Millions of tokens
+    - Curated content
+    - High domain relevance
+  </div>
+
+  <div class="comparison-item">
+    **Fine-tuning**
+
+    Quality critical
+    - Thousands of examples
+    - Perfect formatting
+    - Clear instruction-response pairs
+  </div>
+</div>
+
+### Where Does Capability Come From?
+
+Research (particularly Llama 3 analysis) shows:
+
+- **Pre-training:** ~60% of final capability
+- **Mid-training:** ~35% of final capability
+- **Fine-tuning:** ~5% of final capability
+
+**What?!** Fine-tuning is only 5%?
+
+Yes! Fine-tuning doesn't teach new knowledge—it teaches the model **how to behave**. The actual capabilities (knowledge, reasoning) come from pre-training and mid-training.
+
+<Aside type="tip" title="Practical Implication">
+Invest most of your effort in pre-training and mid-training. Fine-tuning is quick and enables multiple task variants from the same base model.
+</Aside>
+
+---
+
+## Using the Interactive CLI
+
+The redesigned `python main.py` interface guides you through the pipeline:
+
+### Pipeline Progress Tracking
+
+```
+═══════════════════════════════════════════════════════════
+                Training Pipeline Progress
+───────────────────────────────────────────────────────────
+Stage               Checkpoints   Latest              Status
+1️⃣  Pre-Training         5       model_epoch_5.pt    ✓ Complete
+2️⃣  Mid-Training         0       -                   ○ Ready to start
+3️⃣  Fine-Tuning          0       -                   ⊗ Needs base model
+═══════════════════════════════════════════════════════════
+```
+
+The CLI automatically:
+- ✓ Detects which stages you've completed
+- ✓ Shows pipeline progress at a glance
+- ✓ Locks later stages until prerequisites are met
+- ✓ Organizes checkpoints by training stage
+
+### Educational Menus
+
+Each stage menu shows:
+- **Purpose:** What this stage achieves
+- **Data:** What kind of data is used
+- **Loss:** How the objective function works
+- **Result:** What the model can do after training
+
+### Smart Navigation
+
+- Mid-training requires a pre-trained base model
+- Fine-tuning requires either a pre-trained or mid-trained model
+- Generate/evaluate/interpret work across all checkpoint stages
+
+### Learn About the Pipeline
+
+Select "❓ Learn about the pipeline" from the main menu to see an educational overview of all three stages, key insights, and best practices—all without leaving the CLI!
+
+---
+
+## Checkpoint Organization
+
+Checkpoints are organized by training stage for clarity:
+
+```
+checkpoints/
+├── pretrain/
+│   ├── model_epoch_5_fineweb_alibi.pt
+│   ├── model_epoch_10_fineweb_alibi.pt
+│   └── best_pretrain.pt → symlink to best
+│
+├── midtrain/
+│   ├── code/
+│   │   ├── model_epoch_3_code_from_pretrain_ep10.pt
+│   │   └── best_code.pt
+│   ├── math/
+│   │   └── model_epoch_5_math_from_pretrain_ep10.pt
+│   └── science/
+│       └── model_epoch_2_science_from_pretrain_ep10.pt
+│
+└── finetune/
+    ├── instruct/
+    │   ├── model_epoch_2_sft_from_code_ep3.pt
+    │   └── best_instruct.pt
+    └── chat/
+        └── model_epoch_1_sft_from_math_ep5.pt
+```
+
+### Metadata Tracking (Future)
+
+Each checkpoint will include lineage metadata:
+- Which stage it belongs to
+- Which checkpoint it was trained from
+- Training configuration
+- Evaluation metrics (general, domain, task)
+
+---
+
+## Next Steps
+
+<CardGrid>
+  <Card title="Try Pre-Training" icon="rocket">
+    Run `python main.py` and select "Start pre-training" to train your first base model!
+  </Card>
+  <Card title="Explore Code" icon="seti:python">
+    See [commands/train.py](https://github.com/zhubert/transformer/blob/main/commands/train.py) for the full pre-training implementation.
+  </Card>
+  <Card title="Learn More" icon="open-book">
+    Read about [gradient accumulation](./training) and [validation splits](./training) for stable training.
+  </Card>
+</CardGrid>
+
+---
+
+## References
+
+- **Pre-training:** This implementation follows GPT-2/GPT-3 approaches
+- **Mid-training:** Based on Llama 3, GPT-4, and domain-adapted models
+- **Fine-tuning:** InstructGPT, Alpaca, Vicuna methodologies
+- **LoRA:** ["LoRA: Low-Rank Adaptation of Large Language Models"](https://arxiv.org/abs/2106.09685) (2021)
+- **Catastrophic Forgetting:** Continual Learning literature
+
+**This three-stage pipeline is how modern LLMs transform from raw transformers into helpful assistants!**

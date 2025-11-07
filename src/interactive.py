@@ -2,14 +2,18 @@
 """
 Interactive CLI for Transformer operations.
 
-This module provides a user-friendly interactive interface for all transformer
-operations, making it easy to train, generate, evaluate, and analyze models
+This module provides a user-friendly interactive interface for the complete
+transformer training pipeline: pre-training → mid-training → fine-tuning.
+
+The interface guides users through the three-stage approach used by modern LLMs
+like GPT-4, Claude, and Llama 3, making it easy to build production-ready models
 without memorizing command-line flags.
 """
 
 import sys
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
+import json
 
 import questionary
 from questionary import Style
@@ -17,6 +21,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
+from rich.text import Text
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
@@ -46,95 +51,361 @@ custom_style = Style([
 ])
 
 
+class CheckpointMetadata:
+    """Manages checkpoint metadata for tracking training stages and lineage."""
+
+    def __init__(self, checkpoint_path: Path):
+        self.checkpoint_path = checkpoint_path
+        self.metadata = self._load_metadata()
+
+    def _load_metadata(self) -> Dict:
+        """Load metadata from checkpoint file or infer from filename."""
+        # For now, infer from filename until we implement metadata saving
+        # Format: model_epoch_N_dataset_encoding.pt (pretrain)
+        # Future: model_epoch_N_domain_from_base.pt (midtrain)
+        # Future: model_epoch_N_task_sft.pt (finetune)
+
+        stem = self.checkpoint_path.stem
+        parts = stem.split('_')
+
+        # Default metadata
+        metadata = {
+            'training_stage': 'pretrain',  # Default to pretrain
+            'epoch': 0,
+            'dataset': 'unknown',
+            'base_model': None,
+            'domain': None,
+            'task': None,
+        }
+
+        # Parse filename to extract metadata
+        if 'epoch' in stem:
+            try:
+                epoch_idx = parts.index('epoch')
+                metadata['epoch'] = int(parts[epoch_idx + 1])
+            except (ValueError, IndexError):
+                pass
+
+        # Detect stage from filename patterns
+        if '_sft' in stem or '_finetune' in stem:
+            metadata['training_stage'] = 'finetune'
+            # Extract task if present
+            if len(parts) > 3:
+                metadata['task'] = parts[3]
+        elif '_from_' in stem:
+            metadata['training_stage'] = 'midtrain'
+            # Extract domain if present
+            if len(parts) > 3:
+                metadata['domain'] = parts[3]
+        else:
+            # Pretrain - extract dataset
+            if len(parts) > 3:
+                metadata['dataset'] = parts[3]
+
+        return metadata
+
+    def get_stage(self) -> str:
+        """Get the training stage (pretrain/midtrain/finetune)."""
+        return self.metadata['training_stage']
+
+    def get_display_name(self) -> str:
+        """Get a human-readable display name for the checkpoint."""
+        stage = self.metadata['training_stage']
+        epoch = self.metadata['epoch']
+
+        if stage == 'pretrain':
+            dataset = self.metadata.get('dataset', 'unknown')
+            return f"Pre-trained (Epoch {epoch}, {dataset})"
+        elif stage == 'midtrain':
+            domain = self.metadata.get('domain', 'unknown')
+            return f"Mid-trained (Epoch {epoch}, {domain} domain)"
+        elif stage == 'finetune':
+            task = self.metadata.get('task', 'unknown')
+            return f"Fine-tuned (Epoch {epoch}, {task})"
+        else:
+            return f"Epoch {epoch}"
+
+
 class CheckpointScanner:
-    """Scans for available model checkpoints in the checkpoints directory."""
+    """Scans for available model checkpoints and organizes by training stage."""
 
     def __init__(self):
         self.checkpoint_dir = Path('checkpoints')
-        self.checkpoints: List[Path] = []
+        self.pretrain_dir = self.checkpoint_dir / 'pretrain'
+        self.midtrain_dir = self.checkpoint_dir / 'midtrain'
+        self.finetune_dir = self.checkpoint_dir / 'finetune'
+
+        # Checkpoints organized by stage
+        self.pretrain_checkpoints: List[Tuple[Path, CheckpointMetadata]] = []
+        self.midtrain_checkpoints: List[Tuple[Path, CheckpointMetadata]] = []
+        self.finetune_checkpoints: List[Tuple[Path, CheckpointMetadata]] = []
+
         self.scan()
 
     def scan(self):
-        """Scan checkpoint directory for model files."""
+        """Scan checkpoint directories for model files."""
+        # Scan old-style checkpoints in root directory (pretrain)
         if self.checkpoint_dir.exists():
-            # New format: model_epoch_5_fineweb.pt
-            self.checkpoints = sorted(
+            root_checkpoints = sorted(
                 self.checkpoint_dir.glob('model_epoch_*_*.pt'),
-                key=lambda x: int(x.stem.split('_')[2])
+                key=lambda x: int(x.stem.split('_')[2]) if len(x.stem.split('_')) > 2 else 0
             )
+            for ckpt in root_checkpoints:
+                metadata = CheckpointMetadata(ckpt)
+                self.pretrain_checkpoints.append((ckpt, metadata))
 
-    def has_checkpoints(self) -> bool:
-        """Check if any checkpoints exist."""
-        return len(self.checkpoints) > 0
+        # Scan new organized structure
+        if self.pretrain_dir.exists():
+            for ckpt in sorted(self.pretrain_dir.glob('model_epoch_*.pt')):
+                metadata = CheckpointMetadata(ckpt)
+                self.pretrain_checkpoints.append((ckpt, metadata))
 
-    def get_all_checkpoints(self) -> List[Path]:
-        """Get all checkpoints."""
-        return self.checkpoints
+        if self.midtrain_dir.exists():
+            for ckpt in sorted(self.midtrain_dir.rglob('model_epoch_*.pt')):
+                metadata = CheckpointMetadata(ckpt)
+                self.midtrain_checkpoints.append((ckpt, metadata))
 
-    def get_latest(self) -> Optional[Path]:
-        """Get the most recent checkpoint."""
-        if not self.checkpoints:
+        if self.finetune_dir.exists():
+            for ckpt in sorted(self.finetune_dir.rglob('model_epoch_*.pt')):
+                metadata = CheckpointMetadata(ckpt)
+                self.finetune_checkpoints.append((ckpt, metadata))
+
+    def has_pretrain_checkpoints(self) -> bool:
+        """Check if any pre-training checkpoints exist."""
+        return len(self.pretrain_checkpoints) > 0
+
+    def has_midtrain_checkpoints(self) -> bool:
+        """Check if any mid-training checkpoints exist."""
+        return len(self.midtrain_checkpoints) > 0
+
+    def has_finetune_checkpoints(self) -> bool:
+        """Check if any fine-tuning checkpoints exist."""
+        return len(self.finetune_checkpoints) > 0
+
+    def has_any_checkpoints(self) -> bool:
+        """Check if any checkpoints exist at any stage."""
+        return (self.has_pretrain_checkpoints() or
+                self.has_midtrain_checkpoints() or
+                self.has_finetune_checkpoints())
+
+    def get_pretrain_checkpoints(self) -> List[Tuple[Path, CheckpointMetadata]]:
+        """Get all pre-training checkpoints."""
+        return self.pretrain_checkpoints
+
+    def get_midtrain_checkpoints(self) -> List[Tuple[Path, CheckpointMetadata]]:
+        """Get all mid-training checkpoints."""
+        return self.midtrain_checkpoints
+
+    def get_finetune_checkpoints(self) -> List[Tuple[Path, CheckpointMetadata]]:
+        """Get all fine-tuning checkpoints."""
+        return self.finetune_checkpoints
+
+    def get_latest_pretrain(self) -> Optional[Path]:
+        """Get the most recent pre-training checkpoint."""
+        if not self.pretrain_checkpoints:
             return None
         # Sort by modification time
-        return max(self.checkpoints, key=lambda x: x.stat().st_mtime)
+        return max(self.pretrain_checkpoints, key=lambda x: x[0].stat().st_mtime)[0]
+
+    def get_latest_midtrain(self) -> Optional[Path]:
+        """Get the most recent mid-training checkpoint."""
+        if not self.midtrain_checkpoints:
+            return None
+        return max(self.midtrain_checkpoints, key=lambda x: x[0].stat().st_mtime)[0]
+
+    def get_latest_finetune(self) -> Optional[Path]:
+        """Get the most recent fine-tuning checkpoint."""
+        if not self.finetune_checkpoints:
+            return None
+        return max(self.finetune_checkpoints, key=lambda x: x[0].stat().st_mtime)[0]
+
+    def get_current_stage(self) -> str:
+        """Determine the current training stage based on available checkpoints."""
+        if self.has_finetune_checkpoints():
+            return 'finetune'
+        elif self.has_midtrain_checkpoints():
+            return 'midtrain'
+        elif self.has_pretrain_checkpoints():
+            return 'pretrain'
+        else:
+            return 'none'
 
     def display_summary(self):
-        """Display a summary table of available checkpoints."""
-        if not self.has_checkpoints():
-            console.print("[yellow]No checkpoints found. Train a model first![/yellow]")
+        """Display a summary table of available checkpoints by stage."""
+        if not self.has_any_checkpoints():
+            console.print("[yellow]No checkpoints found. Start with pre-training![/yellow]")
             return
 
-        table = Table(title="Available Checkpoints", box=box.ROUNDED)
-        table.add_column("Checkpoint", style="green")
-        table.add_column("Size", justify="right", style="magenta")
+        # Create summary table
+        table = Table(title="Training Pipeline Progress", box=box.ROUNDED)
+        table.add_column("Stage", style="cyan bold")
+        table.add_column("Checkpoints", justify="center")
+        table.add_column("Latest", style="green")
+        table.add_column("Status", style="bold")
 
-        for checkpoint in self.checkpoints:
-            size_mb = checkpoint.stat().st_size / (1024 * 1024)
-            table.add_row(checkpoint.name, f"{size_mb:.1f} MB")
+        # Pre-training row
+        pretrain_count = len(self.pretrain_checkpoints)
+        pretrain_latest = self.get_latest_pretrain()
+        pretrain_status = "✓ Complete" if pretrain_count > 0 else "○ Not started"
+        table.add_row(
+            "1️⃣  Pre-Training",
+            str(pretrain_count),
+            pretrain_latest.name if pretrain_latest else "-",
+            pretrain_status
+        )
+
+        # Mid-training row
+        midtrain_count = len(self.midtrain_checkpoints)
+        midtrain_latest = self.get_latest_midtrain()
+        if midtrain_count > 0:
+            midtrain_status = "✓ Complete"
+        elif pretrain_count > 0:
+            midtrain_status = "○ Ready to start"
+        else:
+            midtrain_status = "⊗ Needs pre-training"
+        table.add_row(
+            "2️⃣  Mid-Training",
+            str(midtrain_count),
+            midtrain_latest.name if midtrain_latest else "-",
+            midtrain_status
+        )
+
+        # Fine-tuning row
+        finetune_count = len(self.finetune_checkpoints)
+        finetune_latest = self.get_latest_finetune()
+        if finetune_count > 0:
+            finetune_status = "✓ Complete"
+        elif pretrain_count > 0 or midtrain_count > 0:
+            finetune_status = "○ Ready to start"
+        else:
+            finetune_status = "⊗ Needs base model"
+        table.add_row(
+            "3️⃣  Fine-Tuning",
+            str(finetune_count),
+            finetune_latest.name if finetune_latest else "-",
+            finetune_status
+        )
 
         console.print(table)
-
-        latest = self.get_latest()
-        if latest:
-            console.print(f"\n[bold green]Latest:[/bold green] {latest.name}")
+        console.print()
 
 
 def show_welcome():
-    """Display welcome message and system status."""
+    """Display welcome message with pipeline overview."""
     console.clear()
 
-    welcome_text = """[bold cyan]Transformer Interactive CLI[/bold cyan]
+    welcome_text = """[bold cyan]Transformer Training Pipeline[/bold cyan]
 
-Welcome to the educational transformer implementation!
-This interactive interface makes it easy to:
-  • Train new models or continue training
-  • Generate text with various sampling strategies
-  • Evaluate model performance
-  • Analyze model internals (interpretability)
-  • Download training data for offline use
+Build production-ready language models through [bold]three sequential stages[/bold]:
 
-Use arrow keys to navigate menus, Enter to select."""
+  [bold green]1️⃣  Pre-Training[/bold green]   → General language understanding
+  [bold blue]2️⃣  Mid-Training[/bold blue]   → Domain expertise & specialization
+  [bold magenta]3️⃣  Fine-Tuning[/bold magenta]    → Task-specific behavior
+
+This is the same approach used by [bold]GPT-4, Claude, Llama 3[/bold], and other
+state-of-the-art language models.
+
+[dim]Use arrow keys to navigate, Enter to select, Ctrl+C to exit anytime.[/dim]"""
 
     console.print(Panel(welcome_text, border_style="cyan", box=box.ROUNDED))
     console.print()
 
 
+def show_pipeline_education():
+    """Display educational screen about the three-stage pipeline."""
+    console.clear()
+
+    education_text = """[bold cyan]THE THREE-STAGE TRAINING PIPELINE[/bold cyan]
+
+Modern LLMs (GPT-4, Claude, Llama) use this approach:
+
+  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+  │ PRE-TRAINING │ ──▶ │ MID-TRAINING │ ──▶ │ FINE-TUNING  │
+  └──────────────┘     └──────────────┘     └──────────────┘
+   Base Model          Domain Expert        Task Specialist
+
+[bold green]📚 STAGE 1: PRE-TRAINING[/bold green]
+   • Goal: Learn general language patterns
+   • Data: Billions of tokens (web text, books)
+   • Time: Days-weeks on GPU
+   • Result: "Can predict text, knows grammar & facts"
+
+[bold blue]🔬 STAGE 2: MID-TRAINING (Continued Pre-Training)[/bold blue]
+   • Goal: Become expert in specific domain
+   • Data: Millions of curated domain tokens
+   • Time: Hours-days on GPU
+   • Result: "Code/math/science specialist"
+   • Key challenge: Don't forget general skills!
+
+[bold magenta]🎯 STAGE 3: FINE-TUNING (Supervised Fine-Tuning)[/bold magenta]
+   • Goal: Learn specific behavior patterns
+   • Data: Thousands of instruction-response pairs
+   • Time: Minutes-hours on GPU
+   • Result: "Follows instructions, helpful assistant"
+   • Tip: Use LoRA for efficient multi-task variants
+
+[bold yellow]💡 KEY INSIGHTS:[/bold yellow]
+   • Same architecture used across all stages
+   • Learning rate [bold]decreases[/bold] at each stage (3e-4 → 1e-5 → 1e-6)
+   • Data quality matters more than quantity (mid/fine)
+   • Most capability comes from pre + mid training
+   • Fine-tuning is lightweight (good for iteration)
+
+[bold cyan]📖 EDUCATIONAL RESOURCES:[/bold cyan]
+   • Pre-training: See CLAUDE.md for architecture details
+   • Mid-training: Prevents catastrophic forgetting via dual evaluation
+   • Fine-tuning: Loss computed on response tokens only!"""
+
+    console.print(Panel(education_text, border_style="cyan", box=box.DOUBLE))
+    console.print("\n[dim]Press Enter to return to main menu...[/dim]")
+    input()
+
+
 def main_menu(scanner: CheckpointScanner) -> str:
-    """Display main menu and get user choice."""
-    choices = ["🎓 Train new model"]
+    """Display main menu organized by training pipeline stages."""
 
-    if scanner.has_checkpoints():
-        choices.extend([
-            "▶️  Continue training",
-            "✨ Generate text",
-            "📊 Evaluate models",
-            "🔍 Interpretability analysis",
-        ])
+    # Display pipeline progress summary
+    scanner.display_summary()
 
-    choices.extend([
-        "⬇️  Download training data",
-        "❌ Exit",
-    ])
+    # Build menu choices based on current state
+    choices = []
+
+    # STAGE 1: PRE-TRAINING
+    choices.append("─── STAGE 1: PRE-TRAINING ───")
+    choices.append("🎓 Start pre-training (build base model)")
+    if scanner.has_pretrain_checkpoints():
+        choices.append("▶️  Continue pre-training")
+
+    # STAGE 2: MID-TRAINING
+    choices.append("─── STAGE 2: MID-TRAINING ───")
+    if scanner.has_pretrain_checkpoints():
+        choices.append("🔬 Start mid-training (domain adaptation)")
+        if scanner.has_midtrain_checkpoints():
+            choices.append("▶️  Continue mid-training")
+    else:
+        choices.append("[Locked] 🔬 Mid-training (needs base model)")
+
+    # STAGE 3: FINE-TUNING
+    choices.append("─── STAGE 3: FINE-TUNING ───")
+    if scanner.has_pretrain_checkpoints() or scanner.has_midtrain_checkpoints():
+        choices.append("🎯 Start fine-tuning (instruction following)")
+        if scanner.has_finetune_checkpoints():
+            choices.append("▶️  Continue fine-tuning")
+    else:
+        choices.append("[Locked] 🎯 Fine-tuning (needs base model)")
+
+    # MODEL OPERATIONS (always available if checkpoints exist)
+    if scanner.has_any_checkpoints():
+        choices.append("─── MODEL OPERATIONS ───")
+        choices.append("✨ Generate text (test any model)")
+        choices.append("📊 Evaluate models (perplexity & benchmarks)")
+        choices.append("🔍 Analyze internals (interpretability)")
+
+    # UTILITIES
+    choices.append("─── UTILITIES ───")
+    choices.append("⬇️  Download training data")
+    choices.append("❓ Learn about the pipeline")
+    choices.append("❌ Exit")
 
     return questionary.select(
         "What would you like to do?",
@@ -143,18 +414,26 @@ def main_menu(scanner: CheckpointScanner) -> str:
     ).ask()
 
 
-def train_menu() -> dict:
-    """Training configuration menu."""
-    console.print("\n[bold cyan]Training Configuration[/bold cyan]\n")
+def pretrain_menu() -> dict:
+    """Pre-training configuration menu (enhanced with educational context)."""
+    console.print("\n[bold green]═══ STAGE 1: PRE-TRAINING ═══[/bold green]\n")
+
+    info_text = """[dim]Purpose:[/dim] Build a base model with general language ability
+[dim]Data:[/dim]    Billions of tokens from diverse web text
+[dim]Loss:[/dim]    Next-token prediction on all tokens
+[dim]Result:[/dim]  Foundation model ready for specialization"""
+
+    console.print(Panel(info_text, border_style="green", box=box.ROUNDED))
+    console.print()
 
     # Select dataset
     dataset_choice = questionary.select(
         "Select dataset:",
         choices=[
-            "fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]",
-            "wikitext - WikiText-103 100M tokens (clean Wikipedia, easier)",
+            "fineweb - FineWeb 10B tokens (realistic web text) [RECOMMENDED]",
+            "wikitext - WikiText-103 100M tokens (clean Wikipedia, benchmark)",
         ],
-        default="fineweb - FineWeb 10B tokens (realistic web text, harder) [DEFAULT]",
+        default="fineweb - FineWeb 10B tokens (realistic web text) [RECOMMENDED]",
         style=custom_style,
     ).ask()
 
@@ -362,6 +641,7 @@ def train_menu() -> dict:
         position_encoding_type = position_encoding_choice.split(' - ')[0]
 
     return {
+        'stage': 'pretrain',
         'dataset': dataset,
         'tokens_per_epoch': tokens_per_epoch,
         'num_layers': num_layers,
@@ -376,14 +656,152 @@ def train_menu() -> dict:
     }
 
 
-def continue_training_menu(scanner: CheckpointScanner) -> dict:
-    """Continue training menu - loads all parameters from checkpoint."""
-    console.print("\n[bold cyan]Continue Training[/bold cyan]\n")
+def midtrain_menu(scanner: CheckpointScanner) -> Optional[dict]:
+    """Mid-training configuration menu."""
+    console.print("\n[bold blue]═══ STAGE 2: MID-TRAINING ═══[/bold blue]\n")
 
-    # Get latest checkpoint
-    latest = scanner.get_latest()
+    info_text = """[dim]Purpose:[/dim] Specialize your base model for specific domains
+[dim]Data:[/dim]    Millions-billions of curated domain-specific tokens
+[dim]Loss:[/dim]    Next-token prediction (lower learning rate than pre-training)
+[dim]Result:[/dim]  Domain-adapted model (code/math/science expert)
+
+[yellow]⚠️  IMPORTANT:[/yellow] Monitor catastrophic forgetting!
+    We'll track both domain AND general performance"""
+
+    console.print(Panel(info_text, border_style="blue", box=box.ROUNDED))
+    console.print()
+
+    # Select base model from pre-training
+    pretrain_checkpoints = scanner.get_pretrain_checkpoints()
+    if not pretrain_checkpoints:
+        console.print("[yellow]No pre-trained models found! Complete pre-training first.[/yellow]")
+        return None
+
+    checkpoint_choices = [f"{ckpt.name} - {meta.get_display_name()}"
+                         for ckpt, meta in pretrain_checkpoints]
+
+    selected = questionary.select(
+        "Select base model (from pre-training):",
+        choices=checkpoint_choices,
+        style=custom_style,
+    ).ask()
+
+    selected_idx = checkpoint_choices.index(selected)
+    base_checkpoint = pretrain_checkpoints[selected_idx][0]
+
+    console.print(f"\n[green]✓ Base model selected:[/green] {base_checkpoint.name}")
+    console.print("[dim]Architecture, tokenizer, and weights will be loaded automatically[/dim]\n")
+
+    # Select domain
+    domain_choice = questionary.select(
+        "Select domain to specialize in:",
+        choices=[
+            "code - Python, JavaScript, documentation, Stack Overflow [COMING SOON]",
+            "math - Proofs, textbooks, problem-solution pairs [COMING SOON]",
+            "science - Papers, textbooks, encyclopedias [COMING SOON]",
+            "custom - Provide your own dataset [COMING SOON]",
+        ],
+        style=custom_style,
+    ).ask()
+
+    domain = domain_choice.split(' - ')[0]
+
+    # For now, show coming soon message
+    console.print(f"\n[yellow]Mid-training infrastructure is coming soon![/yellow]")
+    console.print(f"[dim]Selected: {domain} domain specialization from {base_checkpoint.name}[/dim]\n")
+
+    return None  # Will implement full functionality later
+
+
+def finetune_menu(scanner: CheckpointScanner) -> Optional[dict]:
+    """Fine-tuning configuration menu."""
+    console.print("\n[bold magenta]═══ STAGE 3: FINE-TUNING ═══[/bold magenta]\n")
+
+    info_text = """[dim]Purpose:[/dim] Teach specific behaviors and response formats
+[dim]Data:[/dim]    Thousands of instruction-response pairs
+[dim]Loss:[/dim]    Next-token prediction (response tokens only!)
+[dim]Result:[/dim]  Task-specific model (instruction-following, chat)
+
+[yellow]💡 TIP:[/yellow] Use LoRA for parameter-efficient fine-tuning
+    (trains 94% fewer parameters, same quality!)"""
+
+    console.print(Panel(info_text, border_style="magenta", box=box.ROUNDED))
+    console.print()
+
+    # Select base model (can be pretrain or midtrain)
+    all_base_checkpoints = []
+
+    pretrain_ckpts = scanner.get_pretrain_checkpoints()
+    for ckpt, meta in pretrain_ckpts:
+        all_base_checkpoints.append((ckpt, meta, "pretrain"))
+
+    midtrain_ckpts = scanner.get_midtrain_checkpoints()
+    for ckpt, meta in midtrain_ckpts:
+        all_base_checkpoints.append((ckpt, meta, "midtrain"))
+
+    if not all_base_checkpoints:
+        console.print("[yellow]No base models found! Complete pre-training first.[/yellow]")
+        return None
+
+    checkpoint_choices = [f"[{stage}] {ckpt.name} - {meta.get_display_name()}"
+                         for ckpt, meta, stage in all_base_checkpoints]
+
+    selected = questionary.select(
+        "Select base model:",
+        choices=checkpoint_choices,
+        style=custom_style,
+    ).ask()
+
+    selected_idx = checkpoint_choices.index(selected)
+    base_checkpoint = all_base_checkpoints[selected_idx][0]
+
+    console.print(f"\n[green]✓ Base model selected:[/green] {base_checkpoint.name}")
+    console.print("[dim]Architecture, tokenizer, and weights will be loaded automatically[/dim]\n")
+
+    # Select fine-tuning task
+    task_choice = questionary.select(
+        "Select fine-tuning task:",
+        choices=[
+            "instruction - Instruction following (Alpaca-style Q&A) [COMING SOON]",
+            "chat - Chat / dialogue (conversational assistant) [COMING SOON]",
+            "code - Code completion (GitHub Copilot-style) [COMING SOON]",
+            "summarization - Article → summary [COMING SOON]",
+            "custom - Provide your own instruction dataset [COMING SOON]",
+        ],
+        style=custom_style,
+    ).ask()
+
+    task = task_choice.split(' - ')[0]
+
+    # For now, show coming soon message
+    console.print(f"\n[yellow]Fine-tuning infrastructure is coming soon![/yellow]")
+    console.print(f"[dim]Selected: {task} fine-tuning from {base_checkpoint.name}[/dim]\n")
+
+    return None  # Will implement full functionality later
+
+
+def continue_training_menu(scanner: CheckpointScanner, stage: str) -> dict:
+    """Continue training menu for any stage."""
+    stage_names = {
+        'pretrain': 'Pre-Training',
+        'midtrain': 'Mid-Training',
+        'finetune': 'Fine-Tuning',
+    }
+
+    console.print(f"\n[bold cyan]Continue {stage_names.get(stage, 'Training')}[/bold cyan]\n")
+
+    # Get latest checkpoint for this stage
+    if stage == 'pretrain':
+        latest = scanner.get_latest_pretrain()
+    elif stage == 'midtrain':
+        latest = scanner.get_latest_midtrain()
+    elif stage == 'finetune':
+        latest = scanner.get_latest_finetune()
+    else:
+        latest = None
+
     if not latest:
-        console.print("[yellow]No checkpoints found![/yellow]")
+        console.print(f"[yellow]No {stage} checkpoints found![/yellow]")
         return None
 
     console.print(f"Latest checkpoint: [green]{latest.name}[/green]")
@@ -398,9 +816,8 @@ def continue_training_menu(scanner: CheckpointScanner) -> dict:
     if not confirm:
         return None
 
-    # All parameters will be auto-inferred from checkpoint in train()
-    # We just return resume=True to signal that we want to continue
     return {
+        'stage': stage,
         'resume': True,
         'debug': False,
         'use_mps': False,
@@ -409,17 +826,25 @@ def continue_training_menu(scanner: CheckpointScanner) -> dict:
 
 
 def generate_menu(scanner: CheckpointScanner) -> Optional[dict]:
-    """Text generation menu."""
-    console.print("\n[bold cyan]Text Generation[/bold cyan]\n")
+    """Text generation menu (works with any checkpoint)."""
+    console.print("\n[bold cyan]✨ Text Generation[/bold cyan]\n")
 
-    # Select checkpoint
-    all_checkpoints = scanner.get_all_checkpoints()
+    # Collect all checkpoints from all stages
+    all_checkpoints = []
+
+    for ckpt, meta in scanner.get_pretrain_checkpoints():
+        all_checkpoints.append((ckpt, meta, "pretrain"))
+    for ckpt, meta in scanner.get_midtrain_checkpoints():
+        all_checkpoints.append((ckpt, meta, "midtrain"))
+    for ckpt, meta in scanner.get_finetune_checkpoints():
+        all_checkpoints.append((ckpt, meta, "finetune"))
+
     if not all_checkpoints:
         console.print("[yellow]No checkpoints found![/yellow]")
         return None
 
-    # Create choices from checkpoint names
-    checkpoint_choices = [checkpoint.name for checkpoint in all_checkpoints]
+    # Create choices with stage labels
+    checkpoint_choices = [f"[{stage}] {ckpt.name}" for ckpt, meta, stage in all_checkpoints]
 
     selected = questionary.select(
         "Select checkpoint:",
@@ -429,7 +854,7 @@ def generate_menu(scanner: CheckpointScanner) -> Optional[dict]:
 
     # Find the selected checkpoint path
     selected_idx = checkpoint_choices.index(selected)
-    checkpoint_path = all_checkpoints[selected_idx]
+    checkpoint_path = all_checkpoints[selected_idx][0]
 
     # Select preset
     preset = questionary.select(
@@ -479,27 +904,35 @@ def generate_menu(scanner: CheckpointScanner) -> Optional[dict]:
 
 
 def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
-    """Model evaluation menu."""
-    console.print("\n[bold cyan]Model Evaluation[/bold cyan]\n")
+    """Model evaluation menu (enhanced for multi-stage evaluation)."""
+    console.print("\n[bold cyan]📊 Model Evaluation[/bold cyan]\n")
 
-    if not scanner.has_checkpoints():
+    if not scanner.has_any_checkpoints():
         console.print("[yellow]No checkpoints found![/yellow]")
         return None
 
-    # Evaluate single or compare all
+    # Evaluate single or compare
     action = questionary.select(
         "Evaluation type:",
         choices=[
             "Evaluate single checkpoint (perplexity)",
             "Compare all checkpoints",
+            "Compare by stage (pretrain vs midtrain vs finetune) [COMING SOON]",
         ],
         style=custom_style,
     ).ask()
 
     if action.startswith("Evaluate single"):
-        # Select checkpoint
-        all_checkpoints = scanner.get_all_checkpoints()
-        checkpoint_choices = [checkpoint.name for checkpoint in all_checkpoints]
+        # Collect all checkpoints
+        all_checkpoints = []
+        for ckpt, meta in scanner.get_pretrain_checkpoints():
+            all_checkpoints.append((ckpt, meta, "pretrain"))
+        for ckpt, meta in scanner.get_midtrain_checkpoints():
+            all_checkpoints.append((ckpt, meta, "midtrain"))
+        for ckpt, meta in scanner.get_finetune_checkpoints():
+            all_checkpoints.append((ckpt, meta, "finetune"))
+
+        checkpoint_choices = [f"[{stage}] {ckpt.name}" for ckpt, meta, stage in all_checkpoints]
 
         selected = questionary.select(
             "Select checkpoint:",
@@ -508,38 +941,49 @@ def evaluate_menu(scanner: CheckpointScanner) -> Optional[dict]:
         ).ask()
 
         selected_idx = checkpoint_choices.index(selected)
-        checkpoint_path = all_checkpoints[selected_idx]
+        checkpoint_path = all_checkpoints[selected_idx][0]
 
         return {
             'mode': 'single',
             'checkpoint': str(checkpoint_path),
             'seq_length': 128,
             'batch_size': 8,
-            'device': None,  # Auto-detect device
+            'device': None,  # Auto-detect
             'tokens_per_epoch': 10_000_000,
         }
+    elif "Compare by stage" in action:
+        console.print("\n[yellow]Stage comparison coming soon![/yellow]\n")
+        return None
     else:
         # Compare all checkpoints
         return {
             'mode': 'compare',
             'checkpoint_dir': 'checkpoints',
             'seq_length': 128,
-            'device': None,  # Auto-detect device
+            'device': None,  # Auto-detect
             'tokens_per_epoch': 10_000_000,
         }
 
 
 def interpret_menu(scanner: CheckpointScanner) -> Optional[dict]:
     """Interpretability analysis menu."""
-    console.print("\n[bold cyan]Interpretability Analysis[/bold cyan]\n")
+    console.print("\n[bold cyan]🔍 Interpretability Analysis[/bold cyan]\n")
 
-    if not scanner.has_checkpoints():
+    # Collect all checkpoints
+    all_checkpoints = []
+    for ckpt, meta in scanner.get_pretrain_checkpoints():
+        all_checkpoints.append((ckpt, meta, "pretrain"))
+    for ckpt, meta in scanner.get_midtrain_checkpoints():
+        all_checkpoints.append((ckpt, meta, "midtrain"))
+    for ckpt, meta in scanner.get_finetune_checkpoints():
+        all_checkpoints.append((ckpt, meta, "finetune"))
+
+    if not all_checkpoints:
         console.print("[yellow]No checkpoints found![/yellow]")
         return None
 
     # Select checkpoint
-    all_checkpoints = scanner.get_all_checkpoints()
-    checkpoint_choices = [checkpoint.name for checkpoint in all_checkpoints]
+    checkpoint_choices = [f"[{stage}] {ckpt.name}" for ckpt, meta, stage in all_checkpoints]
 
     selected = questionary.select(
         "Select checkpoint:",
@@ -548,7 +992,7 @@ def interpret_menu(scanner: CheckpointScanner) -> Optional[dict]:
     ).ask()
 
     selected_idx = checkpoint_choices.index(selected)
-    checkpoint_path = all_checkpoints[selected_idx]
+    checkpoint_path = all_checkpoints[selected_idx][0]
 
     # Select analysis type
     analysis = questionary.select(
@@ -588,7 +1032,7 @@ def interpret_menu(scanner: CheckpointScanner) -> Optional[dict]:
 
 def download_menu() -> dict:
     """Data download menu."""
-    console.print("\n[bold cyan]Download Training Data[/bold cyan]\n")
+    console.print("\n[bold cyan]⬇️  Download Training Data[/bold cyan]\n")
 
     # Select dataset type
     dataset_choice = questionary.select(
@@ -628,7 +1072,7 @@ def download_menu() -> dict:
             'tokens': tokens,
         }
     else:
-        # WikiText - no size selection needed (always downloads full dataset)
+        # WikiText - no size selection needed
         return {
             'dataset': 'wikitext',
         }
@@ -636,23 +1080,34 @@ def download_menu() -> dict:
 
 def run_train(config: dict):
     """Execute training with given configuration."""
-    console.print("\n[bold green]Starting training...[/bold green]\n")
-    console.print("=" * 80)
-    print()  # Spacing for train output
+    stage = config.get('stage', 'pretrain')
+    stage_names = {
+        'pretrain': 'PRE-TRAINING',
+        'midtrain': 'MID-TRAINING',
+        'finetune': 'FINE-TUNING',
+    }
 
-    train(
-        tokens_per_epoch=config.get('tokens_per_epoch'),
-        num_layers=config.get('num_layers'),
-        d_model=config.get('d_model'),
-        num_epochs=config.get('num_epochs'),
-        d_ff=config.get('d_ff'),
-        debug=config['debug'],
-        use_mps=config['use_mps'],
-        resume=config['resume'],
-        compile=config['compile'],
-        position_encoding_type=config.get('position_encoding_type', 'alibi'),
-        dataset=config.get('dataset', 'fineweb'),
-    )
+    console.print(f"\n[bold green]Starting {stage_names.get(stage, 'TRAINING')}...[/bold green]\n")
+    console.print("=" * 80)
+    print()
+
+    # For now, only pretrain is implemented
+    if stage == 'pretrain':
+        train(
+            tokens_per_epoch=config.get('tokens_per_epoch'),
+            num_layers=config.get('num_layers'),
+            d_model=config.get('d_model'),
+            num_epochs=config.get('num_epochs'),
+            d_ff=config.get('d_ff'),
+            debug=config['debug'],
+            use_mps=config['use_mps'],
+            resume=config['resume'],
+            compile=config['compile'],
+            position_encoding_type=config.get('position_encoding_type', 'alibi'),
+            dataset=config.get('dataset', 'fineweb'),
+        )
+    else:
+        console.print(f"[yellow]{stage_names.get(stage)} infrastructure coming soon![/yellow]")
 
 
 def run_generate(config: dict):
@@ -733,7 +1188,6 @@ def run_interpret(config: dict):
     args.device = "cpu"
 
     # Set attributes required by interpret commands
-    # These match the defaults from argparse in interpret.py
     args.text = args.prompt  # Commands expect 'text' not 'prompt'
     args.demo = False
     args.interactive = False
@@ -763,16 +1217,14 @@ def run_download(config: dict):
     dataset = config.get('dataset', 'fineweb')
 
     if dataset == 'fineweb':
-        tokens_per_epoch = config.get('tokens', 50_000_000)  # Default to 50M
-        download_shards(
-            tokens_per_epoch=tokens_per_epoch,
-        )
+        tokens_per_epoch = config.get('tokens', 50_000_000)
+        download_shards(tokens_per_epoch=tokens_per_epoch)
     elif dataset == 'wikitext':
         download_wikitext()
 
 
 def interactive_main():
-    """Main interactive loop."""
+    """Main interactive loop with pipeline-aware UI."""
     show_welcome()
 
     # Scan for checkpoints
@@ -786,18 +1238,50 @@ def interactive_main():
             console.print("\n[bold cyan]Goodbye! 👋[/bold cyan]")
             break
 
-        elif choice.startswith("🎓"):  # Train new model
-            config = train_menu()
+        # Handle separator choices (skip)
+        if choice.startswith("───") or choice.startswith("[Locked]"):
+            continue
+
+        # PRE-TRAINING
+        elif choice.startswith("🎓"):  # Start pre-training
+            config = pretrain_menu()
             if config:
                 run_train(config)
-                scanner.scan()  # Rescan for new checkpoints
+                scanner.scan()
 
-        elif choice.startswith("▶️"):  # Continue training
-            config = continue_training_menu(scanner)
+        elif choice.startswith("▶️") and "pre-training" in choice:  # Continue pre-training
+            config = continue_training_menu(scanner, 'pretrain')
             if config:
                 run_train(config)
-                scanner.scan()  # Rescan for updated checkpoints
+                scanner.scan()
 
+        # MID-TRAINING
+        elif choice.startswith("🔬"):  # Start mid-training
+            config = midtrain_menu(scanner)
+            if config:
+                run_train(config)
+                scanner.scan()
+
+        elif choice.startswith("▶️") and "mid-training" in choice:  # Continue mid-training
+            config = continue_training_menu(scanner, 'midtrain')
+            if config:
+                run_train(config)
+                scanner.scan()
+
+        # FINE-TUNING
+        elif choice.startswith("🎯"):  # Start fine-tuning
+            config = finetune_menu(scanner)
+            if config:
+                run_train(config)
+                scanner.scan()
+
+        elif choice.startswith("▶️") and "fine-tuning" in choice:  # Continue fine-tuning
+            config = continue_training_menu(scanner, 'finetune')
+            if config:
+                run_train(config)
+                scanner.scan()
+
+        # MODEL OPERATIONS
         elif choice.startswith("✨"):  # Generate text
             config = generate_menu(scanner)
             if config:
@@ -813,10 +1297,14 @@ def interactive_main():
             if config:
                 run_interpret(config)
 
+        # UTILITIES
         elif choice.startswith("⬇️"):  # Download
             config = download_menu()
             if config:
                 run_download(config)
+
+        elif choice.startswith("❓"):  # Learn about pipeline
+            show_pipeline_education()
 
         # Ask if user wants to do something else
         console.print()
@@ -830,11 +1318,9 @@ def interactive_main():
             console.print("\n[bold cyan]Goodbye! 👋[/bold cyan]")
             break
 
-        # Rescan checkpoints and show summary for next action
+        # Rescan checkpoints for next action
         console.print("\n" + "=" * 80 + "\n")
         scanner.scan()
-        scanner.display_summary()
-        console.print()
 
 
 if __name__ == "__main__":

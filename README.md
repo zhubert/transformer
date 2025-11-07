@@ -89,18 +89,29 @@ The easiest way to use this project is through the interactive CLI:
 python main.py
 ```
 
-The interactive CLI provides a beautiful, arrow-key navigated menu system that lets you:
-- ✨ **Train models** - Choose Quick/Medium/Full modes with smart defaults
-- 🎨 **Generate text** - Select checkpoints, presets, and settings interactively
-- 📊 **Evaluate models** - Compare checkpoints or calculate perplexity
-- 🔍 **Analyze internals** - Explore attention patterns, logit lens, induction heads
+The interactive CLI guides you through the **three-stage training pipeline** used by modern LLMs (GPT-4, Claude, Llama 3):
+
+1. **🎓 Pre-Training** - Build a base model with general language understanding
+2. **🔬 Mid-Training** - Specialize for domains (code, math, science) [Coming Soon]
+3. **🎯 Fine-Tuning** - Teach specific behaviors (instruction-following) [Coming Soon]
+
+The menu system provides:
+- ✨ **Training** - Pre-training fully implemented, mid-training & fine-tuning coming soon
+- 🎨 **Generate text** - Test models at any training stage
+- 📊 **Evaluate models** - Compare checkpoints, measure perplexity
+- 🔍 **Analyze internals** - Attention patterns, logit lens, induction heads
 - ⬇️ **Download data** - Pre-download training shards for offline use
+- ❓ **Learn pipeline** - Educational overview of the three-stage approach
 
 **Features:**
-- Auto-detects available checkpoints and shows status
+- Auto-detects available checkpoints organized by training stage
+- Shows pipeline progress (which stages are complete)
 - Colorful tables and progress indicators
-- Helpful explanations for each option
+- Helpful explanations for each stage
+- Smart locking (mid-training requires base model, etc.)
 - No need to remember complex command-line flags!
+
+See **[PIPELINE.md](PIPELINE.md)** for detailed documentation on the training pipeline.
 
 ### Advanced: Command-Line Interface
 
