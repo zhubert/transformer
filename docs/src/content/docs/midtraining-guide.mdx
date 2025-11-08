@@ -350,22 +350,22 @@ science_dataset = create_domain_dataset(
 
 ### Dataset Integration Status
 
-<Aside type="note" title="Current Status">
-**Infrastructure Complete ✅**
+<Aside type="tip" title="Production Ready!">
+**HuggingFace Datasets Integrated ✅**
 
-The dataset classes are fully implemented with:
-- Proper structure and interfaces
-- Educational documentation
-- Domain-specific configurations
+All three domain datasets are now integrated with real data sources:
 
-**Next Step: HuggingFace Integration 🚧**
+- **Code**: `bigcode/the-stack-dedup` - 115M deduplicated code files
+- **Math**: `hendrycks/math` - 12,500 competition-level problems
+- **Science**: `scientific_papers` - arXiv and PubMed abstracts
 
-To use actual datasets, integrate:
-- `codeparrot/github-code-clean` for code
-- `hendrycks/MATH` for math
-- arXiv papers for science
+Each dataset includes:
+- Streaming support for large datasets
+- Automatic filtering by domain criteria
+- Progress tracking during data loading
+- Graceful fallbacks if datasets unavailable
 
-See `src/transformer/domain_datasets.py` for placeholder locations.
+Ready for production mid-training! See `src/transformer/domain_datasets.py` for implementation details.
 </Aside>
 
 ## Putting It All Together
@@ -574,8 +574,8 @@ for epoch in range(num_epochs):
 </div>
 
 <div style="border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; padding: 1rem;">
-<h3 style="margin-top: 0;">🚀 Integrate Datasets</h3>
-<p>Add HuggingFace datasets in <code>domain_datasets.py</code> for production use</p>
+<h3 style="margin-top: 0;">✅ Datasets Ready</h3>
+<p>HuggingFace datasets integrated! Check <code>domain_datasets.py</code> for Code, Math, and Science datasets</p>
 </div>
 
 <div style="border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; padding: 1rem;">

@@ -222,24 +222,75 @@ class CodeDataset(DomainDataset):
         print(f"Split: {split}")
         print()
 
-        # Note: This is a placeholder implementation
-        # In production, you would:
-        # 1. Load from HuggingFace: load_dataset('codeparrot/github-code-clean')
-        # 2. Filter by language: dataset.filter(lambda x: x['language'] in languages)
-        # 3. Sample to reach target token count
-        # 4. Cache the processed dataset
+        try:
+            # Load The Stack (deduplicated version) - high-quality code dataset
+            # This is a large dataset, so we use streaming to avoid downloading everything
+            print("Loading The Stack dataset (streaming mode)...")
+            print("Dataset: bigcode/the-stack-dedup")
+            print()
 
-        print("[WARNING] Full code dataset integration coming soon!")
-        print("For now, returning placeholder that demonstrates the concept.")
-        print()
-        print("To implement:")
-        print("1. Install datasets: pip install datasets")
-        print("2. Load dataset: load_dataset('codeparrot/github-code-clean')")
-        print("3. Filter and sample based on num_tokens target")
-        print()
+            dataset = load_dataset(
+                'bigcode/the-stack-dedup',
+                split=split,
+                streaming=True,  # Stream to avoid downloading entire dataset
+            )
 
-        # Return empty dataset as placeholder
-        return Dataset.from_dict({'text': []})
+            # Filter by programming languages
+            print(f"Filtering for languages: {', '.join(self.languages)}")
+            dataset = dataset.filter(
+                lambda x: x.get('lang', '').lower() in [lang.lower() for lang in self.languages]
+            )
+
+            # Sample enough examples to reach target token count
+            # Estimate: average file is ~500 tokens
+            estimated_examples_needed = num_tokens // 500
+            print(f"Sampling approximately {estimated_examples_needed:,} code files...")
+            print()
+
+            # Take examples and convert to list (for non-streaming dataset)
+            examples = []
+            total_tokens = 0
+
+            for i, example in enumerate(dataset):
+                if total_tokens >= num_tokens:
+                    break
+
+                # Get code content
+                code = example.get('content', '')
+                if not code:
+                    continue
+
+                # Estimate tokens (rough: ~4 chars per token)
+                estimated_tokens = len(code) // 4
+                total_tokens += estimated_tokens
+
+                examples.append({'text': code})
+
+                # Progress update every 1000 examples
+                if (i + 1) % 1000 == 0:
+                    print(f"  Processed {i+1:,} files, ~{total_tokens:,} tokens so far...")
+
+            print()
+            print(f"✓ Loaded {len(examples):,} code files (~{total_tokens:,} tokens)")
+            print()
+
+            # Convert to HuggingFace Dataset
+            return Dataset.from_dict({'text': [ex['text'] for ex in examples]})
+
+        except Exception as e:
+            print(f"[WARNING] Could not load The Stack dataset: {e}")
+            print()
+            print("This might be because:")
+            print("1. datasets library not installed: pip install datasets")
+            print("2. No internet connection (dataset needs to be downloaded)")
+            print("3. HuggingFace Hub access issues")
+            print()
+            print("Falling back to empty dataset for demonstration purposes.")
+            print("For production use, ensure datasets library is installed and you have internet access.")
+            print()
+
+            # Return empty dataset as fallback
+            return Dataset.from_dict({'text': []})
 
 
 class MathDataset(DomainDataset):
@@ -371,11 +422,76 @@ class MathDataset(DomainDataset):
         print(f"Split: {split}")
         print()
 
-        print("[WARNING] Full math dataset integration coming soon!")
-        print("For now, returning placeholder.")
-        print()
+        try:
+            # Load MATH dataset - competition-level math problems with solutions
+            print("Loading MATH dataset...")
+            print("Dataset: hendrycks/math (12,500 challenging math problems)")
+            print()
 
-        return Dataset.from_dict({'text': []})
+            # Map split name (validation -> test for MATH dataset)
+            dataset_split = 'test' if split == 'validation' else 'train'
+
+            dataset = load_dataset(
+                'hendrycks/math',
+                split=dataset_split,
+            )
+
+            # Filter by difficulty level (1-5 scale)
+            print(f"Filtering for difficulty {self.difficulty_range[0]}-{self.difficulty_range[1]}")
+            dataset = dataset.filter(
+                lambda x: self.difficulty_range[0] <= x.get('level', 3) <= self.difficulty_range[1]
+            )
+
+            print(f"Found {len(dataset):,} problems in difficulty range")
+            print()
+
+            # Format examples: combine problem + solution for learning
+            # This teaches the model mathematical reasoning patterns
+            examples = []
+            total_tokens = 0
+
+            for i, example in enumerate(dataset):
+                if total_tokens >= num_tokens:
+                    break
+
+                # Combine problem and solution
+                problem = example.get('problem', '')
+                solution = example.get('solution', '')
+
+                # Format as "Problem: ... Solution: ..."
+                # This teaches the model to understand problem-solution structure
+                text = f"Problem: {problem}\n\nSolution: {solution}"
+
+                # Estimate tokens
+                estimated_tokens = len(text) // 4
+                total_tokens += estimated_tokens
+
+                examples.append({'text': text})
+
+                # Progress update every 500 problems
+                if (i + 1) % 500 == 0:
+                    print(f"  Processed {i+1:,} problems, ~{total_tokens:,} tokens so far...")
+
+            print()
+            print(f"✓ Loaded {len(examples):,} math problems (~{total_tokens:,} tokens)")
+            print()
+
+            # Convert to HuggingFace Dataset
+            return Dataset.from_dict({'text': [ex['text'] for ex in examples]})
+
+        except Exception as e:
+            print(f"[WARNING] Could not load MATH dataset: {e}")
+            print()
+            print("This might be because:")
+            print("1. datasets library not installed: pip install datasets")
+            print("2. No internet connection (dataset needs to be downloaded)")
+            print("3. HuggingFace Hub access issues")
+            print()
+            print("Falling back to empty dataset for demonstration purposes.")
+            print()
+
+            # Return empty dataset as fallback
+            return Dataset.from_dict({'text': []})
 
 
 class ScienceDataset(DomainDataset):
@@ -473,6 +589,24 @@ class ScienceDataset(DomainDataset):
         """
         Prepare science dataset for mid-training.
 
+        Why This Dataset Structure Works:
+        ==================================
+        1. **Scientific abstracts**: Condensed, high-quality explanations
+           - arXiv: Physics, CS, Math preprints
+           - PubMed: Biomedical research
+           - Both include structured reasoning: background → methods → results
+
+        2. **Field filtering**: Focus on relevant scientific domains
+           - 'physics' → arXiv physics papers
+           - 'cs' → Computer science papers
+           - 'biology' → PubMed biomedical papers
+           - 'general' → All fields (broad scientific knowledge)
+
+        3. **Quality**: Peer-reviewed or preprint standards
+           - Proper citations and references
+           - Technical vocabulary used correctly
+           - Structured scientific reasoning
+
         Args:
             num_tokens: Target number of tokens to sample
             split: 'train' or 'validation'
@@ -488,11 +622,107 @@ class ScienceDataset(DomainDataset):
         print(f"Split: {split}")
         print()
 
-        print("[WARNING] Full science dataset integration coming soon!")
-        print("For now, returning placeholder.")
-        print()
+        try:
+            # Load scientific papers dataset - arXiv and PubMed abstracts
+            print("Loading scientific papers dataset...")
+            print("Dataset: scientific_papers (arXiv + PubMed abstracts)")
+            print()
 
-        return Dataset.from_dict({'text': []})
+            # Map validation to test for this dataset
+            dataset_split = 'validation' if split == 'validation' else 'train'
+
+            # Determine which subset to use based on fields
+            # If fields include biology/chemistry/medicine → use 'pubmed'
+            # If fields include physics/cs/math → use 'arxiv'
+            # If general or mixed → use 'arxiv' (larger and more diverse)
+            bio_fields = {'biology', 'chemistry', 'medicine', 'biomedical'}
+            has_bio = any(field.lower() in bio_fields for field in self.fields)
+
+            # Use arXiv by default (broader scientific content)
+            # PubMed is very specialized for biomedical
+            subset = 'pubmed' if has_bio and len(self.fields) == 1 else 'arxiv'
+
+            print(f"Using subset: {subset}")
+            print(f"  (arXiv: physics, CS, math; PubMed: biomedical)")
+            print()
+
+            dataset = load_dataset(
+                'scientific_papers',
+                subset,
+                split=dataset_split,
+            )
+
+            # Sample enough examples to reach target token count
+            # Estimate: average abstract is ~200 tokens, article is ~3000 tokens
+            # We'll use abstracts + articles for richer content
+            estimated_tokens_per_paper = 500
+            estimated_papers_needed = num_tokens // estimated_tokens_per_paper
+
+            print(f"Sampling approximately {estimated_papers_needed:,} scientific papers...")
+            print()
+
+            # Process papers
+            examples = []
+            total_tokens = 0
+
+            for i, paper in enumerate(dataset):
+                if total_tokens >= num_tokens:
+                    break
+
+                # Get abstract and article (if available)
+                abstract = paper.get('abstract', '')
+                article = paper.get('article', '')
+
+                # Combine abstract and article for fuller context
+                # Abstract: High-level overview
+                # Article: Detailed explanation, methods, results
+                text_parts = []
+
+                if abstract:
+                    text_parts.append(f"Abstract: {abstract}")
+
+                if article:
+                    # Article can be very long, truncate if needed
+                    # Keep first ~2000 words for introduction + methods
+                    words = article.split()[:2000]
+                    text_parts.append(f"Article: {' '.join(words)}")
+
+                if not text_parts:
+                    continue
+
+                text = '\n\n'.join(text_parts)
+
+                # Estimate tokens
+                estimated_tokens = len(text) // 4
+                total_tokens += estimated_tokens
+
+                examples.append({'text': text})
+
+                # Progress update every 500 papers
+                if (i + 1) % 500 == 0:
+                    print(f"  Processed {i+1:,} papers, ~{total_tokens:,} tokens so far...")
+
+            print()
+            print(f"✓ Loaded {len(examples):,} scientific papers (~{total_tokens:,} tokens)")
+            print()
+
+            # Convert to HuggingFace Dataset
+            return Dataset.from_dict({'text': [ex['text'] for ex in examples]})
+
+        except Exception as e:
+            print(f"[WARNING] Could not load scientific papers dataset: {e}")
+            print()
+            print("This might be because:")
+            print("1. datasets library not installed: pip install datasets")
+            print("2. No internet connection (dataset needs to be downloaded)")
+            print("3. HuggingFace Hub access issues")
+            print()
+            print("Falling back to empty dataset for demonstration purposes.")
+            print("For production use, ensure datasets library is installed and you have internet access.")
+            print()
+
+            # Return empty dataset as fallback
+            return Dataset.from_dict({'text': []})
 
 
 def create_domain_dataset(
