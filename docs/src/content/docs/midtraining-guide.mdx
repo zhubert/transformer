@@ -1,0 +1,598 @@
+---
+title: Mid-Training Guide
+description: Hands-on guide to using the mid-training infrastructure
+---
+
+import { Aside, Code, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Now that you've built a pre-trained base model, it's time to specialize it for a specific domain. This hands-on guide shows you how to use the mid-training infrastructure to create domain experts like Codex, Minerva, or Code Llama.
+
+## Overview
+
+Mid-training takes your general-purpose pre-trained model and makes it an expert in a specific domain (code, math, science) while preventing catastrophic forgetting.
+
+**What's Included:**
+- 🎯 Domain-specific datasets
+- 📚 Curriculum learning for progressive difficulty
+- 🔍 Catastrophic forgetting detection
+- 📊 Dual evaluation (domain + general performance)
+
+## Quick Start
+
+### Run the Demonstration
+
+The fastest way to see mid-training in action:
+
+```bash
+# From the interactive CLI
+python main.py
+# Select "🔬 Start mid-training"
+
+# Or run the demonstration directly
+python commands/midtrain_stub.py
+```
+
+This demonstrates all three key components working together!
+
+## Component 1: Curriculum Learning
+
+Curriculum learning means starting with easy examples and progressively increasing difficulty—just like humans learn.
+
+### Why It Works
+
+Imagine learning calculus before algebra. You'd struggle! Neural networks are the same:
+- **Easy examples first** → Build foundational patterns
+- **Progressive difficulty** → Avoid getting stuck in poor solutions
+- **Research shows** → 10-15% improvement on hierarchical tasks
+
+### Basic Usage
+
+```python
+from src.transformer.curriculum import create_math_curriculum
+
+# Create a 3-stage curriculum over 9 epochs
+curriculum = create_math_curriculum(
+    total_epochs=9,
+    difficulty_levels=3
+)
+
+# Print the schedule
+curriculum.print_schedule()
+```
+
+**Output:**
+```
+Curriculum Learning Schedule
+============================================================
+Total epochs: 9
+
+Stage 1: Easy (Epochs 0-2)
+  Difficulty: 1.0 - 2.3
+  Duration: 3 epochs (33% of training)
+
+Stage 2: Medium (Epochs 3-5)
+  Difficulty: 2.3 - 3.7
+  Duration: 3 epochs (33% of training)
+
+Stage 3: Hard (Epochs 6-8)
+  Difficulty: 3.7 - 5.0
+  Duration: 3 epochs (33% of training)
+============================================================
+```
+
+### Using in Training Loop
+
+```python
+from src.transformer.curriculum import create_math_curriculum
+
+# Set up curriculum
+curriculum = create_math_curriculum(total_epochs=10, difficulty_levels=3)
+
+for epoch in range(10):
+    # Get current stage
+    stage = curriculum.get_current_stage(epoch)
+
+    print(f"Epoch {epoch}: Training on {stage.name} examples")
+    print(f"  Difficulty range: {stage.difficulty_range}")
+
+    # Filter your dataset based on stage.difficulty_range
+    # For example:
+    # filtered_data = dataset.filter(
+    #     lambda x: stage.difficulty_range[0] <= x['difficulty'] <= stage.difficulty_range[1]
+    # )
+
+    # Train for one epoch on filtered data
+    # ...
+```
+
+### Custom Curriculum
+
+Create your own curriculum for any domain:
+
+```python
+from src.transformer.curriculum import CurriculumScheduler, CurriculumStage
+
+# Define custom stages
+stages = [
+    CurriculumStage(
+        name="Beginner Code",
+        difficulty_range=(1.0, 2.0),
+        num_epochs=4
+    ),
+    CurriculumStage(
+        name="Intermediate Code",
+        difficulty_range=(2.0, 3.5),
+        num_epochs=3
+    ),
+    CurriculumStage(
+        name="Advanced Code",
+        difficulty_range=(3.5, 5.0),
+        num_epochs=3
+    ),
+]
+
+curriculum = CurriculumScheduler(stages)
+```
+
+<Aside type="tip" title="When to Use Curriculum Learning">
+✅ Use for: Math problems, code complexity, scientific papers (natural difficulty ordering)
+
+❌ Skip for: General web text, random documents (no clear difficulty hierarchy)
+</Aside>
+
+## Component 2: Catastrophic Forgetting Detection
+
+The biggest challenge in mid-training: Your model might become great at code but **forget** how to write general English!
+
+### Understanding Forgetting
+
+**What is it?**
+- Model specializes on domain data
+- General language capability degrades
+- Example: Code expert that can't write coherent prose
+
+**Why it happens:**
+- Neural networks have limited capacity
+- New patterns overwrite old ones
+- Domain data very different from general text
+
+### Basic Usage
+
+```python
+from src.transformer.forgetting_metrics import ForgettingDetector, ForgettingMetrics
+
+# Initialize detector with baseline from pre-training
+detector = ForgettingDetector(
+    baseline_general_perplexity=25.0  # Your pre-trained model's general perplexity
+)
+
+# After each epoch, record metrics
+for epoch in range(10):
+    # Train and evaluate...
+
+    metrics = ForgettingMetrics(
+        epoch=epoch,
+        train_loss=train_loss,
+        domain_perplexity=eval_on_domain_data(),    # Should decrease!
+        general_perplexity=eval_on_general_data(),  # Should stay stable!
+    )
+
+    detector.record(metrics)
+
+    # Check for forgetting
+    if detector.is_forgetting(threshold=0.10):
+        print("⚠️  WARNING: Catastrophic forgetting detected!")
+
+        # Get recommendations
+        for rec in detector.get_recommendations():
+            print(f"  {rec}")
+
+        # Take action:
+        # - Increase general data mixing (10% → 20%)
+        # - Lower learning rate by 50%
+        # - Consider stopping if severe
+
+# Print full summary
+detector.print_summary()
+```
+
+### Interpreting Forgetting Scores
+
+The forgetting score quantifies capability loss:
+
+| Score | Severity | Meaning | Action |
+|-------|----------|---------|--------|
+| < 0.05 | None | Everything great! | Continue training |
+| 0.05 - 0.10 | Minor | Slight degradation | Monitor closely |
+| 0.10 - 0.20 | Moderate | Noticeable loss | Increase general data, lower LR |
+| > 0.20 | Severe | Significant damage | Stop, restore checkpoint, adjust |
+
+**Formula:**
+```
+forgetting_score = (current_general_ppl - baseline_general_ppl) / baseline_general_ppl
+```
+
+**Example:**
+- Baseline: 25.0 perplexity
+- Current: 27.5 perplexity
+- Score: (27.5 - 25.0) / 25.0 = **0.10 (10% degradation)**
+
+### Automated Recommendations
+
+The detector provides specific actions based on severity:
+
+```python
+recommendations = detector.get_recommendations()
+
+# Examples of what you'll see:
+# - Minor forgetting (5-10%):
+#   "→ Monitor closely in next epoch"
+#   "→ Consider increasing general data mix ratio"
+
+# - Moderate forgetting (10-20%):
+#   "→ INCREASE general data mix ratio (e.g., 10% → 20%)"
+#   "→ LOWER learning rate by 50%"
+
+# - Severe forgetting (>20%):
+#   "→ STOP training immediately"
+#   "→ Restore from previous checkpoint"
+```
+
+<Aside type="caution" title="Dual Evaluation is Critical">
+**ALWAYS** evaluate on both domain AND general data during mid-training.
+
+Don't just watch domain perplexity improve—you might be destroying general capability!
+
+Track both metrics every epoch and act quickly if general performance degrades >10%.
+</Aside>
+
+### Saving History
+
+Track forgetting across multiple training runs:
+
+```python
+from pathlib import Path
+
+detector = ForgettingDetector(
+    baseline_general_perplexity=25.0,
+    history_file=Path("experiments/code_midtrain_forgetting.json")
+)
+
+# Metrics are automatically saved after each record()
+
+# Later, load history
+detector = ForgettingDetector.load_from_file(
+    Path("experiments/code_midtrain_forgetting.json")
+)
+detector.print_summary()
+```
+
+## Component 3: Domain Datasets
+
+Specialized datasets for mid-training in code, math, or science.
+
+### Available Domains
+
+<Tabs>
+<TabItem label="Code">
+
+```python
+from src.transformer.domain_datasets import create_domain_dataset
+
+# Create code dataset
+code_dataset = create_domain_dataset(
+    domain='code',
+    languages=['python', 'javascript'],
+    max_seq_len=128,
+)
+
+# Get domain information
+info = code_dataset.get_domain_info()
+print(f"Domain: {info['domain']}")
+print(f"Languages: {info['languages']}")
+print(f"Source: {info['source']}")
+```
+
+**Use cases:**
+- Code completion (GitHub Copilot-style)
+- Bug fixing and refactoring
+- API usage understanding
+- Code translation between languages
+
+</TabItem>
+
+<TabItem label="Math">
+
+```python
+from src.transformer.domain_datasets import create_domain_dataset
+
+# Create math dataset with difficulty levels
+math_dataset = create_domain_dataset(
+    domain='math',
+    difficulty_range=(1, 5),  # All levels
+    max_seq_len=128,
+)
+
+# Perfect for curriculum learning!
+# Start with difficulty_range=(1, 2)
+# Progress to (3, 5)
+```
+
+**Use cases:**
+- Word problem solving
+- Step-by-step mathematical explanations
+- Proof generation
+- Equation manipulation
+
+</TabItem>
+
+<TabItem label="Science">
+
+```python
+from src.transformer.domain_datasets import create_domain_dataset
+
+# Create science dataset
+science_dataset = create_domain_dataset(
+    domain='science',
+    fields=['physics', 'biology', 'chemistry'],
+    max_seq_len=128,
+)
+```
+
+**Use cases:**
+- Scientific explanation
+- Research paper understanding
+- Hypothesis generation
+- Experimental reasoning
+
+</TabItem>
+</Tabs>
+
+### Dataset Integration Status
+
+<Aside type="note" title="Current Status">
+**Infrastructure Complete ✅**
+
+The dataset classes are fully implemented with:
+- Proper structure and interfaces
+- Educational documentation
+- Domain-specific configurations
+
+**Next Step: HuggingFace Integration 🚧**
+
+To use actual datasets, integrate:
+- `codeparrot/github-code-clean` for code
+- `hendrycks/MATH` for math
+- arXiv papers for science
+
+See `src/transformer/domain_datasets.py` for placeholder locations.
+</Aside>
+
+## Putting It All Together
+
+Here's how the three components work together in mid-training:
+
+```python
+from src.transformer.curriculum import create_math_curriculum
+from src.transformer.forgetting_metrics import ForgettingDetector, ForgettingMetrics
+from src.transformer.domain_datasets import create_domain_dataset
+
+# 1. Set up domain dataset
+math_dataset = create_domain_dataset('math', difficulty_range=(1, 5))
+
+# 2. Create curriculum schedule
+curriculum = create_math_curriculum(total_epochs=9, difficulty_levels=3)
+curriculum.print_schedule()
+
+# 3. Initialize forgetting detector
+detector = ForgettingDetector(
+    baseline_general_perplexity=25.0,  # From your pre-trained model
+    history_file=Path("math_midtrain_history.json")
+)
+
+# 4. Training loop (pseudocode)
+for epoch in range(9):
+    # Get current curriculum stage
+    stage = curriculum.get_current_stage(epoch)
+    print(f"\nEpoch {epoch}: {stage.name}")
+    print(f"Difficulty: {stage.difficulty_range}")
+
+    # Filter dataset to current difficulty
+    # current_data = math_dataset.filter(stage.difficulty_range)
+
+    # Train on mixed data (90% domain, 10% general)
+    # train_loss = train_one_epoch(
+    #     model,
+    #     domain_data=current_data,
+    #     general_data=fineweb_data,
+    #     mix_ratio=0.9,  # 90% domain
+    #     lr=1e-5,  # Lower than pre-training!
+    # )
+
+    # Dual evaluation
+    # domain_ppl = evaluate(model, math_validation_set)
+    # general_ppl = evaluate(model, fineweb_validation_set)
+
+    # Record metrics
+    metrics = ForgettingMetrics(
+        epoch=epoch,
+        train_loss=train_loss,
+        domain_perplexity=domain_ppl,
+        general_perplexity=general_ppl,
+    )
+    detector.record(metrics)
+
+    # Check for catastrophic forgetting
+    if detector.is_forgetting(threshold=0.10):
+        print("\n⚠️  WARNING: Forgetting detected!")
+        for rec in detector.get_recommendations():
+            print(f"  {rec}")
+
+        # Adjust training:
+        # - Increase general data ratio
+        # - Lower learning rate
+        # - Or stop if severe
+
+# Final summary
+detector.print_summary()
+```
+
+## Key Hyperparameters
+
+Mid-training uses different hyperparameters than pre-training:
+
+| Parameter | Pre-Training | Mid-Training | Why Different |
+|-----------|--------------|--------------|---------------|
+| Learning Rate | 3e-4 | 1e-5 | 30x lower to preserve general capability |
+| Data | General web text | Domain-specific | Focused learning |
+| Data Mixing | N/A | 90% domain, 10% general | Prevent forgetting |
+| Epochs | 15-20 | 5-10 | Smaller, curated datasets |
+| Evaluation | General perplexity | Domain + General | Dual metrics |
+
+<Aside type="tip" title="Learning Rate is Critical">
+The **30x lower learning rate** (1e-5 vs 3e-4) is what makes mid-training work!
+
+Too high → Catastrophic forgetting
+Too low → Slow adaptation, wasted compute
+
+Start with 1e-5 and adjust based on forgetting metrics.
+</Aside>
+
+## Best Practices
+
+### 1. Start with Small Experiments
+
+Before full mid-training:
+```python
+# Short experiment to test forgetting
+quick_test_epochs = 3
+test_curriculum = create_math_curriculum(
+    total_epochs=quick_test_epochs,
+    difficulty_levels=1  # No curriculum, just test
+)
+
+# Monitor forgetting closely
+# Adjust hyperparameters based on results
+```
+
+### 2. Monitor Both Metrics
+
+```python
+# Good: Track both!
+print(f"Domain perplexity: {domain_ppl:.1f} (↓ is good)")
+print(f"General perplexity: {general_ppl:.1f} (→ is good)")
+print(f"Forgetting score: {forgetting_score:.2f}")
+
+# Bad: Only tracking domain
+print(f"Domain perplexity: {domain_ppl:.1f}")  # Incomplete picture!
+```
+
+### 3. Use Curriculum When Appropriate
+
+```python
+# Math: Clear difficulty levels → Use curriculum ✅
+math_curriculum = create_math_curriculum(total_epochs=9, difficulty_levels=3)
+
+# Code: Has complexity levels → Use curriculum ✅
+code_curriculum = create_code_curriculum(total_epochs=9)
+
+# General text: No clear hierarchy → Skip curriculum ❌
+# Just train on all data
+```
+
+### 4. Save Checkpoints Frequently
+
+```python
+# Save every epoch during mid-training
+# You might need to rollback if forgetting becomes severe
+for epoch in range(num_epochs):
+    # Train...
+
+    # Save with stage information
+    save_checkpoint(
+        f"checkpoints/midtrain/math/model_epoch_{epoch}_from_pretrain_ep10.pt",
+        model, optimizer, epoch, metrics
+    )
+```
+
+## Troubleshooting
+
+### Problem: Severe Catastrophic Forgetting
+
+**Symptoms:**
+- General perplexity increasing rapidly
+- Forgetting score > 0.20
+- Model generates domain-specific text for general prompts
+
+**Solutions:**
+1. **Increase general data mixing** from 10% to 20-30%
+2. **Lower learning rate** by 50% (e.g., 1e-5 → 5e-6)
+3. **Restore previous checkpoint** and try again
+4. **Consider different domain dataset** (might be too different)
+
+### Problem: Slow Domain Adaptation
+
+**Symptoms:**
+- Domain perplexity barely improving
+- Training feels slow
+- No forgetting detected
+
+**Solutions:**
+1. **Check learning rate** isn't too low
+2. **Verify domain data quality** (is it actually different from general?)
+3. **Increase domain data ratio** from 90% to 95%
+4. **Train for more epochs**
+
+### Problem: Curriculum Not Helping
+
+**Symptoms:**
+- No improvement over random ordering
+- Same results with/without curriculum
+
+**Possible Causes:**
+1. **Domain doesn't have clear difficulty hierarchy**
+   - Solution: Skip curriculum, just train on all data
+2. **Difficulty ranges poorly calibrated**
+   - Solution: Adjust `difficulty_range` tuples
+3. **Dataset too small**
+   - Solution: Curriculum works best with larger datasets
+
+## Next Steps
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1rem;">
+
+<div style="border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; padding: 1rem;">
+<h3 style="margin-top: 0;">📚 Learn More</h3>
+<p>Read the <a href="/pipeline/">Training Pipeline</a> guide for comprehensive conceptual overview</p>
+</div>
+
+<div style="border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; padding: 1rem;">
+<h3 style="margin-top: 0;">🔬 Experiment</h3>
+<p>Try the demonstrations:
+<code>python src/transformer/curriculum.py</code><br/>
+<code>python src/transformer/forgetting_metrics.py</code></p>
+</div>
+
+<div style="border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; padding: 1rem;">
+<h3 style="margin-top: 0;">🚀 Integrate Datasets</h3>
+<p>Add HuggingFace datasets in <code>domain_datasets.py</code> for production use</p>
+</div>
+
+<div style="border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; padding: 1rem;">
+<h3 style="margin-top: 0;">💬 Share Results</h3>
+<p>Found an interesting forgetting pattern? Share your findings!</p>
+</div>
+
+</div>
+
+## References
+
+- **Curriculum Learning**: Bengio et al., 2009
+- **Catastrophic Forgetting**: Goodfellow et al., 2013
+- **Continual Learning**: Review, 2019
+- **Elastic Weight Consolidation**: Kirkpatrick et al., 2017
+- **Production Examples**: Codex (OpenAI), Minerva (Google), Code Llama (Meta)
+
+---
+
+**Remember**: Mid-training is about **balance**. You want domain expertise WITHOUT forgetting general capability. Monitor both metrics, adjust as needed, and don't be afraid to roll back if forgetting becomes severe!

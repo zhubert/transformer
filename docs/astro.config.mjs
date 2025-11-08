@@ -41,6 +41,7 @@ export default defineConfig({
           label: "Advanced Topics",
           items: [
             { label: "Training Pipeline", link: "/pipeline/" },
+            { label: "Mid-Training Guide", link: "/midtraining-guide/" },
             { label: "Training at Scale", link: "/training/" },
             { label: "KV-Cache Optimization", link: "/kv-cache/" },
             { label: "Model Interpretability", link: "/interpretability/" },
