@@ -1127,18 +1127,30 @@ def run_train(config: dict):
             dataset=config.get('dataset', 'fineweb'),
         )
     elif stage == 'midtrain':
-        # Mid-training demonstration (infrastructure ready, datasets integrated)
-        console.print("[bold blue]Mid-Training Infrastructure[/bold blue]\n")
-        console.print("[dim]Demonstrating mid-training components with integrated datasets...[/dim]\n")
-        demonstrate_midtraining_concepts()
-        console.print("\n[bold green]✓ Demonstration complete![/bold green]")
-        console.print("\n[yellow]Ready for full training:[/yellow]")
-        console.print("  • Curriculum learning ✓")
-        console.print("  • Catastrophic forgetting detection ✓")
-        console.print("  • HuggingFace datasets integrated ✓")
-        console.print(f"  • Selected domain: {config.get('domain', 'N/A')}")
-        console.print(f"  • Base checkpoint: {config.get('base_checkpoint', 'N/A')}")
-        console.print("\n[dim]Note: Full training loop implementation is the next step.[/dim]")
+        # Mid-training (full implementation)
+        from commands.midtrain import midtrain
+
+        # Extract domain-specific parameters based on domain
+        domain = config.get('domain', 'code')
+        domain_params = {}
+
+        if domain == 'code':
+            domain_params['languages'] = ['python', 'javascript']
+        elif domain == 'math':
+            domain_params['difficulty_range'] = (1, 3)  # Start with easier problems
+        elif domain == 'science':
+            domain_params['fields'] = ['general']
+
+        midtrain(
+            base_checkpoint=config.get('base_checkpoint'),
+            domain=domain,
+            tokens_per_epoch=50_000_000,  # 50M tokens (less than pre-training)
+            num_epochs=10,
+            debug=config['debug'],
+            use_mps=config['use_mps'],
+            compile=config['compile'],
+            **domain_params
+        )
     else:
         # Fine-tuning
         console.print(f"[yellow]{stage_names.get(stage)} infrastructure coming soon![/yellow]")
