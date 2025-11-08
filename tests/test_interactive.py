@@ -25,7 +25,9 @@ import time
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.interactive import (
     CheckpointScanner,
-    train_menu,
+    pretrain_menu,
+    midtrain_menu,
+    finetune_menu,
     continue_training_menu,
     generate_menu,
     evaluate_menu,
@@ -287,7 +289,7 @@ class TestCheckpointScanner:
 # =============================================================================
 
 class TestTrainMenu:
-    """Test the train_menu() configuration builder."""
+    """Test the pretrain_menu() configuration builder."""
 
     def test_beginner_preset_configuration(self, mock_questionary, mock_console):
         """Test that selecting Beginner preset builds correct config."""
@@ -299,7 +301,7 @@ class TestTrainMenu:
         ]
         mock_questionary.confirm.return_value.ask.side_effect = [False, False]  # resume, advanced
 
-        config = train_menu()
+        config = pretrain_menu()
 
         assert config['dataset'] == 'fineweb'
         assert config['tokens_per_epoch'] == 10_000_000
@@ -321,7 +323,7 @@ class TestTrainMenu:
         ]
         mock_questionary.confirm.return_value.ask.side_effect = [True, False]  # resume=True, advanced=False
 
-        config = train_menu()
+        config = pretrain_menu()
 
         assert config['dataset'] == 'fineweb'
         assert config['tokens_per_epoch'] == 50_000_000
@@ -339,7 +341,7 @@ class TestTrainMenu:
         ]
         mock_questionary.confirm.return_value.ask.side_effect = [False, False]
 
-        config = train_menu()
+        config = pretrain_menu()
 
         assert config['dataset'] == 'fineweb'
         assert config['tokens_per_epoch'] == 100_000_000
@@ -358,7 +360,7 @@ class TestTrainMenu:
         # resume=False, advanced=True, debug=True, mps=True, compile=False
         mock_questionary.confirm.return_value.ask.side_effect = [False, True, True, True, False]
 
-        config = train_menu()
+        config = pretrain_menu()
 
         assert config['dataset'] == 'fineweb'
         assert config['debug'] is True
@@ -376,7 +378,7 @@ class TestTrainMenu:
         ]
         mock_questionary.confirm.return_value.ask.side_effect = [False, True, False, False, True]  # resume=False, advanced=True, then options
 
-        config = train_menu()
+        config = pretrain_menu()
 
         assert config['dataset'] == 'fineweb'
         assert config['position_encoding_type'] == 'alibi'
@@ -391,7 +393,7 @@ class TestTrainMenu:
         ]
         mock_questionary.confirm.return_value.ask.side_effect = [False, True, False, False, True]
 
-        config = train_menu()
+        config = pretrain_menu()
 
         assert config['position_encoding_type'] == 'learned'
 
@@ -406,7 +408,7 @@ class TestContinueTrainingMenu:
         scanner = CheckpointScanner()
         mock_questionary.confirm.return_value.ask.return_value = True
 
-        config = continue_training_menu(scanner)
+        config = continue_training_menu(scanner, 'pretrain')
 
         assert config is not None
         assert config['resume'] is True
@@ -421,7 +423,7 @@ class TestContinueTrainingMenu:
         scanner = CheckpointScanner()
         mock_questionary.confirm.return_value.ask.return_value = False
 
-        config = continue_training_menu(scanner)
+        config = continue_training_menu(scanner, 'pretrain')
 
         assert config is None
 
@@ -430,7 +432,7 @@ class TestContinueTrainingMenu:
         monkeypatch.chdir(empty_checkpoint_dir)
 
         scanner = CheckpointScanner()
-        config = continue_training_menu(scanner)
+        config = continue_training_menu(scanner, 'pretrain')
 
         assert config is None
 
@@ -446,7 +448,7 @@ class TestGenerateMenu:
 
         # Mock user selections
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_10_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_10_fineweb.pt")),
             Mock(ask=Mock(return_value="balanced - Moderate creativity (temp=0.8, top-k=50, top-p=0.9) [DEFAULT]")),
             Mock(ask=Mock(return_value="Interactive - Multiple prompts in a loop")),
         ]
@@ -467,7 +469,7 @@ class TestGenerateMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_1_fineweb.pt")),
             Mock(ask=Mock(return_value="greedy - Deterministic, picks most likely tokens")),
             Mock(ask=Mock(return_value="Single prompt - Generate once and exit")),
         ]
@@ -489,7 +491,7 @@ class TestGenerateMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_1_fineweb.pt")),
             Mock(ask=Mock(return_value="very-creative - Maximum creativity (temp=1.2, top-k=100, top-p=0.95)")),
             Mock(ask=Mock(return_value="Interactive - Multiple prompts in a loop")),
         ]
@@ -521,7 +523,7 @@ class TestEvaluateMenu:
 
         mock_questionary.select.side_effect = [
             Mock(ask=Mock(return_value="Evaluate single checkpoint (perplexity)")),
-            Mock(ask=Mock(return_value="model_epoch_5_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_5_fineweb.pt")),
         ]
 
         config = evaluate_menu(scanner)
@@ -570,7 +572,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_1_fineweb.pt")),
             Mock(ask=Mock(return_value="attention - Visualize attention patterns")),
         ]
         mock_questionary.text.return_value.ask.return_value = "Hello world"
@@ -589,7 +591,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_2_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_2_fineweb.pt")),
             Mock(ask=Mock(return_value="logit-lens - See how predictions evolve through layers")),
         ]
         mock_questionary.text.return_value.ask.return_value = "Test prompt"
@@ -606,7 +608,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_3_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_3_fineweb.pt")),
             Mock(ask=Mock(return_value="induction-heads - Detect pattern-matching circuits")),
         ]
 
@@ -622,7 +624,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_1_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_1_fineweb.pt")),
             Mock(ask=Mock(return_value="patch - Causal intervention experiments")),
         ]
 
@@ -638,7 +640,7 @@ class TestInterpretMenu:
         scanner = CheckpointScanner()
 
         mock_questionary.select.side_effect = [
-            Mock(ask=Mock(return_value="model_epoch_5_fineweb.pt")),
+            Mock(ask=Mock(return_value="[pretrain] model_epoch_5_fineweb.pt")),
             Mock(ask=Mock(return_value="all - Run all analyses")),
         ]
         mock_questionary.text.return_value.ask.return_value = "The quick brown fox"
@@ -721,7 +723,7 @@ class TestMainMenu:
         monkeypatch.chdir(temp_checkpoint_dir)
 
         scanner = CheckpointScanner()
-        mock_questionary.select.return_value.ask.return_value = "✨ Generate text"
+        mock_questionary.select.return_value.ask.return_value = "✨ Generate text (test any model)"
 
         result = main_menu(scanner)
 
@@ -729,22 +731,23 @@ class TestMainMenu:
         call_args = mock_questionary.select.call_args
         choices = call_args[1]['choices']
 
-        assert "🎓 Train new model" in choices
-        assert "▶️  Continue training" in choices
-        assert "✨ Generate text" in choices
-        assert "📊 Evaluate models" in choices
-        assert "🔍 Interpretability analysis" in choices
+        # Stage-based menu options
+        assert "🎓 Start pre-training (build base model)" in choices
+        assert "▶️  Continue pre-training" in choices
+        assert "✨ Generate text (test any model)" in choices
+        assert "📊 Evaluate models (perplexity & benchmarks)" in choices
+        assert "🔍 Analyze internals (interpretability)" in choices
         assert "⬇️  Download training data" in choices
         assert "❌ Exit" in choices
 
-        assert result == "✨ Generate text"
+        assert result == "✨ Generate text (test any model)"
 
     def test_menu_without_checkpoints(self, empty_checkpoint_dir, monkeypatch, mock_questionary):
         """Test that menu hides checkpoint-dependent options when none exist."""
         monkeypatch.chdir(empty_checkpoint_dir)
 
         scanner = CheckpointScanner()
-        mock_questionary.select.return_value.ask.return_value = "🎓 Train new model"
+        mock_questionary.select.return_value.ask.return_value = "🎓 Start pre-training (build base model)"
 
         main_menu(scanner)
 
@@ -752,15 +755,15 @@ class TestMainMenu:
         call_args = mock_questionary.select.call_args
         choices = call_args[1]['choices']
 
-        assert "🎓 Train new model" in choices
+        assert "🎓 Start pre-training (build base model)" in choices
         assert "⬇️  Download training data" in choices
         assert "❌ Exit" in choices
 
         # These should NOT be present without checkpoints
-        assert "▶️  Continue training" not in choices
-        assert "✨ Generate text" not in choices
-        assert "📊 Evaluate models" not in choices
-        assert "🔍 Interpretability analysis" not in choices
+        assert "▶️  Continue pre-training" not in choices
+        assert "✨ Generate text (test any model)" not in choices
+        assert "📊 Evaluate models (perplexity & benchmarks)" not in choices
+        assert "🔍 Analyze internals (interpretability)" not in choices
 
 
 # =============================================================================
@@ -1109,12 +1112,12 @@ class TestInteractiveMain:
 
     @patch('src.interactive.show_welcome')
     @patch('src.interactive.main_menu')
-    @patch('src.interactive.train_menu')
+    @patch('src.interactive.pretrain_menu')
     @patch('src.interactive.run_train')
     @patch('src.interactive.questionary')
     @patch('src.interactive.CheckpointScanner')
     def test_train_flow_with_rescan(self, mock_scanner_class, mock_questionary,
-                                    mock_run_train, mock_train_menu,
+                                    mock_run_train, mock_pretrain_menu,
                                     mock_main_menu, mock_welcome, mock_console):
         """Test that training flow rescans checkpoints after completion."""
         # Setup scanner instance
@@ -1126,7 +1129,7 @@ class TestInteractiveMain:
         mock_main_menu.side_effect = ["🎓 Train new model", "❌ Exit"]
 
         # Train config
-        mock_train_menu.return_value = {
+        mock_pretrain_menu.return_value = {
             'dataset': 'fineweb',
             'tokens_per_epoch': 10_000_000,
             'num_layers': 4,

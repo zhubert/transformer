@@ -231,6 +231,46 @@ class CheckpointScanner:
         else:
             return 'none'
 
+    # =========================================================================
+    # Backward Compatibility Properties for Tests
+    # =========================================================================
+    # The old API used a single .checkpoints list. These properties provide
+    # backward compatibility while we transition to the new stage-aware API.
+
+    @property
+    def checkpoints(self) -> List[Path]:
+        """
+        Get all checkpoint paths (backward compatibility).
+
+        Returns paths only, not (path, metadata) tuples.
+        Combines all stages for compatibility with old tests.
+        """
+        all_paths = []
+        all_paths.extend([ckpt[0] for ckpt in self.pretrain_checkpoints])
+        all_paths.extend([ckpt[0] for ckpt in self.midtrain_checkpoints])
+        all_paths.extend([ckpt[0] for ckpt in self.finetune_checkpoints])
+        return all_paths
+
+    def has_checkpoints(self) -> bool:
+        """Check if any checkpoints exist (backward compatibility)."""
+        return self.has_any_checkpoints()
+
+    def get_all_checkpoints(self) -> List[Path]:
+        """Get all checkpoint paths (backward compatibility)."""
+        return self.checkpoints
+
+    def get_latest(self) -> Optional[Path]:
+        """Get the most recent checkpoint from any stage (backward compatibility)."""
+        all_checkpoints = []
+        all_checkpoints.extend(self.pretrain_checkpoints)
+        all_checkpoints.extend(self.midtrain_checkpoints)
+        all_checkpoints.extend(self.finetune_checkpoints)
+
+        if not all_checkpoints:
+            return None
+
+        return max(all_checkpoints, key=lambda x: x[0].stat().st_mtime)[0]
+
     def display_summary(self):
         """Display a summary table of available checkpoints by stage."""
         if not self.has_any_checkpoints():
