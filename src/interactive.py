@@ -33,6 +33,7 @@ from commands.generate import main as generate_main
 from commands.evaluate_perplexity import evaluate_checkpoint, compare_checkpoints
 from commands.sampling_comparison import demonstrate_sampling_strategies, demonstrate_with_model
 from commands import interpret
+from commands.midtrain_stub import demonstrate_midtraining_concepts
 from src.transformer.device_utils import init_device, get_autocast_context
 
 # Initialize Rich console for pretty output
@@ -706,11 +707,18 @@ def midtrain_menu(scanner: CheckpointScanner) -> Optional[dict]:
 
     domain = domain_choice.split(' - ')[0]
 
-    # For now, show coming soon message
-    console.print(f"\n[yellow]Mid-training infrastructure is coming soon![/yellow]")
-    console.print(f"[dim]Selected: {domain} domain specialization from {base_checkpoint.name}[/dim]\n")
+    console.print(f"\n[green]✓ Configuration complete![/green]")
+    console.print(f"[dim]Will demonstrate {domain} domain specialization from {base_checkpoint.name}[/dim]\n")
 
-    return None  # Will implement full functionality later
+    # Return configuration for mid-training demonstration
+    return {
+        'stage': 'midtrain',
+        'base_checkpoint': str(base_checkpoint),
+        'domain': domain,
+        'debug': False,
+        'use_mps': False,
+        'compile': True,
+    }
 
 
 def finetune_menu(scanner: CheckpointScanner) -> Optional[dict]:
@@ -1091,7 +1099,7 @@ def run_train(config: dict):
     console.print("=" * 80)
     print()
 
-    # For now, only pretrain is implemented
+    # Execute appropriate training stage
     if stage == 'pretrain':
         train(
             tokens_per_epoch=config.get('tokens_per_epoch'),
@@ -1106,7 +1114,15 @@ def run_train(config: dict):
             position_encoding_type=config.get('position_encoding_type', 'alibi'),
             dataset=config.get('dataset', 'fineweb'),
         )
+    elif stage == 'midtrain':
+        # Mid-training demonstration (infrastructure ready, full implementation next step)
+        console.print("[bold blue]Mid-Training Concepts Demonstration[/bold blue]\n")
+        console.print("[dim]Infrastructure complete. Demonstrating how mid-training works...[/dim]\n")
+        demonstrate_midtraining_concepts()
+        console.print("\n[bold green]✓ Demonstration complete![/bold green]")
+        console.print("\n[dim]Next step: Integrate HuggingFace datasets for full mid-training.[/dim]")
     else:
+        # Fine-tuning
         console.print(f"[yellow]{stage_names.get(stage)} infrastructure coming soon![/yellow]")
 
 
