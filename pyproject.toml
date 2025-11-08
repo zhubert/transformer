@@ -36,5 +36,9 @@ explicit = true
 [tool.uv.sources]
 # When rocm extra is requested, get torch from ROCm index on Linux
 # Only apply alternative source when the extra is active AND on Linux
-torch = { index = "pytorch-rocm", marker = "extra == 'rocm'" }
-pytorch-triton-rocm = { index = "pytorch-rocm", marker = "extra == 'rocm'" }
+torch = [
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux'" },
+]
+pytorch-triton-rocm = [
+    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
