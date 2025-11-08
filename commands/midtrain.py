@@ -106,7 +106,13 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.transformer.model import DecoderOnlyTransformer
 from src.transformer.fineweb_dataset import FineWebDataset
 from src.transformer.domain_datasets import create_domain_dataset
-from src.transformer.curriculum import CurriculumScheduler
+from src.transformer.curriculum import (
+    CurriculumScheduler,
+    create_math_curriculum,
+    create_code_curriculum,
+    create_science_curriculum,
+    create_general_curriculum,
+)
 from src.transformer.forgetting_metrics import ForgettingDetector, ForgettingMetrics
 from src.transformer.scheduler import get_cosine_schedule_with_warmup
 from src.transformer.perplexity import calculate_perplexity_from_loss
@@ -136,6 +142,7 @@ def load_base_checkpoint(checkpoint_path: Path, device, console):
         model: Loaded model
         encoding: Tokenizer encoding name
         config: Model configuration
+        baseline_perplexity: Pre-training general perplexity (for forgetting detection)
     """
     console.print(f"[bold cyan]Loading base model:[/bold cyan] {checkpoint_path}")
 
@@ -198,7 +205,18 @@ def load_base_checkpoint(checkpoint_path: Path, device, console):
     console.print(info_table)
     console.print()
 
-    return model, encoding, config
+    # Extract baseline perplexity for forgetting detection
+    # Try validation perplexity first (more reliable), then training perplexity
+    baseline_perplexity = checkpoint.get('val_perplexity') or checkpoint.get('train_perplexity')
+
+    # If no perplexity found, use a reasonable default based on model size
+    if baseline_perplexity is None or baseline_perplexity == 0:
+        # Typical perplexity for small models on FineWeb is ~25-40
+        baseline_perplexity = 35.0
+        console.print("[yellow]Warning: No perplexity found in checkpoint, using default baseline: 35.0[/yellow]")
+        console.print()
+
+    return model, encoding, config, baseline_perplexity
 
 
 def midtrain(
@@ -275,7 +293,7 @@ def midtrain(
         console.print(f"[bold red]Error:[/bold red] Base checkpoint not found: {base_checkpoint}")
         return
 
-    model, encoding, base_config = load_base_checkpoint(base_checkpoint_path, device, console)
+    model, encoding, base_config, baseline_perplexity = load_base_checkpoint(base_checkpoint_path, device, console)
 
     # Get vocab size from model
     vocab_size = model.token_embedding.embedding.num_embeddings
@@ -427,15 +445,28 @@ def midtrain(
     console.print(dataset_table)
     console.print()
 
-    # Initialize curriculum scheduler
+    # Initialize curriculum scheduler based on domain
     console.print("[bold]Initializing curriculum learning...[/bold]")
-    curriculum = CurriculumScheduler(num_epochs=num_epochs)
+    if domain == 'math':
+        curriculum = create_math_curriculum(total_epochs=num_epochs, difficulty_levels=3)
+    elif domain == 'code':
+        curriculum = create_code_curriculum(total_epochs=num_epochs)
+    elif domain == 'science':
+        curriculum = create_science_curriculum(total_epochs=num_epochs)
+    else:
+        # Fallback for unknown domains
+        curriculum = create_general_curriculum(total_epochs=num_epochs)
+
     console.print(f"[dim]  • {len(curriculum.stages)} stages: {' → '.join(s.name for s in curriculum.stages)}[/dim]")
     console.print()
 
-    # Initialize forgetting detector
+    # Initialize forgetting detector with baseline perplexity
     console.print("[bold]Initializing catastrophic forgetting detection...[/bold]")
-    forgetting_detector = ForgettingDetector()
+    console.print(f"[dim]  • Baseline general perplexity: {baseline_perplexity:.2f}[/dim]")
+    forgetting_detector = ForgettingDetector(
+        baseline_general_perplexity=baseline_perplexity,
+        history_file=CHECKPOINT_DIR / f"{domain}_forgetting_history.json"
+    )
     console.print("[dim]  • Dual evaluation: domain + general perplexity[/dim]")
     console.print("[dim]  • Alert threshold: >10% general perplexity increase[/dim]")
     console.print()

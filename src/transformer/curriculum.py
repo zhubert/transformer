@@ -361,6 +361,86 @@ def create_code_curriculum(
     return CurriculumScheduler(stages)
 
 
+def create_science_curriculum(
+    total_epochs: int = 10,
+) -> CurriculumScheduler:
+    """
+    Create a curriculum for science mid-training.
+
+    Science papers can be ranked by complexity:
+    - Introductory papers (reviews, tutorials)
+    - Research papers (standard difficulty)
+    - Advanced research (cutting-edge, high complexity)
+
+    For educational purposes, we use a simple 3-stage curriculum.
+
+    Args:
+        total_epochs: Total number of training epochs
+
+    Returns:
+        CurriculumScheduler configured for science
+
+    Example:
+        >>> curriculum = create_science_curriculum(total_epochs=9)
+        >>> curriculum.print_schedule()
+        # Stage 1: Introductory - 3 epochs
+        # Stage 2: Research papers - 3 epochs
+        # Stage 3: Advanced research - 3 epochs
+    """
+    epochs_per_stage = total_epochs // 3
+
+    stages = [
+        CurriculumStage(
+            name="Introductory",
+            difficulty_range=(1.0, 2.0),
+            num_epochs=epochs_per_stage,
+        ),
+        CurriculumStage(
+            name="Research papers",
+            difficulty_range=(2.0, 3.5),
+            num_epochs=epochs_per_stage,
+        ),
+        CurriculumStage(
+            name="Advanced research",
+            difficulty_range=(3.5, 5.0),
+            num_epochs=total_epochs - (2 * epochs_per_stage),  # Remaining epochs
+        ),
+    ]
+
+    return CurriculumScheduler(stages)
+
+
+def create_general_curriculum(
+    total_epochs: int = 10,
+) -> CurriculumScheduler:
+    """
+    Create a general curriculum for domains without clear difficulty levels.
+
+    This is a simple single-stage curriculum that trains on all data uniformly.
+    Used as a fallback when domain-specific curriculum isn't applicable.
+
+    Args:
+        total_epochs: Total number of training epochs
+
+    Returns:
+        CurriculumScheduler configured for general training
+
+    Example:
+        >>> curriculum = create_general_curriculum(total_epochs=10)
+        >>> curriculum.print_schedule()
+        # Stage 1: All data - 10 epochs
+    """
+    stages = [
+        CurriculumStage(
+            name="All data",
+            difficulty_range=(1.0, 5.0),  # No filtering, accept all
+            num_epochs=total_epochs,
+        ),
+    ]
+
+    return CurriculumScheduler(stages)
+
+
 # Example usage and tests
 if __name__ == "__main__":
     print("=" * 80)
